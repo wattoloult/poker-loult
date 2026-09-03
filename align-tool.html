@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Outil d'alignement de frames</title>
+<style>
+  body{ background:#1a1030; color:#eee; font-family:system-ui,sans-serif; margin:0; padding:16px; }
+  h1{ font-size:18px; margin:0 0 12px; }
+  .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  label{ font-size:13px; opacity:.85; }
+  input[type=number], input[type=text]{ width:70px; background:#12203f; color:#fff; border:1px solid #33436e; border-radius:6px; padding:5px 7px; }
+  button{ background:#5a3fa0; color:#fff; border:none; border-radius:8px; padding:8px 14px; cursor:pointer; font-weight:bold; }
+  button:hover{ background:#6e4fc0; }
+  button:active{ transform:translateY(1px); }
+  #stage{ position:relative; border:2px dashed #6d5628; background:
+      repeating-conic-gradient(#241a3a 0% 25%, #2c2048 0% 50%) 50% / 24px 24px;
+    overflow:hidden; touch-action:none; }
+  #stage img{ position:absolute; image-rendering:pixelated; pointer-events:none; user-select:none; -webkit-user-drag:none; }
+  #ghost{ opacity:.45; filter:grayscale(.3); }
+  #cur{ cursor:grab; pointer-events:auto; }
+  #cur:active{ cursor:grabbing; }
+  #info{ font-size:13px; opacity:.8; margin-top:8px; white-space:pre-wrap; }
+  #frameList{ font-size:12px; margin-top:10px; background:#0c1430; border-radius:8px; padding:8px; max-height:160px; overflow:auto; }
+  .hint{ font-size:12px; opacity:.6; }
+  .badge{ background:#12203f; border:1px solid #33436e; border-radius:6px; padding:3px 8px; font-size:12px; }
+</style>
+</head>
+<body>
+<h1>Outil d'alignement de sprite sheet</h1>
+<div class="row">
+  <label>Planche :
+    <select id="preset">
+      <option value="colt">Pistolet (colt_frames.png)</option>
+      <option value="cigare">Cigare (cigare_frames.png)</option>
+      <option value="cafe">Café (cafe_frames.png)</option>
+    </select>
+  </label>
+  <label>Largeur frame <input type="number" id="fw" value="772"></label>
+  <label>Hauteur frame <input type="number" id="fh" value="355"></label>
+  <label>Nb frames <input type="number" id="fn" value="9"></label>
+  <label>Zoom <input type="number" id="zoom" value="3" step="0.5" min="0.5" max="8"></label>
+  <button id="load">Recharger</button>
+</div>
+<div class="row">
+  <button id="prev">&larr; Précédente</button>
+  <span class="badge" id="idxBadge">frame 0 / 0</span>
+  <button id="next">Suivante &rarr;</button>
+  <button id="resetOne">Reset cette frame</button>
+  <button id="exportBtn">Exporter JSON</button>
+</div>
+<div class="row hint">Glisse la frame du dessus (nette) pour l'aligner sur le fantôme grisé du dessous (frame précédente). Flèches clavier = 1px, Shift+flèche = 10px.</div>
+<div id="stage"><img id="ghost"><img id="cur"></div>
+<div id="info"></div>
+<textarea id="out" style="width:100%;height:120px;margin-top:10px;background:#0c1430;color:#9f9;font-family:monospace;font-size:12px;" placeholder="Le JSON exporté apparaît ici — colle-le moi dans le chat."></textarea>
+
+<script>
+const $ = s => document.querySelector(s);
+let img = null, FW=772, FH=355, N=9, idx=0, ZOOM=3;
+let offsets = []; // {x,y} par frame, EN PIXELS NATIFS (pas de zoom), appliqué en plus de la position nominale (idx*FW, 0)
+
+function updateStage() {
+  $('#stage').style.width = (FW*ZOOM)+'px'; $('#stage').style.height = (FH*ZOOM)+'px';
+}
+function draw() {
+  if (!img) return;
+  $('#idxBadge').textContent = `frame ${idx} / ${N-1}`;
+  const gEl = $('#ghost'), cEl = $('#cur');
+  [gEl, cEl].forEach(el => { el.style.width = (FW*N*ZOOM)+'px'; el.style.height = (FH*ZOOM)+'px'; el.src = img.src; });
+  // fantôme = frame précédente (idx-1), à sa position nominale + son propre offset déjà validé
+  const prevIdx = Math.max(0, idx - 1);
+  const po = offsets[prevIdx] || {x:0,y:0};
+  gEl.style.left = ((-(prevIdx*FW) + po.x) * ZOOM) + 'px'; gEl.style.top = (po.y * ZOOM) + 'px';
+  gEl.hidden = idx === 0;
+  // frame courante = à sa position nominale + son offset en cours
+  const co = offsets[idx] || {x:0,y:0};
+  cEl.style.left = ((-(idx*FW) + co.x) * ZOOM) + 'px'; cEl.style.top = (co.y * ZOOM) + 'px';
+  $('#info').textContent = `Frame ${idx} : décalage x=${co.x}, y=${co.y}  (zoom x${ZOOM})`;
+}
+
+const PRESETS = {
+  colt:   { src: 'assets/colt_frames.png',   fw: 432, fh: 355, n: 10 },
+  cigare: { src: 'assets/cigare_frames.png', fw: 199, fh: 79,  n: 16 },
+  cafe:   { src: 'assets/cafe_frames.png',   fw: 336, fh: 336, n: 24 },
+};
+function loadCurrent() {
+  FW = +$('#fw').value; FH = +$('#fh').value; N = +$('#fn').value; ZOOM = +$('#zoom').value || 1;
+  offsets = Array.from({length:N}, () => ({x:0,y:0}));
+  const src = PRESETS[$('#preset').value].src;
+  img = new Image(); img.onload = () => { updateStage(); idx = 0; draw(); }; img.src = src + '?t=' + Date.now();
+}
+$('#preset').onchange = () => {
+  const p = PRESETS[$('#preset').value];
+  $('#fw').value = p.fw; $('#fh').value = p.fh; $('#fn').value = p.n;
+  loadCurrent();
+};
+$('#load').onclick = loadCurrent;
+$('#zoom').onchange = () => { ZOOM = +$('#zoom').value || 1; updateStage(); draw(); };
+loadCurrent(); // chargée directement à l'ouverture, pas besoin de choisir un fichier
+$('#prev').onclick = () => { idx = Math.max(0, idx-1); draw(); };
+$('#next').onclick = () => { idx = Math.min(N-1, idx+1); draw(); };
+$('#stage').addEventListener('wheel', (e) => {
+  e.preventDefault();
+  idx = e.deltaY > 0 ? Math.min(N-1, idx+1) : Math.max(0, idx-1);
+  draw();
+}, { passive: false });
+$('#resetOne').onclick = () => { offsets[idx] = {x:0,y:0}; draw(); };
+$('#exportBtn').onclick = () => { $('#out').value = JSON.stringify({ FW, FH, N, offsets }, null, 2); };
+
+document.addEventListener('keydown', (e) => {
+  if (!img) return;
+  const step = e.shiftKey ? 10 : 1;
+  const o = offsets[idx] || (offsets[idx] = {x:0,y:0});
+  if (e.key === 'ArrowLeft') { o.x -= step; e.preventDefault(); }
+  else if (e.key === 'ArrowRight') { o.x += step; e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { o.y -= step; e.preventDefault(); }
+  else if (e.key === 'ArrowDown') { o.y += step; e.preventDefault(); }
+  else return;
+  draw();
+});
+
+// glisser à la souris (les deltas écran sont divisés par le zoom pour stocker un offset en pixels natifs)
+let dragging = false, dragStart = null, offStart = null;
+$('#cur').addEventListener('mousedown', (e) => {
+  dragging = true; dragStart = {x:e.clientX, y:e.clientY};
+  offStart = Object.assign({}, offsets[idx] || {x:0,y:0});
+});
+document.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  const dx = (e.clientX - dragStart.x) / ZOOM, dy = (e.clientY - dragStart.y) / ZOOM;
+  offsets[idx] = { x: Math.round(offStart.x + dx), y: Math.round(offStart.y + dy) };
+  draw();
+});
+document.addEventListener('mouseup', () => { dragging = false; });
+</script>
+</body>
+</html>

@@ -1,0 +1,814 @@
+[
+ {
+  "slug": "albert-einstein",
+  "name": "Albert Einstein"
+ },
+ {
+  "slug": "isaac-newton",
+  "name": "Isaac Newton"
+ },
+ {
+  "slug": "charles-darwin",
+  "name": "Charles Darwin"
+ },
+ {
+  "slug": "marie-curie",
+  "name": "Marie Curie"
+ },
+ {
+  "slug": "nikola-tesla",
+  "name": "Nikola Tesla"
+ },
+ {
+  "slug": "stephen-hawking",
+  "name": "Stephen Hawking"
+ },
+ {
+  "slug": "richard-feynman",
+  "name": "Richard Feynman"
+ },
+ {
+  "slug": "alan-turing",
+  "name": "Alan Turing"
+ },
+ {
+  "slug": "galileo-galilei",
+  "name": "Galileo Galilei"
+ },
+ {
+  "slug": "nicolaus-copernicus",
+  "name": "Nicolaus Copernicus"
+ },
+ {
+  "slug": "dmitri-mendeleev",
+  "name": "Dmitri Mendeleev"
+ },
+ {
+  "slug": "louis-pasteur",
+  "name": "Louis Pasteur"
+ },
+ {
+  "slug": "thomas-edison",
+  "name": "Thomas Edison"
+ },
+ {
+  "slug": "benjamin-franklin",
+  "name": "Benjamin Franklin"
+ },
+ {
+  "slug": "niels-bohr",
+  "name": "Niels Bohr"
+ },
+ {
+  "slug": "j-robert-oppenheimer",
+  "name": "J. Robert Oppenheimer"
+ },
+ {
+  "slug": "ada-lovelace",
+  "name": "Ada Lovelace"
+ },
+ {
+  "slug": "rosalind-franklin",
+  "name": "Rosalind Franklin"
+ },
+ {
+  "slug": "katherine-johnson",
+  "name": "Katherine Johnson"
+ },
+ {
+  "slug": "neil-degrasse-tyson",
+  "name": "Neil deGrasse Tyson"
+ },
+ {
+  "slug": "jane-goodall",
+  "name": "Jane Goodall"
+ },
+ {
+  "slug": "yuri-gagarin",
+  "name": "Yuri Gagarin"
+ },
+ {
+  "slug": "carl-sagan",
+  "name": "Carl Sagan"
+ },
+ {
+  "slug": "werner-heisenberg",
+  "name": "Werner Heisenberg"
+ },
+ {
+  "slug": "max-planck",
+  "name": "Max Planck"
+ },
+ {
+  "slug": "michael-faraday",
+  "name": "Michael Faraday"
+ },
+ {
+  "slug": "james-clerk-maxwell",
+  "name": "James Clerk Maxwell"
+ },
+ {
+  "slug": "gregor-mendel",
+  "name": "Gregor Mendel"
+ },
+ {
+  "slug": "alexander-fleming",
+  "name": "Alexander Fleming"
+ },
+ {
+  "slug": "rachel-carson",
+  "name": "Rachel Carson"
+ },
+ {
+  "slug": "william-shakespeare",
+  "name": "William Shakespeare"
+ },
+ {
+  "slug": "victor-hugo",
+  "name": "Victor Hugo"
+ },
+ {
+  "slug": "voltaire",
+  "name": "Voltaire"
+ },
+ {
+  "slug": "leo-tolstoy",
+  "name": "Leo Tolstoy"
+ },
+ {
+  "slug": "fyodor-dostoevsky",
+  "name": "Fyodor Dostoevsky"
+ },
+ {
+  "slug": "ernest-hemingway",
+  "name": "Ernest Hemingway"
+ },
+ {
+  "slug": "franz-kafka",
+  "name": "Franz Kafka"
+ },
+ {
+  "slug": "george-orwell",
+  "name": "George Orwell"
+ },
+ {
+  "slug": "albert-camus",
+  "name": "Albert Camus"
+ },
+ {
+  "slug": "jean-paul-sartre",
+  "name": "Jean-Paul Sartre"
+ },
+ {
+  "slug": "simone-de-beauvoir",
+  "name": "Simone de Beauvoir"
+ },
+ {
+  "slug": "jane-austen",
+  "name": "Jane Austen"
+ },
+ {
+  "slug": "mark-twain",
+  "name": "Mark Twain"
+ },
+ {
+  "slug": "gabriel-garc-a-m-rquez",
+  "name": "Gabriel García Márquez"
+ },
+ {
+  "slug": "toni-morrison",
+  "name": "Toni Morrison"
+ },
+ {
+  "slug": "confucius",
+  "name": "Confucius"
+ },
+ {
+  "slug": "socrates",
+  "name": "Socrates"
+ },
+ {
+  "slug": "plato",
+  "name": "Plato"
+ },
+ {
+  "slug": "aristotle",
+  "name": "Aristotle"
+ },
+ {
+  "slug": "friedrich-nietzsche",
+  "name": "Friedrich Nietzsche"
+ },
+ {
+  "slug": "immanuel-kant",
+  "name": "Immanuel Kant"
+ },
+ {
+  "slug": "rumi",
+  "name": "Rumi"
+ },
+ {
+  "slug": "chinua-achebe",
+  "name": "Chinua Achebe"
+ },
+ {
+  "slug": "moli-re",
+  "name": "Molière"
+ },
+ {
+  "slug": "charles-baudelaire",
+  "name": "Charles Baudelaire"
+ },
+ {
+  "slug": "marcel-proust",
+  "name": "Marcel Proust"
+ },
+ {
+  "slug": "mile-zola",
+  "name": "Émile Zola"
+ },
+ {
+  "slug": "homer",
+  "name": "Homer"
+ },
+ {
+  "slug": "dante-alighieri",
+  "name": "Dante Alighieri"
+ },
+ {
+  "slug": "miguel-de-cervantes",
+  "name": "Miguel de Cervantes"
+ },
+ {
+  "slug": "george-washington",
+  "name": "George Washington"
+ },
+ {
+  "slug": "abraham-lincoln",
+  "name": "Abraham Lincoln"
+ },
+ {
+  "slug": "barack-obama",
+  "name": "Barack Obama"
+ },
+ {
+  "slug": "donald-trump",
+  "name": "Donald Trump"
+ },
+ {
+  "slug": "joe-biden",
+  "name": "Joe Biden"
+ },
+ {
+  "slug": "john-f-kennedy",
+  "name": "John F. Kennedy"
+ },
+ {
+  "slug": "franklin-d-roosevelt",
+  "name": "Franklin D. Roosevelt"
+ },
+ {
+  "slug": "winston-churchill",
+  "name": "Winston Churchill"
+ },
+ {
+  "slug": "charles-de-gaulle",
+  "name": "Charles de Gaulle"
+ },
+ {
+  "slug": "napoleon",
+  "name": "Napoleon"
+ },
+ {
+  "slug": "louis-xiv",
+  "name": "Louis XIV"
+ },
+ {
+  "slug": "nicolas-sarkozy",
+  "name": "Nicolas Sarkozy"
+ },
+ {
+  "slug": "emmanuel-macron",
+  "name": "Emmanuel Macron"
+ },
+ {
+  "slug": "fran-ois-mitterrand",
+  "name": "François Mitterrand"
+ },
+ {
+  "slug": "jordan-bardella",
+  "name": "Jordan Bardella"
+ },
+ {
+  "slug": "marine-le-pen",
+  "name": "Marine Le Pen"
+ },
+ {
+  "slug": "angela-merkel",
+  "name": "Angela Merkel"
+ },
+ {
+  "slug": "vladimir-putin",
+  "name": "Vladimir Putin"
+ },
+ {
+  "slug": "xi-jinping",
+  "name": "Xi Jinping"
+ },
+ {
+  "slug": "mahatma-gandhi",
+  "name": "Mahatma Gandhi"
+ },
+ {
+  "slug": "nelson-mandela",
+  "name": "Nelson Mandela"
+ },
+ {
+  "slug": "kwame-nkrumah",
+  "name": "Kwame Nkrumah"
+ },
+ {
+  "slug": "jawaharlal-nehru",
+  "name": "Jawaharlal Nehru"
+ },
+ {
+  "slug": "fidel-castro",
+  "name": "Fidel Castro"
+ },
+ {
+  "slug": "sim-n-bol-var",
+  "name": "Simón Bolívar"
+ },
+ {
+  "slug": "elizabeth-ii",
+  "name": "Elizabeth II"
+ },
+ {
+  "slug": "charles-iii",
+  "name": "Charles III"
+ },
+ {
+  "slug": "louis-xvi",
+  "name": "Louis XVI"
+ },
+ {
+  "slug": "marie-antoinette",
+  "name": "Marie Antoinette"
+ },
+ {
+  "slug": "cleopatra",
+  "name": "Cleopatra"
+ },
+ {
+  "slug": "julius-caesar",
+  "name": "Julius Caesar"
+ },
+ {
+  "slug": "genghis-khan",
+  "name": "Genghis Khan"
+ },
+ {
+  "slug": "alexander-the-great",
+  "name": "Alexander the Great"
+ },
+ {
+  "slug": "otto-von-bismarck",
+  "name": "Otto von Bismarck"
+ },
+ {
+  "slug": "vladimir-lenin",
+  "name": "Vladimir Lenin"
+ },
+ {
+  "slug": "mikhail-gorbachev",
+  "name": "Mikhail Gorbachev"
+ },
+ {
+  "slug": "golda-meir",
+  "name": "Golda Meir"
+ },
+ {
+  "slug": "margaret-thatcher",
+  "name": "Margaret Thatcher"
+ },
+ {
+  "slug": "indira-gandhi",
+  "name": "Indira Gandhi"
+ },
+ {
+  "slug": "justin-trudeau",
+  "name": "Justin Trudeau"
+ },
+ {
+  "slug": "recep-tayyip-erdo-an",
+  "name": "Recep Tayyip Erdoğan"
+ },
+ {
+  "slug": "shinzo-abe",
+  "name": "Shinzo Abe"
+ },
+ {
+  "slug": "lee-kuan-yew",
+  "name": "Lee Kuan Yew"
+ },
+ {
+  "slug": "henry-viii",
+  "name": "Henry VIII"
+ },
+ {
+  "slug": "elizabeth-i",
+  "name": "Elizabeth I"
+ },
+ {
+  "slug": "peter-the-great",
+  "name": "Peter the Great"
+ },
+ {
+  "slug": "catherine-the-great",
+  "name": "Catherine the Great"
+ },
+ {
+  "slug": "ho-chi-minh",
+  "name": "Ho Chi Minh"
+ },
+ {
+  "slug": "mao-zedong",
+  "name": "Mao Zedong"
+ },
+ {
+  "slug": "deng-xiaoping",
+  "name": "Deng Xiaoping"
+ },
+ {
+  "slug": "sun-yat-sen",
+  "name": "Sun Yat-sen"
+ },
+ {
+  "slug": "haile-selassie",
+  "name": "Haile Selassie"
+ },
+ {
+  "slug": "ramesses-ii",
+  "name": "Ramesses II"
+ },
+ {
+  "slug": "tutankhamun",
+  "name": "Tutankhamun"
+ },
+ {
+  "slug": "hatshepsut",
+  "name": "Hatshepsut"
+ },
+ {
+  "slug": "otto-von-habsburg",
+  "name": "Otto von Habsburg"
+ },
+ {
+  "slug": "leonardo-da-vinci",
+  "name": "Leonardo da Vinci"
+ },
+ {
+  "slug": "michelangelo",
+  "name": "Michelangelo"
+ },
+ {
+  "slug": "pablo-picasso",
+  "name": "Pablo Picasso"
+ },
+ {
+  "slug": "vincent-van-gogh",
+  "name": "Vincent van Gogh"
+ },
+ {
+  "slug": "salvador-dal",
+  "name": "Salvador Dalí"
+ },
+ {
+  "slug": "frida-kahlo",
+  "name": "Frida Kahlo"
+ },
+ {
+  "slug": "ludwig-van-beethoven",
+  "name": "Ludwig van Beethoven"
+ },
+ {
+  "slug": "wolfgang-amadeus-mozart",
+  "name": "Wolfgang Amadeus Mozart"
+ },
+ {
+  "slug": "johann-sebastian-bach",
+  "name": "Johann Sebastian Bach"
+ },
+ {
+  "slug": "elvis-presley",
+  "name": "Elvis Presley"
+ },
+ {
+  "slug": "john-lennon",
+  "name": "John Lennon"
+ },
+ {
+  "slug": "bob-marley",
+  "name": "Bob Marley"
+ },
+ {
+  "slug": "michael-jackson",
+  "name": "Michael Jackson"
+ },
+ {
+  "slug": "freddie-mercury",
+  "name": "Freddie Mercury"
+ },
+ {
+  "slug": "dith-piaf",
+  "name": "Édith Piaf"
+ },
+ {
+  "slug": "claude-monet",
+  "name": "Claude Monet"
+ },
+ {
+  "slug": "rembrandt",
+  "name": "Rembrandt"
+ },
+ {
+  "slug": "andy-warhol",
+  "name": "Andy Warhol"
+ },
+ {
+  "slug": "georgia-o-keeffe",
+  "name": "Georgia O'Keeffe"
+ },
+ {
+  "slug": "gustav-klimt",
+  "name": "Gustav Klimt"
+ },
+ {
+  "slug": "edvard-munch",
+  "name": "Edvard Munch"
+ },
+ {
+  "slug": "david-bowie",
+  "name": "David Bowie"
+ },
+ {
+  "slug": "prince-musician",
+  "name": "Prince (musician)"
+ },
+ {
+  "slug": "whitney-houston",
+  "name": "Whitney Houston"
+ },
+ {
+  "slug": "johannes-vermeer",
+  "name": "Johannes Vermeer"
+ },
+ {
+  "slug": "henri-matisse",
+  "name": "Henri Matisse"
+ },
+ {
+  "slug": "auguste-rodin",
+  "name": "Auguste Rodin"
+ },
+ {
+  "slug": "piet-mondrian",
+  "name": "Piet Mondrian"
+ },
+ {
+  "slug": "jean-michel-basquiat",
+  "name": "Jean-Michel Basquiat"
+ },
+ {
+  "slug": "christopher-columbus",
+  "name": "Christopher Columbus"
+ },
+ {
+  "slug": "marco-polo",
+  "name": "Marco Polo"
+ },
+ {
+  "slug": "neil-armstrong",
+  "name": "Neil Armstrong"
+ },
+ {
+  "slug": "amelia-earhart",
+  "name": "Amelia Earhart"
+ },
+ {
+  "slug": "ferdinand-magellan",
+  "name": "Ferdinand Magellan"
+ },
+ {
+  "slug": "james-cook",
+  "name": "James Cook"
+ },
+ {
+  "slug": "ibn-battuta",
+  "name": "Ibn Battuta"
+ },
+ {
+  "slug": "roald-amundsen",
+  "name": "Roald Amundsen"
+ },
+ {
+  "slug": "zheng-he",
+  "name": "Zheng He"
+ },
+ {
+  "slug": "vasco-da-gama",
+  "name": "Vasco da Gama"
+ },
+ {
+  "slug": "martin-luther-king-jr",
+  "name": "Martin Luther King Jr."
+ },
+ {
+  "slug": "malcolm-x",
+  "name": "Malcolm X"
+ },
+ {
+  "slug": "rosa-parks",
+  "name": "Rosa Parks"
+ },
+ {
+  "slug": "malala-yousafzai",
+  "name": "Malala Yousafzai"
+ },
+ {
+  "slug": "greta-thunberg",
+  "name": "Greta Thunberg"
+ },
+ {
+  "slug": "desmond-tutu",
+  "name": "Desmond Tutu"
+ },
+ {
+  "slug": "aung-san-suu-kyi",
+  "name": "Aung San Suu Kyi"
+ },
+ {
+  "slug": "harvey-milk",
+  "name": "Harvey Milk"
+ },
+ {
+  "slug": "steve-jobs",
+  "name": "Steve Jobs"
+ },
+ {
+  "slug": "bill-gates",
+  "name": "Bill Gates"
+ },
+ {
+  "slug": "elon-musk",
+  "name": "Elon Musk"
+ },
+ {
+  "slug": "mark-zuckerberg",
+  "name": "Mark Zuckerberg"
+ },
+ {
+  "slug": "jeff-bezos",
+  "name": "Jeff Bezos"
+ },
+ {
+  "slug": "henry-ford",
+  "name": "Henry Ford"
+ },
+ {
+  "slug": "walt-disney",
+  "name": "Walt Disney"
+ },
+ {
+  "slug": "coco-chanel",
+  "name": "Coco Chanel"
+ },
+ {
+  "slug": "warren-buffett",
+  "name": "Warren Buffett"
+ },
+ {
+  "slug": "oprah-winfrey",
+  "name": "Oprah Winfrey"
+ },
+ {
+  "slug": "charlie-chaplin",
+  "name": "Charlie Chaplin"
+ },
+ {
+  "slug": "marilyn-monroe",
+  "name": "Marilyn Monroe"
+ },
+ {
+  "slug": "bruce-lee",
+  "name": "Bruce Lee"
+ },
+ {
+  "slug": "audrey-hepburn",
+  "name": "Audrey Hepburn"
+ },
+ {
+  "slug": "alfred-hitchcock",
+  "name": "Alfred Hitchcock"
+ },
+ {
+  "slug": "grace-kelly",
+  "name": "Grace Kelly"
+ },
+ {
+  "slug": "louis-de-fun-s",
+  "name": "Louis de Funès"
+ },
+ {
+  "slug": "jean-paul-belmondo",
+  "name": "Jean-Paul Belmondo"
+ },
+ {
+  "slug": "g-rard-depardieu",
+  "name": "Gérard Depardieu"
+ },
+ {
+  "slug": "catherine-deneuve",
+  "name": "Catherine Deneuve"
+ },
+ {
+  "slug": "muhammad-ali",
+  "name": "Muhammad Ali"
+ },
+ {
+  "slug": "pel",
+  "name": "Pelé"
+ },
+ {
+  "slug": "usain-bolt",
+  "name": "Usain Bolt"
+ },
+ {
+  "slug": "serena-williams",
+  "name": "Serena Williams"
+ },
+ {
+  "slug": "diego-maradona",
+  "name": "Diego Maradona"
+ },
+ {
+  "slug": "michael-jordan",
+  "name": "Michael Jordan"
+ },
+ {
+  "slug": "zinedine-zidane",
+  "name": "Zinedine Zidane"
+ },
+ {
+  "slug": "lionel-messi",
+  "name": "Lionel Messi"
+ },
+ {
+  "slug": "cristiano-ronaldo",
+  "name": "Cristiano Ronaldo"
+ },
+ {
+  "slug": "roger-federer",
+  "name": "Roger Federer"
+ },
+ {
+  "slug": "simone-biles",
+  "name": "Simone Biles"
+ },
+ {
+  "slug": "michael-phelps",
+  "name": "Michael Phelps"
+ },
+ {
+  "slug": "jesse-owens",
+  "name": "Jesse Owens"
+ },
+ {
+  "slug": "babe-ruth",
+  "name": "Babe Ruth"
+ },
+ {
+  "slug": "wayne-gretzky",
+  "name": "Wayne Gretzky"
+ },
+ {
+  "slug": "joan-of-arc",
+  "name": "Joan of Arc"
+ },
+ {
+  "slug": "che-guevara",
+  "name": "Che Guevara"
+ },
+ {
+  "slug": "moses",
+  "name": "Moses"
+ },
+ {
+  "slug": "martin-luther",
+  "name": "Martin Luther"
+ },
+ {
+  "slug": "thomas-aquinas",
+  "name": "Thomas Aquinas"
+ }
+]

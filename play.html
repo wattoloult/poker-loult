@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Poker Loult</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="play.css">
+</head>
+<body>
+<!-- fond global (remplace background.png quand tu l'envoies) -->
+<div id="app-bg"></div>
+<div id="game-bg"></div>
+<!-- src posé dynamiquement par showScreen() : titlescreen.mp3 à l'accueil, songmenu.mp3 dans les menus/salons -->
+<audio id="bgm" loop preload="none"></audio>
+
+<!-- réglage du son (volume bas par défaut) -->
+<div id="audio-ctrl">
+  <button id="mute-btn" title="Son">🔊</button>
+  <input id="vol" type="range" min="0" max="100" value="25" aria-label="Volume">
+</div>
+
+<!-- ============ ACCUEIL ============ -->
+<section id="landing" class="screen">
+  <div class="landing-inner">
+    <div id="logo">
+      <img id="logo-img" src="assets/logo.png" alt="" onload="this.classList.add('ready'); document.getElementById('logo-text').style.display='none'" onerror="this.style.display='none'">
+      <div id="logo-text" class="logo-text">POKER<b>LOULT</b></div>
+    </div>
+    <p class="tagline">Made by Watto &amp; Claude — poker en ligne</p>
+    <label class="field"><span>Ton pseudo</span><input id="land-name" type="text" maxlength="16" placeholder="Pseudo"></label>
+    <button id="btn-play" class="big-btn">JOUER</button>
+    <button id="btn-rules-land" class="link-rules">Jamais joué au poker&nbsp;? Lire les règles</button>
+  </div>
+</section>
+
+<!-- ============ LOBBY ============ -->
+<section id="lobby" class="screen" hidden>
+  <div class="panel">
+    <header class="panel-head">
+      <div class="mini-logo">POKER<b>LOULT</b></div>
+      <div class="who">Salon : <b id="lobby-name">—</b> <button id="btn-rename" class="link">changer</button></div>
+    </header>
+    <div class="lobby-actions">
+      <button id="btn-create-open" class="big-btn">+ Créer une room</button>
+      <button id="btn-join-code" class="ghost-btn">Rejoindre par code</button>
+      <button id="btn-refresh" class="ghost-btn">↻</button>
+    </div>
+    <h3 class="section-title">Rooms publiques</h3>
+    <div id="room-list" class="room-list"></div>
+  </div>
+</section>
+
+<!-- ============ CRÉER UNE ROOM ============ -->
+<section id="create" class="screen" hidden>
+  <div class="panel">
+    <header class="panel-head"><div class="mini-logo">Nouvelle room</div></header>
+    <label class="field"><span>Nom de la room</span><input id="cr-name" type="text" maxlength="24" placeholder="La room de …"></label>
+    <div class="field"><span>Visibilité</span>
+      <div class="seg" id="cr-vis">
+        <button data-v="public" class="on">Publique</button>
+        <button data-v="private">Privée</button>
+      </div>
+    </div>
+    <label class="field" id="cr-pass-wrap"><span>Mot de passe (optionnel)</span><input id="cr-pass" type="text" maxlength="24" placeholder="Laisser vide = libre"></label>
+    <div class="field"><span>Bots à ajouter</span><div class="seg" id="cr-bots"></div></div>
+    <div class="field"><span>Avatars</span>
+      <div class="seg" id="cr-avatar">
+        <button data-v="pokemon" class="on">Pokémon</button>
+        <button data-v="people">Personnalités</button>
+      </div>
+    </div>
+    <div class="row">
+      <button id="btn-create-back" class="ghost-btn">Retour</button>
+      <button id="btn-create" class="big-btn">Créer la room</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SALLE D'ATTENTE ============ -->
+<section id="waiting" class="screen" hidden>
+  <div class="panel">
+    <header class="panel-head">
+      <div class="mini-logo" id="wait-name">Room</div>
+      <div class="code-box">Code : <b id="wait-code">····</b> <button id="btn-copy" class="link">copier</button></div>
+    </header>
+    <h3 class="section-title">Joueurs</h3>
+    <div id="wait-players" class="player-list"></div>
+    <div class="field host-only"><span>Bots dans la partie</span><div class="seg" id="wait-bots"></div></div>
+    <button id="btn-ready" class="big-btn">JE SUIS PRÊT</button>
+    <div id="wait-hostnote" class="note"></div>
+    <div class="row">
+      <button id="btn-leave" class="ghost-btn">Quitter</button>
+      <button id="btn-start" class="big-btn host-only">Lancer la partie</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ JEU ============ -->
+<div id="stage" hidden>
+  <div id="board">
+    <div id="blinds">
+      <div class="lvl">NIVEAU <span id="lvl-num">1</span></div>
+      <div class="amt"><span id="lvl-sb">200</span> / <span id="lvl-bb">400</span></div>
+      <div class="clock" id="lvl-clock">05:00</div>
+    </div>
+    <div id="croupier"></div>
+    <div id="ronflex-bubble"></div>
+    <div id="deck"></div>
+    <div id="community"><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div></div>
+    <div id="pot"><span class="pot-label">POT :</span> <span id="pot-amount">0</span></div>
+    <div id="side-pots" hidden></div>
+    <div id="outs-box" hidden><div class="outs-title">OUTS</div><div class="outs-cards"></div><div class="outs-pct"></div></div>
+    <div id="allin-banner" hidden></div>
+    <div id="combo-banner" hidden></div>
+    <div id="seats"></div>
+    <div id="victory" hidden>
+      <div class="trophy"><img src="assets/coupe.png" alt=""></div>
+      <div class="vtitle" id="vtitle"></div>
+      <div class="vsub">Tournoi POKER LOULT terminé</div>
+      <div class="row">
+        <button id="btn-quit-game" class="ghost-btn">Quitter</button>
+        <button id="btn-newgame" class="big-btn host-only">Rejouer</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="bottombar" hidden>
+  <div id="hand-info"><span id="hand-name"></span><span id="hand-outs"></span></div>
+  <div id="controls">
+    <button id="btn-fold" class="act fold">Se coucher</button>
+    <button id="btn-check" class="act check">Check</button>
+    <button id="btn-call" class="act call">Suivre</button>
+    <button id="btn-allin" class="act allin">Tapis</button>
+    <div id="raise-box">
+      <input type="range" id="raise-slider" min="0" max="1000" step="10" value="0"><span id="raise-amount">0</span>
+      <button id="btn-raise" class="act raise">Relancer</button>
+      <button class="act quick" data-mult="2">×2</button>
+      <button class="act quick" data-mult="3">×3</button>
+      <button class="act quick" data-mult="4">×4</button>
+    </div>
+    <div id="preactions" hidden>
+      <button id="pa-checkfold" class="pa">Check/Fold<i class="pa-box"></i></button>
+      <button id="pa-check" class="pa">Check<i class="pa-box"></i></button>
+      <button id="pa-callany" class="pa">Suivre<i class="pa-box"></i></button>
+    </div>
+    <button id="btn-show" class="act show" hidden>Montrer</button>
+    <button id="btn-leave-game" class="ghost-btn small">Quitter</button>
+    <span id="conn" class="waiting">Connexion…</span>
+  </div>
+</div>
+
+<div id="toast" hidden></div>
+<div id="confirm-modal" hidden>
+  <div class="confirm-box">
+    <p id="confirm-msg"></p>
+    <div class="confirm-actions">
+      <button id="confirm-cancel" class="ghost-btn">Annuler</button>
+      <button id="confirm-ok" class="big-btn">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<button id="btn-combos" title="Règles du poker">?</button>
+
+<!-- ============ RÈGLES (3 onglets) — accessible du menu ET en jeu ============ -->
+<div id="rules-modal" hidden>
+  <div class="rules-box">
+    <header class="rules-head">
+      <div class="mini-logo">RÈGLES DU <b>POKER</b></div>
+      <button id="rules-close" class="ghost-btn small">Fermer</button>
+    </header>
+    <div class="seg rules-tabs" id="rules-tabs">
+      <button data-t="but" class="on">Le but</button>
+      <button data-t="coups">Les coups</button>
+      <button data-t="mains">Les mains</button>
+    </div>
+
+    <div class="rules-body">
+      <section data-p="but">
+        <p class="rules-lead">Tu reçois 2 cartes que toi seul vois. 5 cartes communes arrivent au milieu de la table. Tu formes la meilleure main possible de 5 cartes en piochant parmi tes 2 cartes et les 5 du milieu.</p>
+        <dl class="rules-list">
+          <dt>Le déroulé d'une main</dt>
+          <dd>Les 2 cartes sont distribuées, puis les cartes du milieu arrivent en trois temps : le <b>flop</b> (3 cartes d'un coup), la <b>turn</b> (1 carte), la <b>river</b> (1 dernière carte). On mise entre chaque.</dd>
+          <dt>Comment on gagne le pot</dt>
+          <dd>Soit tous les autres se couchent avant la fin — tu remportes le pot sans montrer tes cartes. Soit on va jusqu'au bout, on retourne les cartes, et la meilleure main de 5 cartes gagne.</dd>
+          <dt>Comment on gagne la partie</dt>
+          <dd>Chacun démarre avec le même tapis de jetons. On joue main après main jusqu'à ce qu'un seul joueur ait tous les jetons — les autres sont éliminés quand ils n'en ont plus.</dd>
+          <dt>Les blindes</dt>
+          <dd>À chaque main, deux joueurs misent d'office (petite et grosse blinde) pour qu'il y ait toujours quelque chose à gagner. Elles augmentent régulièrement : impossible d'attendre éternellement.</dd>
+        </dl>
+      </section>
+
+      <section data-p="coups" hidden>
+        <p class="rules-lead">Quand c'est ton tour, seuls les coups possibles s'affichent en bas de l'écran.</p>
+        <dl class="rules-list">
+          <dt>Se coucher</dt><dd>Tu abandonnes la main. Tu ne peux plus rien gagner, et ce que tu avais déjà misé reste dans le pot.</dd>
+          <dt>Checker</dt><dd>Tu passes ton tour sans rien miser. Possible uniquement si personne n'a misé avant toi sur ce tour.</dd>
+          <dt>Suivre</dt><dd>Tu mises exactement ce qu'il faut pour t'aligner sur la mise en cours et rester dans le coup.</dd>
+          <dt>Relancer</dt><dd>Tu mises plus que la mise en cours. Les autres devront suivre, relancer à leur tour, ou se coucher.</dd>
+          <dt>Tapis</dt><dd>Tu mises tout ce qu'il te reste. Si tu perds, tu es éliminé ; si tu gagnes, tu doubles. Les cartes restantes sont alors retournées jusqu'au bout.</dd>
+          <dt>Le chronomètre</dt><dd>Tu as un temps limité pour jouer. Sans réponse, tu es automatiquement couché.</dd>
+        </dl>
+      </section>
+
+      <section data-p="mains" hidden>
+        <p class="rules-lead">De la plus forte (en haut) à la plus faible (en bas). En jeu, ta meilleure main est affichée en permanence sous tes cartes.</p>
+        <img src="assets/combinaisons.png" alt="Classement des mains de poker">
+      </section>
+    </div>
+  </div>
+</div>
+<button id="btn-chat" title="Chat">💬</button>
+<div id="chat-menu" hidden></div>
+<button id="btn-emote" title="Emotes"><img src="assets/emojiicon.png" alt="Emotes"></button>
+<div id="emote-menu" hidden></div>
+<audio id="cigare-audio" src="sfx/cigare.mp3" preload="none"></audio>
+<audio id="cafe-audio" src="sfx/freesound_community-drinking-coffe-107121.mp3" preload="none"></audio>
+<audio id="colt-audio" src="sfx/revolver-disparos_HnFF70x.mp3" preload="none"></audio>
+
+<script src="poker-eval.js"></script>
+<script src="sfx.js"></script>
+<script src="play.js"></script>
+</body>
+</html>

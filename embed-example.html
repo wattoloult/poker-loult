@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Exemple d'intégration — Poker Loult</title>
+<style>
+  body{ font-family:system-ui,sans-serif; background:#0a1330; color:#eaf1ff; display:flex;
+    align-items:center; justify-content:center; min-height:100vh; margin:0; }
+  .card{ background:#12203f; border:1px solid #33436e; border-radius:16px; padding:32px 40px; text-align:center; }
+  button{ font:inherit; font-weight:900; font-size:18px; letter-spacing:.5px; color:#241a00; cursor:pointer;
+    background:linear-gradient(#ffe38c,#f2b53a); border:none; border-radius:13px; padding:16px 28px;
+    box-shadow:0 4px 0 #b07d10; }
+  button:active{ transform:translateY(3px); box-shadow:0 1px 0 #b07d10; }
+  p{ color:#9fb2dd; font-size:14px; max-width:360px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>♠ Poker Loult</h1>
+    <p>Exemple de bouton à coller sur loult.fr — ouvre le jeu dans une fenêtre popup dédiée, plus
+    petite que la page principale.</p>
+    <button onclick="openPokerLoult()">Jouer au Poker Loult</button>
+  </div>
+
+  <script>
+    // ⚠️ à remplacer par l'URL réelle une fois le jeu déployé de façon permanente (voir EMBED.md)
+    const POKER_LOULT_URL = 'https://poker.loult.fr/';
+
+    function openPokerLoult() {
+      window.open(
+        POKER_LOULT_URL,
+        'pokerLoult',                              // même nom -> réutilise la fenêtre si déjà ouverte
+        'width=1100,height=720,resizable=yes,scrollbars=no'
+      );
+    }
+  </script>
+</body>
+</html>

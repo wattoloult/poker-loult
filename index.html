@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Poker Loult</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage">
+  <div id="board">
+    <div id="ronflex-bubble"></div>
+    <div id="deck"></div>
+
+    <div id="center">
+      <div id="community"></div>
+      <div id="pot"><span id="pot-amount">0</span></div>
+    </div>
+
+    <div class="seat" id="seat-0"></div>
+    <div class="seat" id="seat-1"></div>
+    <div class="seat" id="seat-2"></div>
+    <div class="seat" id="seat-3"></div>
+
+    <div id="announce"></div>
+  </div>
+</div>
+
+<!-- Ta main + tirages -->
+<div id="hand-info">
+  <span id="hand-name"></span>
+  <span id="hand-outs"></span>
+</div>
+
+<!-- Barre d'action -->
+<div id="controls">
+  <button id="btn-fold" class="act fold">Se coucher</button>
+  <button id="btn-check" class="act check">Check</button>
+  <button id="btn-call" class="act call">Suivre</button>
+  <button id="btn-allin" class="act allin">Tapis</button>
+  <div id="raise-box">
+    <input type="range" id="raise-slider" min="0" max="1000" step="10" value="0">
+    <span id="raise-amount">0</span>
+    <button id="btn-raise" class="act raise">Relancer</button>
+  </div>
+  <button id="btn-next" class="act next" hidden>Main suivante</button>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>

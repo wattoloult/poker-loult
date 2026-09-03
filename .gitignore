@@ -1,0 +1,12 @@
+# dépendances (le projet est zéro-dépendance, mais au cas où)
+node_modules/
+
+# logs de dev (serveur, tunnels)
+*.log
+
+# bundle généré par scripts/build_bundle.py (regénérable, pas la source)
+pokerloult.bundle.html
+
+# fichiers système
+.DS_Store
+Thumbs.db
