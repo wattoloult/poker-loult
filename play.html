@@ -3,13 +3,73 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Poker Loult</title>
+<title>Loult Party — jeux entre amis</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon-party.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-party-32.png">
+<link rel="apple-touch-icon" href="assets/favicon-party-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@500;700;800&family=Roboto+Condensed:ital,wght@1,700&family=Special+Elite&family=Permanent+Marker&family=Caveat:wght@700&family=Shrikhand&family=Righteous&family=Lilita+One&family=Bungee&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="play.css">
+<link rel="stylesheet" href="imposteur.css">
+<link rel="stylesheet" href="hub.css">
+<link rel="stylesheet" href="lculture.css">
 </head>
 <body>
+<!-- ============ ÉCRAN DE CHARGEMENT (fake, réutilisable) ============
+     Ne se déclenche plus tout seul au chargement de la page (avant même le choix du jeu, ça n'avait pas de
+     sens d'afficher "remplissage des jetons" pendant qu'on est encore sur le HUB à choisir Poker ou
+     Connexion). Déclenché par play.js au moment où un jeu est choisi (voir PL_runLoading), avec les
+     messages et le préchargement propres à CE jeu. -->
+<div id="loading" hidden>
+  <div class="load-msg">Démarrage…</div>
+  <div class="load-bar"><div class="load-fill"></div></div>
+  <div class="load-pct">0%</div>
+</div>
+<script>
+window.PL_runLoading = function(opts){
+  opts = opts || {};
+  var el=document.getElementById('loading');
+  el.hidden=false; el.classList.remove('done');
+  var preloadUrls = opts.preload || [];
+  var preloadLeft=preloadUrls.length, preloadResolve;
+  var preloadDone=new Promise(function(res){ preloadResolve=res; });
+  if(!preloadLeft) preloadResolve();
+  preloadUrls.forEach(function(u){ var im=new Image(); im.onload=im.onerror=function(){ if(--preloadLeft<=0) preloadResolve(); }; im.src=u; });
+  var msgs = opts.messages && opts.messages.length ? opts.messages : ['Chargement'];
+  // segments : [pourcentage cible, durée de la montée ms, pause après ms] -> montées inégales + petits
+  // arrêts pour faire "vrai chargement" (dont un gros stall vers 72% et le classique près de la fin).
+  var seg=[[10,72,56],[28,172,112],[40,88,216],[58,152,88],[72,120,264],
+           [88,144,72],[96,104,176],[100,128,0]];
+  var fill=el.querySelector('.load-fill'), pct=el.querySelector('.load-pct'), msg=el.querySelector('.load-msg');
+  var cur=0, i=0;
+  fill.style.transition='none'; fill.style.width='0%'; pct.textContent='0%'; // reset visuel si rejoué (2e sélection dans la session)
+  function tickPct(target,dur){                 // fait défiler le chiffre pendant la montée CSS
+    var from=cur, t0=performance.now();
+    (function upd(now){
+      var k=Math.min(1,(now-t0)/dur);
+      pct.textContent=Math.round(from+(target-from)*k)+'%';
+      if(k<1) requestAnimationFrame(upd);
+    })(t0);
+  }
+  function run(){
+    if(i>=seg.length){ msg.textContent='Prêt !';
+      var finish=function(){ el.classList.add('done'); setTimeout(function(){ el.hidden=true; el.classList.remove('done'); if(opts.onDone) opts.onDone(); },650); };
+      setTimeout(function(){
+        var capped=new Promise(function(res){ setTimeout(res,3000); });
+        Promise.race([preloadDone,capped]).then(finish);
+      },260);
+      return; }
+    var s=seg[i++], target=s[0], dur=s[1], hold=s[2];
+    msg.textContent=msgs[(i-1)%msgs.length]+'…';
+    fill.style.transition='width '+dur+'ms cubic-bezier(.4,.05,.3,1)';
+    fill.style.width=target+'%';
+    tickPct(target,dur); cur=target;
+    setTimeout(run, dur+hold);
+  }
+  requestAnimationFrame(run); // laisse le reset (width:0%, transition:none) se peindre avant de lancer la montée
+};
+</script>
 <!-- fond global (remplace background.png quand tu l'envoies) -->
 <div id="app-bg"></div>
 <div id="game-bg"></div>
@@ -18,95 +78,474 @@
 
 <!-- réglage du son (volume bas par défaut) -->
 <div id="audio-ctrl">
-  <button id="mute-btn" title="Son">🔊</button>
+  <button id="mute-btn" title="Son" aria-label="Couper / remettre le son"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor"/><path class="ico-on" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><path class="ico-off" d="m16 9 6 6m0-6-6 6"/></svg></button>
+  <button id="lc-music-btn" title="Couper la musique (les bruitages et les voix restent)" aria-pressed="false"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6.5" cy="17.5" r="3"/><circle cx="17.5" cy="15" r="3"/><path d="M9 5.8l11-2.3v3L9 8.8z"/><rect x="8" y="6" width="2" height="11.5"/><rect x="19" y="3.6" width="2" height="11.4"/></svg></button>
   <input id="vol" type="range" min="0" max="100" value="25" aria-label="Volume">
 </div>
 
 <!-- ============ ACCUEIL ============ -->
-<section id="landing" class="screen">
+<section id="landing" class="screen" hidden>
   <div class="landing-inner">
     <div id="logo">
-      <img id="logo-img" src="assets/logo.png" alt="" onload="this.classList.add('ready'); document.getElementById('logo-text').style.display='none'" onerror="this.style.display='none'">
+      <img id="logo-img" src="assets/logo.webp" alt="" onload="this.classList.add('ready')" onerror="this.style.display='none'; document.getElementById('logo-text').style.display='block'">
       <div id="logo-text" class="logo-text">POKER<b>LOULT</b></div>
     </div>
     <p class="tagline">Made by Watto &amp; Claude — poker en ligne</p>
     <label class="field"><span>Ton pseudo</span><input id="land-name" type="text" maxlength="16" placeholder="Pseudo"></label>
-    <button id="btn-play" class="big-btn">JOUER</button>
+    <button id="btn-play" class="play-asset" aria-label="Jouer">JOUER</button>
     <button id="btn-rules-land" class="link-rules">Jamais joué au poker&nbsp;? Lire les règles</button>
+    <button id="land-back" class="link">‹ changer de jeu</button>
   </div>
+</section>
+
+<!-- ============ HUB (choix du jeu, TOUT PREMIER écran) ============
+     Présentation façon portail de jeux Flash : 4 jeux "à la une" en grand + le reste du catalogue en vignettes.
+     Chaque vignette = un cadre dessiné en CSS dans la DA du jeu (hub.css), logo du jeu par-dessus.
+     Les id #hub-<jeu> sont ceux que play.js / imposteur-client.js / lculture-client.js branchent au clic.
+     Pastilles "en jeu" + compteurs : hub-live.js (GET /api/hub). -->
+<section id="hub" class="screen">
+  <div class="hub-wrap">
+    <img class="hub-brand" src="assets/logoloultparty.webp" alt="Loult Party">
+    <div class="hub-sec"><h2>À la une</h2><span class="hub-online" hidden><i></i><b></b></span></div>
+    <div class="hub-feat">
+      <button id="hub-geo" class="gt gt-geo gt-big" data-game="geo">
+        <span class="gt-art">
+          <span class="geo-sky" aria-hidden="true"></span>
+          <svg class="geo-orbit" viewBox="0 0 160 100" aria-hidden="true"><ellipse cx="80" cy="54" rx="64" ry="22"/><ellipse cx="80" cy="54" rx="34" ry="11"/><circle class="geo-dot" r="2.2" cx="16" cy="54"/></svg>
+          <span class="gt-logo geo-logo"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M23.07 8.93A10 10 0 1 0 26 16H17" fill="none" stroke="#dcb872" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="16" r="2.6" fill="#f3ead8"/></svg><b>Géodésique</b><small>Laboratoire de l’Univers</small></span>
+          <span class="gt-ribbon">Nouveau</span>
+          <span class="gt-play" aria-hidden="true">Explorer</span>
+        </span>
+        <span class="gt-cap"><b>Géodésique</b><small>Trous noirs, quantique, cosmos : des expériences de physique à manipuler, avec les vraies données</small></span>
+      </button>
+      <button id="hub-lc" class="gt gt-lc gt-big" data-game="lc">
+        <span class="gt-art">
+          <span class="lc-rays" aria-hidden="true"></span>
+          <span class="gt-logo lc-logo lc-logo-hub"><span class="lc-L"></span><span class="lc-word">Culture</span></span>
+          <video class="gt-vid" data-src="assets/previews/lc.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
+          <span class="gt-live" hidden></span>
+          <span class="gt-play" aria-hidden="true">Jouer</span>
+        </span>
+        <span class="gt-cap"><b>L Culture</b><small>Le grand quiz télé entre amis · 2 à 12 joueurs</small></span>
+      </button>
+      <button id="hub-bomber" class="gt gt-bomber gt-big" data-game="bomber">
+        <span class="gt-art">
+          <span class="bb-walls" aria-hidden="true"></span>
+          <span class="gt-logo gt-svg" data-logo="bomber"></span>
+          <video class="gt-vid" data-src="assets/previews/bomber.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
+          <span class="gt-live" hidden></span><span class="gt-ribbon">Nouveau</span>
+          <span class="gt-play" aria-hidden="true">Jouer</span>
+        </span>
+        <span class="gt-cap"><b>Bomberloult</b><small>Bombes, bonus et explosions en chaîne · solo ou jusqu'à 4</small></span>
+      </button>
+      <button id="hub-line" class="gt gt-line gt-big" data-game="line">
+        <span class="gt-art">
+          <span class="ln-sun" aria-hidden="true"></span><span class="ln-floor" aria-hidden="true"><span class="ln-grid"></span></span>
+          <span class="gt-logo gt-svg" data-logo="line"></span>
+          <video class="gt-vid" data-src="assets/previews/line.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
+          <span class="gt-live" hidden></span><span class="gt-ribbon">Nouveau</span>
+          <span class="gt-play" aria-hidden="true">Jouer</span>
+        </span>
+        <span class="gt-cap"><b>Loultline</b><small>Shooter 2.5D nerveux — contrats, équipes, extraction · jusqu'à 8</small></span>
+      </button>
+    </div>
+    <div class="hub-sec"><h2>Plus de jeux</h2></div>
+    <div class="hub-grid">
+      <button id="hub-together" class="gt gt-together" data-game="together">
+        <span class="gt-art">
+          <span class="tg-stars" aria-hidden="true"></span>
+          <img class="gt-logo" src="together/assets/logo.webp" alt="">
+          <video class="gt-vid" data-src="assets/previews/together.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
+          <span class="gt-live" hidden></span>
+          <span class="gt-play" aria-hidden="true">Jouer</span>
+        </span>
+        <span class="gt-cap"><b>LoultTogether</b><small>Vidéos, musique et films regardés ensemble, en parfaite synchro · salons</small></span>
+      </button>
+      <button id="hub-poker" class="gt gt-poker" data-game="poker">
+        <span class="gt-art">
+          <span class="pk-chip" aria-hidden="true"></span><span class="pk-cards" aria-hidden="true"><i>A♠</i><i>K♥</i></span>
+          <img class="gt-logo" src="assets/logo.webp" alt="">
+          <video class="gt-vid" data-src="assets/previews/poker.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
+          <span class="gt-live" hidden></span>
+          <span class="gt-play" aria-hidden="true">Jouer</span>
+        </span>
+        <span class="gt-cap"><b>Poker Loult</b><small>Texas Hold'em en tournoi · 2 à 6</small></span>
+      </button>
+      <button id="hub-imp" class="gt gt-imp" data-game="imp">
+        <span class="gt-art">
+          <span class="gt-logo imp-hub-logo"><span class="imp-hub-pol" id="imp-hub-av"></span><span class="imp-hub-stamp">L'IMPOSTEUR</span></span>
+          <video class="gt-vid" data-src="assets/previews/imp.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
+          <span class="gt-live" hidden></span>
+          <span class="gt-play" aria-hidden="true">Jouer</span>
+        </span>
+        <span class="gt-cap"><b>L'Imposteur</b><small>Démasquez l'intrus · 3 à 6</small></span>
+      </button>
+      <button id="hub-yams" class="gt gt-yams" data-game="yams">
+        <span class="gt-art">
+          <span class="ym-die ym-d1" aria-hidden="true"></span><span class="ym-die ym-d2" aria-hidden="true"></span>
+          <img class="gt-logo" src="assets/yams/logo.webp" alt="">
+          <video class="gt-vid" data-src="assets/previews/yams.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
+          <span class="gt-live" hidden></span><span class="gt-ribbon upd">Updated</span>
+          <span class="gt-play" aria-hidden="true">Jouer</span>
+        </span>
+        <span class="gt-cap"><b>Loult Yams</b><small>Yams 3D aux vrais dés physiques · 2 à 4</small></span>
+      </button>
+      <button id="hub-toupie" class="gt gt-toupie" data-game="toupie">
+        <span class="gt-art">
+          <span class="tp-spin" aria-hidden="true"></span>
+          <img class="gt-logo" src="assets/toupie/logo.webp" alt="">
+          <video class="gt-vid" data-src="assets/previews/toupie.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
+          <span class="gt-live" hidden></span>
+          <span class="gt-play" aria-hidden="true">Jouer</span>
+        </span>
+        <span class="gt-cap"><b>Toupie SmashLoult</b><small>Éjecte l'adversaire de l'arène · jusqu'à 4</small></span>
+      </button>
+      <button id="hub-flappy" class="gt gt-flappy" data-game="flappy">
+        <span class="gt-art">
+          <span class="fl-clouds" aria-hidden="true"></span><span class="fl-ground" aria-hidden="true"></span>
+          <img class="gt-logo" src="assets/flappy/logo.webp" alt="">
+          <video class="gt-vid" data-src="assets/previews/flappy.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
+          <span class="gt-live" hidden></span>
+          <span class="gt-play" aria-hidden="true">Jouer</span>
+        </span>
+        <span class="gt-cap"><b>Flappy Trum</b><small>Évite les canettes, vise le top 10 · jusqu'à 4</small></span>
+      </button>
+      <button id="hub-cx" class="gt gt-cx" data-game="cx">
+        <span class="gt-art">
+          <svg class="cx-net" viewBox="0 0 160 100" preserveAspectRatio="none" aria-hidden="true"><path d="M12 22 L46 64 L82 30 L118 70 L148 26 M46 64 L18 86 M82 30 L104 8 M118 70 L142 90"/><circle cx="12" cy="22" r="3"/><circle cx="46" cy="64" r="3.4"/><circle cx="82" cy="30" r="3"/><circle cx="118" cy="70" r="3.4"/><circle cx="148" cy="26" r="3"/><circle cx="18" cy="86" r="2.4"/><circle cx="104" cy="8" r="2.4"/><circle cx="142" cy="90" r="2.4"/></svg>
+          <img class="gt-logo" src="assets/connexion/logoconnexion.webp" alt="">
+          <video class="gt-vid" data-src="assets/previews/cx.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
+          <span class="gt-live" hidden></span>
+          <span class="gt-play" aria-hidden="true">Jouer</span>
+        </span>
+        <span class="gt-cap"><b>Connexion</b><small>Trouvez le même mot, en même temps · à 2</small></span>
+      </button>
+      <button id="hub-c4" class="gt gt-c4" data-game="c4">
+        <span class="gt-art">
+          <span class="c4-tok c4-r" aria-hidden="true"></span><span class="c4-tok c4-y" aria-hidden="true"></span>
+          <img class="gt-logo" src="assets/c4/logo.webp" alt="">
+          <video class="gt-vid" data-src="assets/previews/c4.mp4" muted loop playsinline preload="none" aria-hidden="true"></video>
+          <span class="gt-live" hidden></span>
+          <span class="gt-play" aria-hidden="true">Jouer</span>
+        </span>
+        <span class="gt-cap"><b>Puissance 4</b><small>Alignez 4 pions, en ligne ou contre le bot · à 2</small></span>
+      </button>
+    </div>
+    <p class="hub-foot" hidden></p>
+  </div>
+</section>
+
+<!-- ============ CONNEXION : accueil (matchmaking, pas de code) ============ -->
+<section id="cxhome" class="screen" hidden>
+  <div class="cx-panel">
+    <img class="cx-logo" src="assets/connexion/logoconnexion.webp" alt="Connexion">
+    <p class="cx-sub">Trouvez le même mot que votre partenaire, en même temps.</p>
+    <button id="cx-search" class="big-btn">Rechercher une partie</button>
+    <div id="cx-searching" class="cx-hint" hidden>
+      <div class="cx-spinner"></div>
+      Recherche d'un joueur…
+      <button id="cx-cancel-search" class="ghost-btn small">Annuler</button>
+    </div>
+    <div id="cx-live" class="cx-live" hidden>
+      <div class="cx-live-title">👀 Parties en cours — clique pour regarder</div>
+      <div id="cx-live-list" class="cx-live-list"></div>
+    </div>
+    <button id="cx-home-back" class="ghost-btn">‹ Retour</button>
+  </div>
+</section>
+
+<!-- ============ CONNEXION : partie ============ -->
+<section id="cxgame" class="screen" hidden>
+  <div class="cx-panel cx-game-panel">
+    <div class="cx-players" id="cx-players"></div>
+    <div class="cx-status-row">
+      <div class="cx-lives" id="cx-lives"></div>
+      <div class="cx-timer" id="cx-timer">2:00</div>
+      <div class="cx-spec-count" id="cx-spec-count" hidden></div>
+    </div>
+    <div class="cx-round" id="cx-round-label">Manche 1</div>
+    <div id="cx-history" class="cx-history"></div>
+    <div id="cx-prompt-box" class="cx-prompt-box" hidden>
+      <div class="cx-prompt-label">Trouve le mot qui relie les deux derniers mots :</div>
+      <div class="cx-prompt-pair">
+        <span class="cx-prompt-word" id="cx-prompt-word-0"></span>
+        <span class="cx-prompt-vs">/</span>
+        <span class="cx-prompt-word" id="cx-prompt-word-1"></span>
+      </div>
+    </div>
+    <div id="cx-starter-box" class="cx-prompt-box" hidden>
+      <div class="cx-prompt-label">Lancez la partie : écrivez chacun un mot, en même temps !</div>
+    </div>
+    <form id="cx-form" class="cx-form">
+      <input id="cx-word-input" maxlength="24" autocomplete="off" placeholder="Ton mot…">
+      <button id="cx-submit" class="big-btn" type="submit">Valider</button>
+    </form>
+    <div id="cx-waitmsg" class="cx-hint" hidden>Envoyé — en attente de ton/ta partenaire…</div>
+    <div id="cx-result" class="cx-result" hidden>
+      <div id="cx-result-title" class="cx-result-title"></div>
+      <div class="row">
+        <button id="cx-game-leave" class="ghost-btn">Quitter</button>
+        <button id="cx-rematch" class="big-btn" hidden>Rejouer</button>
+      </div>
+      <div id="cx-rematch-wait" class="cx-hint" hidden>En attente que ton/ta partenaire relance la partie…</div>
+    </div>
+    <div id="cx-spec-bar" class="cx-spec-bar" hidden>
+      <div class="cx-spec-emojis" id="cx-spec-emojis"></div>
+      <button id="cx-spec-leave" class="ghost-btn small">Quitter</button>
+    </div>
+  </div>
+  <div id="cx-emoji-layer" class="cx-emoji-layer"></div>
+</section>
+
+<!-- ============ PUISSANCE 4 : accueil (matchmaking, pas de code) ============ -->
+<section id="c4home" class="screen" hidden>
+  <div class="c4-panel">
+    <img class="cx-logo" src="assets/c4/logo.webp" alt="Puissance 4" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'hub-emoji',style:'font-size:64px;margin:0 auto 12px',textContent:'🔴'}))">
+    <p class="cx-sub">Alignez 4 pions avant votre adversaire.</p>
+    <button id="c4-search" class="big-btn">Rechercher une partie</button>
+    <button id="c4-bot-play" class="big-btn">Jouer contre un Bot</button>
+    <div id="c4-searching" class="cx-hint" hidden>
+      <div class="cx-spinner"></div>
+      Recherche d'un joueur…
+      <button id="c4-cancel-search" class="ghost-btn small">Annuler</button>
+    </div>
+    <button id="c4-home-back" class="ghost-btn">‹ Retour</button>
+  </div>
+</section>
+
+<!-- ============ PUISSANCE 4 : partie ============ -->
+<section id="c4game" class="screen" hidden>
+  <div class="c4-game-panel">
+    <div class="cx-players" id="c4-players"></div>
+    <div class="c4-turn" id="c4-turn-label">—</div>
+    <div class="c4-board" id="c4-board"></div>
+    <div id="c4-result" class="cx-result" hidden>
+      <div id="c4-result-title" class="cx-result-title"></div>
+      <div class="row">
+        <button id="c4-game-leave" class="ghost-btn">Quitter</button>
+        <button id="c4-rematch" class="big-btn" hidden>Rejouer</button>
+      </div>
+      <div id="c4-rematch-wait" class="cx-hint" hidden>En attente que ton/ta partenaire relance la partie…</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ L'IMPOSTEUR : accueil = bureau du détective (fiche suspect + enquêtes) ============ -->
+<section id="imphome" class="screen imp-scene" hidden>
+  <div class="imp-home">
+    <h1 class="imp-title"><span>L'</span>IMPOSTEUR</h1>
+    <div class="imp-home-grid">
+      <div class="imp-folder imp-editor">
+        <div class="imp-folder-tab">Fiche suspect</div>
+        <div class="imp-ed-stage">
+          <div class="imp-ed-arrows" id="imp-ed-arrows"></div>
+          <div class="imp-pol imp-ed-pol"><div class="imp-pol-photo" id="imp-ed-photo"></div><div class="imp-pol-name" id="imp-ed-name"></div></div>
+        </div>
+        <div class="imp-ed-colors" id="imp-ed-colors"></div>
+        <button id="imp-ed-random" class="imp-btn ghost">🎲 Au hasard</button>
+      </div>
+      <div class="imp-folder imp-cases">
+        <div class="imp-folder-tab">Enquêtes</div>
+        <button id="imp-create" class="imp-btn">Ouvrir une enquête</button>
+        <form id="imp-join-form" class="imp-line">
+          <input id="imp-join-code" maxlength="4" autocomplete="off" placeholder="CODE" aria-label="Code du salon">
+          <button class="imp-btn" type="submit">Rejoindre</button>
+        </form>
+        <div class="imp-open-title">Enquêtes en cours</div>
+        <div id="imp-open-list" class="imp-open-list"><div class="imp-empty">Aucune pour l'instant — ouvre la tienne !</div></div>
+        <button id="imp-home-back" class="imp-btn ghost small">‹ Changer de jeu</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ L'IMPOSTEUR : salon + partie (tableau en liège) ============ -->
+<section id="impgame" class="screen imp-scene" hidden>
+  <div class="imp-room">
+    <header class="imp-hud">
+      <button id="imp-code-btn" class="imp-tab" title="Copier le lien d'invitation">Dossier <b id="imp-code"></b> <span>🔗</span></button>
+      <div id="imp-manche" class="imp-manche"></div>
+      <div id="imp-spec-count" class="imp-spec-count" hidden></div>
+      <div id="imp-fuse" class="imp-fuse" hidden><div class="imp-fuse-cord" id="imp-fuse-cord"><i class="imp-spark"></i></div><span id="imp-timer"></span></div>
+    </header>
+    <div class="imp-board" id="imp-board">
+      <svg class="imp-strings" id="imp-strings"></svg>
+      <div id="imp-players" class="imp-players"></div>
+      <div class="imp-flash" id="imp-flash"></div>
+    </div>
+    <div class="imp-bottom">
+      <button id="imp-role" class="imp-envelope" hidden title="Cliquer pour cacher / montrer"></button>
+      <div class="imp-note">
+        <div id="imp-msg" class="imp-msg"></div>
+        <form id="imp-form" class="imp-line" hidden>
+          <input id="imp-input" maxlength="24" autocomplete="off">
+          <button class="imp-btn" type="submit">Envoyer</button>
+        </form>
+        <div class="imp-note-btns">
+          <button id="imp-start" class="imp-btn" hidden>Lancer la manche</button>
+        </div>
+      </div>
+    </div>
+    <div class="imp-foot">
+      <div class="imp-reacts" id="imp-reacts"></div>
+      <button id="imp-leave" class="imp-btn ghost small">Quitter</button>
+    </div>
+  </div>
+  <div id="imp-fx" class="imp-fx"></div>
+  <div id="imp-podium" class="imp-podium" hidden></div>
+</section>
+
+<!-- ============ L CULTURE : accueil (carte candidat + émissions) ============ -->
+<section id="lchome" class="screen lc-scene" hidden>
+  <div class="lc-home">
+    <div class="lc-logo lc-logo-big"><span class="lc-L"></span><span class="lc-word">Culture</span></div>
+    <div class="lc-home-grid">
+      <div class="lc-card lc-editor">
+        <div class="lc-card-title">Ta mascotte</div>
+        <div class="lc-ed-stage">
+          <div class="lc-ed-av" id="lc-ed-av"></div>
+          <div class="lc-ed-rows" id="lc-ed-rows"></div>
+        </div>
+        <div class="lc-ed-colors" id="lc-ed-colors"></div>
+        <button id="lc-ed-random" class="lc-btn ghost">🎲 Au hasard</button>
+      </div>
+      <div class="lc-card lc-shows">
+        <div class="lc-card-title">Émissions</div>
+        <button id="lc-create" class="lc-btn big">Créer une émission</button>
+        <form id="lc-join-form" class="lc-line">
+          <input id="lc-join-code" maxlength="4" autocomplete="off" placeholder="CODE" aria-label="Code de l'émission">
+          <button class="lc-btn" type="submit">Rejoindre</button>
+        </form>
+        <div class="lc-open-title">En direct</div>
+        <div id="lc-open-list" class="lc-open-list"><div class="lc-empty">Aucune émission en cours — lance la tienne !</div></div>
+        <button id="lc-home-back" class="lc-btn ghost small">‹ Changer de jeu</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ L CULTURE : plateau (écran géant + pupitres) ============ -->
+<section id="lcgame" class="screen lc-scene" hidden>
+  <div class="lc-room">
+    <header class="lc-hud">
+      <div class="lc-logo lc-logo-mini"><span class="lc-L"></span><span class="lc-word">Culture</span></div>
+      <button id="lc-code-btn" class="lc-pill" title="Copier le lien d'invitation">Émission <b id="lc-code"></b> 🔗</button>
+      <div id="lc-progress" class="lc-progress"></div>
+      <div id="lc-spec-count" class="lc-pill dim" hidden></div>
+      <div id="lc-timer" class="lc-timer" hidden><svg viewBox="0 0 40 40"><circle class="lc-timer-bg" cx="20" cy="20" r="17"/><circle class="lc-timer-arc" id="lc-timer-arc" cx="20" cy="20" r="17" pathLength="100"/></svg><span id="lc-timer-txt"></span></div>
+    </header>
+    <div class="lc-screen-frame"><div class="lc-screen" id="lc-screen"></div></div>
+    <div class="lc-desks" id="lc-desks"></div>
+    <div class="lc-foot">
+      <div class="lc-reacts" id="lc-reacts"></div>
+      <button id="lc-leave" class="lc-btn ghost small">Quitter</button>
+    </div>
+  </div>
+  <div id="lc-fx" class="lc-fx"></div>
 </section>
 
 <!-- ============ LOBBY ============ -->
 <section id="lobby" class="screen" hidden>
-  <div class="panel">
-    <header class="panel-head">
-      <div class="mini-logo">POKER<b>LOULT</b></div>
-      <div class="who">Salon : <b id="lobby-name">—</b> <button id="btn-rename" class="link">changer</button></div>
-    </header>
-    <div class="lobby-actions">
-      <button id="btn-create-open" class="big-btn">+ Créer une room</button>
-      <button id="btn-join-code" class="ghost-btn">Rejoindre par code</button>
-      <button id="btn-refresh" class="ghost-btn">↻</button>
+  <div class="lobby-wrap">
+    <div class="lobby-top">
+      <div id="logo-lobby"><img src="assets/logo.webp" alt="POKER LOULT">
+        <button id="btn-back-title" class="link-reset logo-back" title="Retour à l'écran titre">‹ Retour</button>
+      </div>
+      <div class="who" id="salon-pill">Pseudo :&nbsp;<b id="lobby-name">—</b>&nbsp;<button id="btn-rename" class="link">changer</button></div>
     </div>
-    <h3 class="section-title">Rooms publiques</h3>
-    <div id="room-list" class="room-list"></div>
+    <div class="lobby-frame">
+      <div class="lobby-actions">
+        <button id="btn-create-open" class="asset-btn abtn-create" aria-label="Créer une room"></button>
+        <button id="btn-join-code" class="asset-btn abtn-join" aria-label="Rejoindre par code"></button>
+      </div>
+      <div class="lobby-listhead">
+        <h3 class="section-title">Rooms publiques</h3>
+        <button id="btn-refresh" class="asset-btn abtn-refresh" aria-label="Rafraîchir la liste"></button>
+      </div>
+      <div id="room-list" class="room-list"></div>
+    </div>
   </div>
 </section>
 
 <!-- ============ CRÉER UNE ROOM ============ -->
 <section id="create" class="screen" hidden>
-  <div class="panel">
-    <header class="panel-head"><div class="mini-logo">Nouvelle room</div></header>
-    <label class="field"><span>Nom de la room</span><input id="cr-name" type="text" maxlength="24" placeholder="La room de …"></label>
-    <div class="field"><span>Visibilité</span>
-      <div class="seg" id="cr-vis">
-        <button data-v="public" class="on">Publique</button>
-        <button data-v="private">Privée</button>
+  <div class="crn-frame">
+   <div class="crn-wrap">
+    <div class="crn-row">
+      <div class="crn-lbl crn-lbl-name" aria-hidden="true"></div>
+      <div class="crn-field"><input id="cr-name" type="text" maxlength="24" placeholder="Nom de la room…" aria-label="Nom de la room"></div>
+    </div>
+
+    <div class="crn-row">
+      <div class="crn-lbl crn-lbl-vis" aria-hidden="true"></div>
+      <div class="crn-seg" id="cr-vis">
+        <button data-v="public" class="on" aria-label="Room publique"></button>
+        <button data-v="private" aria-label="Room privée"></button>
       </div>
     </div>
-    <label class="field" id="cr-pass-wrap"><span>Mot de passe (optionnel)</span><input id="cr-pass" type="text" maxlength="24" placeholder="Laisser vide = libre"></label>
-    <div class="field"><span>Bots à ajouter</span><div class="seg" id="cr-bots"></div></div>
-    <div class="field"><span>Avatars</span>
-      <div class="seg" id="cr-avatar">
-        <button data-v="pokemon" class="on">Pokémon</button>
-        <button data-v="people">Personnalités</button>
+
+    <div class="crn-row" id="cr-pass-wrap">
+      <div class="crn-lbl crn-lbl-pass" aria-hidden="true"></div>
+      <div class="crn-field"><input id="cr-pass" type="text" maxlength="24" placeholder="Laisser vide = libre" aria-label="Mot de passe (optionnel)"></div>
+    </div>
+
+    <div class="crn-row">
+      <div class="crn-lbl crn-lbl-bots" aria-hidden="true"></div>
+      <div class="crn-seg crn-bots" id="cr-bots"></div>
+    </div>
+
+    <div class="crn-row">
+      <div class="crn-lbl crn-lbl-avatars" aria-hidden="true"></div>
+      <div class="crn-seg" id="cr-avatar">
+        <button data-v="pokemon" class="on" aria-label="Avatars Pokémon"></button>
+        <button data-v="people" aria-label="Avatars Personnalités"></button>
       </div>
     </div>
-    <div class="row">
-      <button id="btn-create-back" class="ghost-btn">Retour</button>
-      <button id="btn-create" class="big-btn">Créer la room</button>
+
+    <div class="crn-actions">
+      <button id="btn-create-back" class="crn-abtn crn-back" aria-label="Retour"></button>
+      <button id="btn-create" class="crn-abtn crn-submit" aria-label="Créer la room"></button>
     </div>
+   </div>
   </div>
 </section>
 
 <!-- ============ SALLE D'ATTENTE ============ -->
 <section id="waiting" class="screen" hidden>
-  <div class="panel">
-    <header class="panel-head">
-      <div class="mini-logo" id="wait-name">Room</div>
-      <div class="code-box">Code : <b id="wait-code">····</b> <button id="btn-copy" class="link">copier</button></div>
-    </header>
-    <h3 class="section-title">Joueurs</h3>
-    <div id="wait-players" class="player-list"></div>
-    <div class="field host-only"><span>Bots dans la partie</span><div class="seg" id="wait-bots"></div></div>
-    <button id="btn-ready" class="big-btn">JE SUIS PRÊT</button>
-    <div id="wait-hostnote" class="note"></div>
-    <div class="row">
-      <button id="btn-leave" class="ghost-btn">Quitter</button>
-      <button id="btn-start" class="big-btn host-only">Lancer la partie</button>
+  <div class="wait-frame">
+   <div class="crn-wrap">
+    <div class="crn-head">
+      <div class="crn-infobox" id="wait-name">Room</div>
+      <div class="wait-code">Code : <b id="wait-code">····</b> <button id="btn-copy" class="link">copier</button></div>
     </div>
+    <div class="wait-lead" aria-hidden="true"></div>
+    <div id="wait-players" class="player-list"></div>
+    <div class="crn-row host-only">
+      <div class="crn-lbl crn-lbl-bots" aria-hidden="true"></div>
+      <div class="crn-seg crn-bots" id="wait-bots"></div>
+    </div>
+    <div id="wait-hostnote" class="note"></div>
+    <div class="crn-actions">
+      <button id="btn-leave" class="crn-abtn wait-quit" aria-label="Quitter"></button>
+      <button id="btn-ready" class="crn-abtn" aria-label="Je suis prêt"></button>
+      <button id="btn-start" class="crn-abtn wait-start host-only" aria-label="Lancer la partie"></button>
+    </div>
+   </div>
   </div>
 </section>
 
 <!-- ============ JEU ============ -->
+<!-- mobile portrait, en jeu : demande de tourner l'écran (la table est calée sur du 16:9) -->
+<div id="rotate-hint"><div class="rh-icon">📱</div><p>Tourne ton téléphone pour jouer confortablement</p></div>
 <div id="stage" hidden>
   <div id="board">
     <div id="blinds">
-      <div class="lvl">NIVEAU <span id="lvl-num">1</span></div>
+      <div class="lvl">BLIND <span id="lvl-num">1</span></div>
       <div class="amt"><span id="lvl-sb">200</span> / <span id="lvl-bb">400</span></div>
       <div class="clock" id="lvl-clock">05:00</div>
     </div>
     <div id="croupier"></div>
+    <div id="croupier-chips-l"></div><div id="croupier-chips-r"></div>
     <div id="ronflex-bubble"></div>
     <div id="deck"></div>
     <div id="community"><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div></div>
@@ -117,13 +556,19 @@
     <div id="combo-banner" hidden></div>
     <div id="seats"></div>
     <div id="victory" hidden>
-      <div class="trophy"><img src="assets/coupe.png" alt=""></div>
+      <div class="trophy"><img src="assets/coupe.webp" alt=""></div>
       <div class="vtitle" id="vtitle"></div>
-      <div class="vsub">Tournoi POKER LOULT terminé</div>
+      <div class="vsub">Partie POKER LOULT terminée</div>
+      <div id="vstats" hidden>
+        <div class="vstat"><b id="vs-hands">0</b><span>main<i id="vs-hands-s">s</i> gagnée<i id="vs-hands-s2">s</i></span></div>
+        <div class="vstat"><b id="vs-best">—</b><span>meilleure main</span></div>
+        <div class="vstat"><b id="vs-biggest">0</b><span>plus gros gain</span></div>
+      </div>
       <div class="row">
         <button id="btn-quit-game" class="ghost-btn">Quitter</button>
-        <button id="btn-newgame" class="big-btn host-only">Rejouer</button>
+        <button id="btn-newgame" class="big-btn">Rejouer</button>
       </div>
+      <div id="rematch-note" class="note"></div>
     </div>
   </div>
 </div>
@@ -135,11 +580,14 @@
     <button id="btn-call" class="act call">Suivre</button>
     <button id="btn-allin" class="act allin">Tapis</button>
     <div id="raise-box">
-      <input type="range" id="raise-slider" min="0" max="1000" step="10" value="0"><span id="raise-amount">0</span>
-      <button id="btn-raise" class="act raise">Relancer</button>
-      <button class="act quick" data-mult="2">×2</button>
-      <button class="act quick" data-mult="3">×3</button>
-      <button class="act quick" data-mult="4">×4</button>
+      <div class="pot-shortcuts">
+        <button class="act quick" data-pot="0.5">POT ½</button>
+        <button class="act quick" data-pot="1">POT ×1</button>
+      </div>
+      <div class="raise-row">
+        <input type="range" id="raise-slider" min="0" max="1000" step="10" value="0"><span id="raise-amount">0</span>
+        <button id="btn-raise" class="act raise">Relancer</button>
+      </div>
     </div>
     <div id="preactions" hidden>
       <button id="pa-checkfold" class="pa">Check/Fold<i class="pa-box"></i></button>
@@ -159,6 +607,31 @@
     <div class="confirm-actions">
       <button id="confirm-cancel" class="ghost-btn">Annuler</button>
       <button id="confirm-ok" class="big-btn">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<!-- petite modale à 1 champ (remplace prompt() : renommer pseudo, mdp room verrouillée) -->
+<div id="prompt-modal" hidden>
+  <div class="confirm-box join-box">
+    <p id="prompt-msg"></p>
+    <input id="prompt-input" type="text" maxlength="24" autocomplete="off" spellcheck="false">
+    <div class="confirm-actions">
+      <button id="prompt-cancel" class="ghost-btn">Annuler</button>
+      <button id="prompt-ok" class="big-btn">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rejoindre par code (remplace les prompt() natifs du navigateur) -->
+<div id="join-modal" hidden>
+  <div class="confirm-box join-box">
+    <p>Rejoindre par code</p>
+    <input id="join-code" type="text" maxlength="8" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    <input id="join-pass" type="text" maxlength="24" placeholder="Mot de passe (si privée)" autocomplete="off">
+    <div class="confirm-actions">
+      <button id="join-cancel" class="ghost-btn">Annuler</button>
+      <button id="join-go" class="big-btn">Rejoindre</button>
     </div>
   </div>
 </div>
@@ -207,14 +680,14 @@
 
       <section data-p="mains" hidden>
         <p class="rules-lead">De la plus forte (en haut) à la plus faible (en bas). En jeu, ta meilleure main est affichée en permanence sous tes cartes.</p>
-        <img src="assets/combinaisons.png" alt="Classement des mains de poker">
+        <img src="assets/combinaisons.webp" alt="Classement des mains de poker">
       </section>
     </div>
   </div>
 </div>
 <button id="btn-chat" title="Chat">💬</button>
 <div id="chat-menu" hidden></div>
-<button id="btn-emote" title="Emotes"><img src="assets/emojiicon.png" alt="Emotes"></button>
+<button id="btn-emote" title="Emotes"><img src="assets/emojiicon.webp" alt="Emotes"></button>
 <div id="emote-menu" hidden></div>
 <audio id="cigare-audio" src="sfx/cigare.mp3" preload="none"></audio>
 <audio id="cafe-audio" src="sfx/freesound_community-drinking-coffe-107121.mp3" preload="none"></audio>
@@ -222,6 +695,25 @@
 
 <script src="poker-eval.js"></script>
 <script src="sfx.js"></script>
+<!-- moteur/room Puissance 4 : mêmes fichiers que le serveur (server/c4-*.js exposent window.C4Engine/
+     window.C4Room en plus de module.exports), réutilisés tels quels pour le mode "vs Bot" 100% local
+     (pas de partie réseau pour ce mode -> pas de triche possible à protéger, pas besoin du serveur). -->
+<script src="server/c4-engine.js"></script>
+<script src="server/c4-room.js"></script>
+<script src="server/c4-bot.js"></script>
 <script src="play.js"></script>
+<script src="hub-live.js"></script>
+<script type="module">
+// logos vectoriels animés de Bomberloult / Loultline (mêmes modules que les jeux, rien de dupliqué)
+import { logoSVG as bomber } from "./bomberloult/logo.js";
+import { logoSVG as line } from "./loultline/logo.js";
+const L = { bomber: () => bomber("hubbl"), line: () => line("hubll") };
+document.querySelectorAll("[data-logo]").forEach((el) => { el.innerHTML = L[el.dataset.logo](); });
+</script>
+<script src="imposteur-avatar.js"></script>
+<script src="imposteur-client.js"></script>
+<script src="imposteur-decor.js"></script>
+<script src="lculture-avatar.js"></script>
+<script src="lculture-client.js"></script>
 </body>
 </html>

@@ -9,13 +9,17 @@ const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
 /* identité */
 let token = localStorage.getItem('pl_token');
-if (!token) { token = 'p-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('pl_token', token); }
+// crypto.getRandomValues (pas Math.random, prévisible et pas fait pour ça) : ce token sert de session de
+// reconnexion, autant qu'il soit dur à deviner même s'il n'est plus renvoyé aux autres joueurs (voir fix
+// côté serveur : le snapshot n'exposait plus que le siège, jamais ce token, depuis la faille corrigée).
+if (!token) { const b = crypto.getRandomValues(new Uint8Array(16)); token = 'p-' + [...b].map(x => x.toString(16).padStart(2, '0')).join(''); localStorage.setItem('pl_token', token); }
 let pseudo = localStorage.getItem('pl_name') || ('Loult' + Math.floor(Math.random() * 900 + 100));
 
 let snap = null, timeOffset = 0, awaiting = false, ws = null, currentScreen = 'landing', lastPot = 0, lastActionSeq = -1, lastCurrentBet = 0, preAction = null, lastMyTurn = false;
 const showCard = [false, false], shownCard = [false, false];   // SHOW par carte : armée / déjà envoyée
 const viewerShows = () => showCard[0] || showCard[1] || shownCard[0] || shownCard[1];
 const checkedSeats = new Set(); let lastStreet = null, lastCheckHand = -1;   // tag "CHECK" par siège
+const actionTags = new Map(); // seat -> {type:'call'|'raise', amount} : tag "C" / "RAISE 12K" sous le siège
 
 /* ---------- chat de messages préfaits (identique au serveur) ---------- */
 const CHAT_PRESETS = ['Bien joué !', 'GG', 'Bluff ?', 'All-in !', 'Trop fort', 'Chanceux…', 'Allez !', 'Aïe 😬', 'Nice 😎', 'Mdr 😂', 'Bien tenté', 'Merci !'];
@@ -37,11 +41,11 @@ function showChat(seat, text) {
 // 12 réactions Watto : chacune un vrai PNG séparé (assets/emote_<id>.png, découpé par slice_watto.py depuis
 // setemojiwatto.png) -> plus simple et plus fiable qu'un sprite-sheet + background-position à calculer.
 const EMOTES = [
-  { id: 'cigare', label: 'Cigare' },   // vignette = 1ère frame de assets/cigare_frames.png (cas spécial, voir emoteThumb)
-  { id: 'cafe', label: 'Café' },       // idem, assets/cafe_frames.png
-  { id: 'pistolet', label: 'Pistolet' }, // idem, assets/colt_frames.png ; nécessite une CIBLE (voir initEmote/onSeatClickForPistol)
-  { id: 'baffe', label: 'Baffe' },       // idem, assets/baffe_frames.png ; nécessite une CIBLE aussi
-  { id: 'gossip', label: 'Ragot' },      // idem, assets/gossip_frames.png
+  { id: 'cigare', label: 'Cigare' },   // vignette = 1ère frame de assets/cigare_frames.webp (cas spécial, voir emoteThumb)
+  { id: 'cafe', label: 'Café' },       // idem, assets/cafe_frames.webp
+  { id: 'pistolet', label: 'Pistolet' }, // idem, assets/colt_frames.webp ; nécessite une CIBLE (voir initEmote/onSeatClickForPistol)
+  { id: 'baffe', label: 'Baffe' },       // idem, assets/baffe_frames.webp ; nécessite une CIBLE aussi
+  { id: 'gossip', label: 'Ragot' },      // idem, assets/gossip_frames.webp
   { id: 'w-relax', label: 'Zen' },
   { id: 'w-cheer', label: 'Hourra' },
   { id: 'w-cool', label: 'Cool' },
@@ -68,11 +72,11 @@ function emoteThumb(em) {
     // 1ère frame mise à l'échelle sur la largeur de la boîte -> lettrboxée verticalement (pas déformée, pas rognée)
     const SHEET = { cigare: [16, 199, 79], cafe: [24, 336, 336], pistolet: [10, 432, 355], baffe: [5, 375, 403], gossip: [16, 484, 356] }[em.id];
     const [FRAMES, FW, FH] = SHEET, s = BOX / FW, fh = FH * s;
-    el.style.backgroundImage = `url('assets/${em.id === 'pistolet' ? 'colt' : em.id}_frames.png')`;
+    el.style.backgroundImage = `url('assets/${em.id === 'pistolet' ? 'colt' : em.id}_frames.webp')`;
     el.style.backgroundSize = (BOX * FRAMES) + 'px ' + fh + 'px';
     el.style.backgroundPosition = '0 ' + Math.round((BOX - fh) / 2) + 'px'; // centrée verticalement dans la boîte
   } else {
-    el.style.backgroundImage = `url('assets/emote_${em.id}.png')`;
+    el.style.backgroundImage = `url('assets/emote_${em.id}.webp')`;
     el.style.backgroundSize = 'cover'; el.style.backgroundPosition = 'center';
   }
   return el;
@@ -127,7 +131,7 @@ function playWattoEmote(seat, id) {
   const w = Math.max(66, av.width * 1.5), h = w / EMOTE_ASPECT;
   const el = document.createElement('div'); el.className = 'watto-emote';
   el.style.width = w + 'px'; el.style.height = h + 'px';
-  el.style.backgroundImage = `url('assets/emote_${id}.png')`;
+  el.style.backgroundImage = `url('assets/emote_${id}.webp')`;
   el.style.backgroundSize = 'contain'; el.style.backgroundPosition = 'center';
   el.style.left = (av.left + av.width / 2 - w / 2) + 'px';
   el.style.top = (av.top + av.height * 0.5 - h) + 'px'; // centré sur l'avatar, débordant surtout vers le haut (devant lui, pas au-dessus de tout le pod)
@@ -151,7 +155,7 @@ function playCigare(seat) {
   if (!av.width || !bd.width) return;
   const FRAMES = 16;                                                 // cigare_frames.png : 16 frames horizontales de 199x79
   const fw = Math.max(28, av.width * 0.6), fh = fw * 79 / 199;       // plus petit : ~60% de l'avatar (pas centré/énorme)
-  const bg = "url('assets/cigare_frames.png')", bgSize = (fw * FRAMES) + 'px ' + fh + 'px';
+  const bg = "url('assets/cigare_frames.webp')", bgSize = (fw * FRAMES) + 'px ' + fh + 'px';
   const el = document.createElement('div'); el.className = 'cigare-emote';
   el.style.width = fw + 'px'; el.style.height = fh + 'px';
   el.style.backgroundImage = bg; el.style.backgroundSize = bgSize; el.style.backgroundPosition = '0 0'; // frame 0 (éteint) pendant le vol
@@ -193,7 +197,7 @@ function playCafe(seat) {
   if (!av.width || !bd.width) return;
   const FRAMES = 24;                                                 // cafe_frames.png : 24 frames horizontales de 336x336 (carré, cellule nominale + marge fixe)
   const fw = Math.max(38, av.width * 0.8), fh = fw;                  // agrandi (avant 0.55) ; carré donc fh=fw
-  const bg = "url('assets/cafe_frames.png')", bgSize = (fw * FRAMES) + 'px ' + fh + 'px';
+  const bg = "url('assets/cafe_frames.webp')", bgSize = (fw * FRAMES) + 'px ' + fh + 'px';
   const el = document.createElement('div'); el.className = 'cigare-emote'; // même style (position/ombre) que le cigare
   el.style.width = fw + 'px'; el.style.height = fh + 'px';
   el.style.backgroundImage = bg; el.style.backgroundSize = bgSize; el.style.backgroundPosition = '0 0'; // frame 0 (tasse pleine, posée)
@@ -230,7 +234,7 @@ function playGossip(seat) {
   if (!av.width || !bd.width) return;
   const FRAMES = 16;                                                 // gossip_frames.png : 16 frames horizontales de 484x356 (slice_gossip.py)
   const fw = Math.max(60, av.width * 1.3), fh = fw * 356 / 484; // 2x (avant 0.65)
-  const bg = "url('assets/gossip_frames.png')", bgSize = (fw * FRAMES) + 'px ' + fh + 'px';
+  const bg = "url('assets/gossip_frames.webp')", bgSize = (fw * FRAMES) + 'px ' + fh + 'px';
   const el = document.createElement('div'); el.className = 'cigare-emote'; // même style (position/ombre) que les autres
   el.style.width = fw + 'px'; el.style.height = fh + 'px';
   el.style.backgroundImage = bg; el.style.backgroundSize = bgSize; el.style.backgroundPosition = '0 0';
@@ -304,7 +308,7 @@ function playPistolet(seat, targetSeat) {
   const fw = Math.max(50, av.width * 1.1), scale = fw / COLT_FW, fh = fw * COLT_FH / COLT_FW;
   console.log('[pistolet] src=', srcX, srcY, 'dst=', dstX, dstY, 'angle(deg)=', targetAngle * 180 / Math.PI, 'fw/fh=', fw, fh);
   const px = fw * COLT_PIVOT_X, py = fh * COLT_PIVOT_Y;
-  const gunBg = "url('assets/colt_frames.png')", gunBgSize = (fw * COLT_FRAMES) + 'px ' + fh + 'px';
+  const gunBg = "url('assets/colt_frames.webp')", gunBgSize = (fw * COLT_FRAMES) + 'px ' + fh + 'px';
   const el = document.createElement('div'); el.className = 'colt-emote';
   el.style.width = fw + 'px'; el.style.height = fh + 'px';
   el.style.backgroundImage = gunBg; el.style.backgroundSize = gunBgSize; el.style.backgroundPosition = '0 0';
@@ -331,7 +335,7 @@ function fireBullet(x0, y0, x1, y1, angle) {
   const BW = 70, BH = BW * 137 / 340; // bullet_frames.png : frame ~340x137, 5 frames (garde la frame "avec traînée")
   const b = document.createElement('div'); b.className = 'bullet-emote';
   b.style.width = BW + 'px'; b.style.height = BH + 'px';
-  b.style.backgroundImage = "url('assets/bullet_frames.png')"; b.style.backgroundSize = (BW * 5) + 'px ' + BH + 'px'; b.style.backgroundPosition = (-3 * BW) + 'px 0'; // frame 3 = balle + traînée
+  b.style.backgroundImage = "url('assets/bullet_frames.webp')"; b.style.backgroundSize = (BW * 5) + 'px ' + BH + 'px'; b.style.backgroundPosition = (-3 * BW) + 'px 0'; // frame 3 = balle + traînée
   b.style.left = (x0 - BW / 2) + 'px'; b.style.top = (y0 - BH / 2) + 'px';
   b.style.transform = `rotate(${angle}rad)`;
   document.body.appendChild(b);
@@ -343,7 +347,7 @@ function spawnImpact(x, y) {
   const IW = 100, IH = 100; // impact_frames.png : les 4 premières frames (254x255) sont propres, la suite = fragments -> on n'utilise QUE 0..3
   const el = document.createElement('div'); el.className = 'impact-emote';
   el.style.width = IW + 'px'; el.style.height = IH + 'px';
-  el.style.backgroundImage = "url('assets/impact_frames.png')"; el.style.backgroundSize = (IW * 14) + 'px ' + IH + 'px';
+  el.style.backgroundImage = "url('assets/impact_frames.webp')"; el.style.backgroundSize = (IW * 14) + 'px ' + IH + 'px';
   el.style.left = (x - IW / 2) + 'px'; el.style.top = (y - IH / 2) + 'px';
   document.body.appendChild(el);
   const FRAMES = [0, 1, 2, 3], per = 90;
@@ -356,7 +360,7 @@ function spawnCasings(x, y, angle) {
   idxs.slice(0, 2).forEach((fi, i) => {
     const c = document.createElement('div'); c.className = 'casing-emote';
     c.style.width = CW + 'px'; c.style.height = CH + 'px';
-    c.style.backgroundImage = "url('assets/casing_frames.png')"; c.style.backgroundSize = (CW * 11) + 'px ' + CH + 'px'; c.style.backgroundPosition = (-fi * CW) + 'px 0';
+    c.style.backgroundImage = "url('assets/casing_frames.webp')"; c.style.backgroundSize = (CW * 11) + 'px ' + CH + 'px'; c.style.backgroundPosition = (-fi * CW) + 'px 0';
     c.style.left = (x - CW / 2) + 'px'; c.style.top = (y - CH / 2) + 'px';
     document.body.appendChild(c);
     // éjectée perpendiculairement au canon (vers le haut-arrière), tombe en tournant
@@ -390,7 +394,7 @@ function playBaffe(seat, targetSeat) {
   const extraRotRad = targetAngle - BAFFE_NATURAL_ANGLE; // même rotation gardée tout du long (trajet + swing local)
   const fw = Math.max(46, av.width * 0.95), fh = fw * BAFFE_FH / BAFFE_FW;
   const px = fw * BAFFE_PIVOT_X, py = fh * BAFFE_PIVOT_Y;
-  const bg = "url('assets/baffe_frames.png')", bgSize = (fw * BAFFE_FRAMES) + 'px ' + fh + 'px';
+  const bg = "url('assets/baffe_frames.webp')", bgSize = (fw * BAFFE_FRAMES) + 'px ' + fh + 'px';
   const el = document.createElement('div'); el.className = 'colt-emote'; // même style (position/ombre) que le pistolet
   el.style.width = fw + 'px'; el.style.height = fh + 'px';
   el.style.backgroundImage = bg; el.style.backgroundSize = bgSize; el.style.backgroundPosition = '0 0'; // frame 1 (main ouverte) pendant le trajet
@@ -433,7 +437,7 @@ function spawnBaffeImpact(x, y) {
   const IW = 90, IH = IW * 261 / 321; // baffe_impact_frames.png : 2 frames de 321x261
   const el = document.createElement('div'); el.className = 'impact-emote';
   el.style.width = IW + 'px'; el.style.height = IH + 'px';
-  el.style.backgroundImage = "url('assets/baffe_impact_frames.png')"; el.style.backgroundSize = (IW * 2) + 'px ' + IH + 'px';
+  el.style.backgroundImage = "url('assets/baffe_impact_frames.webp')"; el.style.backgroundSize = (IW * 2) + 'px ' + IH + 'px';
   el.style.left = (x - IW / 2) + 'px'; el.style.top = (y - IH / 2) + 'px';
   document.body.appendChild(el);
   setTimeout(() => { el.style.backgroundPosition = (-IW) + 'px 0'; }, 60);
@@ -444,7 +448,7 @@ function spawnBaffeMark(x, y) {
   const MW = 110, MH = MW * 267 / 348; // baffe_mark_frames.png : une seule frame (la plus nette) affichée plus grande et plus longtemps
   const el = document.createElement('div'); el.className = 'impact-emote';
   el.style.width = MW + 'px'; el.style.height = MH + 'px';
-  el.style.backgroundImage = "url('assets/baffe_mark_frames.png')"; el.style.backgroundSize = (MW * 5) + 'px ' + MH + 'px'; el.style.backgroundPosition = '0 0';
+  el.style.backgroundImage = "url('assets/baffe_mark_frames.webp')"; el.style.backgroundSize = (MW * 5) + 'px ' + MH + 'px'; el.style.backgroundPosition = '0 0';
   el.style.left = (x - MW / 2) + 'px'; el.style.top = (y - MH / 2) + 'px';
   document.body.appendChild(el);
   const hold = 2000; // 1s de plus qu'avant pour bien la voir
@@ -460,8 +464,8 @@ for (let s = 0; s < 6; s++) {
     '<div class="cards"></div><div class="hand-label" hidden></div><div class="eq-badge" hidden></div></div>' +
     '<div class="status"></div>' +
     '<div class="plate"><div class="pname"></div><div class="stack"></div></div>' +
-    '<div class="check-tag" hidden>✓ CHECK</div>' +
-    '<div class="chips" hidden><img class="chip-ava" alt=""><b class="chip-blind"></b><i class="chip-a">A</i><span>0</span><i class="chip-jeton"></i></div><div class="chat-bubble" hidden></div>' +
+    '<div class="mise-row"><div class="check-tag" hidden>✓ CHECK</div>' +
+    '<div class="chips" hidden><img class="chip-ava" alt=""><b class="chip-blind"></b><i class="chip-a">A</i><span>0</span><i class="chip-jeton"></i></div></div><div class="chat-bubble" hidden></div>' +
     '<button class="show-btn l">SHOW</button><button class="show-btn r">SHOW</button>';
   el.querySelectorAll('.show-btn').forEach(b => b.onclick = () => toggleShow(b.classList.contains('r') ? 1 : 0));
   el.addEventListener('click', (e) => { if (e.target.closest('button')) return; onSeatClickForPistol(s); }); // cible pour l'émote pistolet
@@ -472,15 +476,15 @@ const SEAT_SLOTS = { 2: [0, 4], 3: [0, 3, 4], 4: [0, 2, 3, 4], 5: [0, 2, 3, 4, 5
 const AVATARS = { 'Miaouss': 'meowth', 'Roucool': 'pidgey', 'Évoli': 'eevee', 'Salamèche': 'charmander', 'Rondoudou': 'jigglypuff', 'Magicarpe': 'magikarp' };
 const AVATAR_POOL = ['p1', 'p4', 'p6', 'p7', 'p9', 'p16', 'p25', 'p26', 'p39', 'p52', 'p54', 'p58', 'p63', 'p92', 'p94', 'p104', 'p113', 'p129', 'p131', 'p133', 'p143', 'p150', 'p151'];
 function avatarSrc(name, id) {
-  if (AVATARS[name]) return 'avatars/' + AVATARS[name] + '.png';        // bot -> son Pokémon
+  if (AVATARS[name]) return 'avatars/' + AVATARS[name] + '.webp';        // bot -> son Pokémon
   const key = String(id || name || 'x'); let h = 0;
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
-  return 'avatars/' + AVATAR_POOL[Math.abs(h) % AVATAR_POOL.length] + '.png'; // humain -> avatar aléatoire stable
+  return 'avatars/' + AVATAR_POOL[Math.abs(h) % AVATAR_POOL.length] + '.webp'; // humain -> avatar aléatoire stable
 }
 // une partie sur deux, le serveur pioche dans le pool "personnalités" (avatarKind) au lieu du pool Pokémon
 function avatarImgSrc(p) {
-  if (p.avatarKind === 'people' && p.avatar) return 'avatars/people/' + p.avatar + '.jpg';
-  return p.avatar ? 'avatars/p' + p.avatar + '.png' : avatarSrc(p.name, p.id);
+  if (p.avatarKind === 'people' && p.avatar) return 'avatars/people/' + p.avatar + '.webp';
+  return p.avatar ? 'avatars/p' + p.avatar + '.webp' : avatarSrc(p.name, p.id);
 }
 const fmtK = (n) => n >= 10000 ? Math.round(n / 1000) + 'K' : n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K' : '' + n; // 10000 -> "10K"
 
@@ -488,20 +492,41 @@ const fmtK = (n) => n >= 10000 ? Math.round(n / 1000) + 'K' : n >= 1000 ? (n / 1
    GESTION DES ÉCRANS
    ============================================================ */
 // piste par écran : titlescreen.mp3 à l'accueil, songmenu.mp3 dans le lobby/création/salle d'attente
-const MENU_MUSIC = { landing: 'sfx/titlescreen.mp3', lobby: 'sfx/songmenu.mp3', create: 'sfx/songmenu.mp3', waiting: 'sfx/songmenu.mp3' };
+const MENU_MUSIC = { landing: 'sfx/titlescreen.mp3', lobby: 'sfx/songmenu.wav', create: 'sfx/songmenu.wav', waiting: 'sfx/songmenu.wav' };
 const MENU_MUSIC_SKIP = { 'sfx/titlescreen.mp3': 3 }; // cet enregistrement a plusieurs secondes de silence au début -> on saute direct dedans pour avoir le son tout de suite
 function showScreen(name) {
   currentScreen = name;
-  ['landing', 'lobby', 'create', 'waiting'].forEach(s => $('#' + s).hidden = s !== name);
+  try { localStorage.setItem('pl_screen', name); } catch (e) { } // pour retomber au bon endroit après un refresh
+  ['landing', 'hub', 'lobby', 'create', 'waiting', 'cxhome', 'cxgame', 'c4home', 'c4game', 'imphome', 'impgame', 'lchome', 'lcgame'].forEach(s => $('#' + s).hidden = s !== name);
   $('#rules-modal').hidden = true; // ne doit jamais rester ouverte en changeant d'écran (menu, fin de partie...)
+  if (name === 'cxhome') send({ type: 'cxListGames' }); // liste des parties à regarder, tout de suite (puis polling, voir cxRenderLive)
   const g = name === 'game';
   $('#stage').hidden = !g; $('#bottombar').hidden = !g;
   document.body.classList.toggle('playing', g); // fond casino masqué en jeu
+  // fond casino (photo "POKER LOULT") masqué au hub, écran neutre commun à tous les jeux
+  // L'Imposteur : décor "bureau de détective" (CSS, cf. body.imp-bg dans play.css), jamais la photo casino
+  const impScreen = name === 'imphome' || name === 'impgame' || (name === 'landing' && selectedGame === 'imp');
+  document.body.classList.toggle('on-hub', name === 'hub');
+  document.body.classList.toggle('imp-bg', impScreen);
+  // L Culture : plateau télé rétro (CSS, cf. body.lc-bg dans lculture.css)
+  const lcScreen = name === 'lchome' || name === 'lcgame' || (name === 'landing' && selectedGame === 'lc');
+  document.body.classList.toggle('lc-bg', lcScreen);
+  // décor Connexion (son propre fond, jamais la photo casino poker) : accueil (si Connexion choisi), écran
+  // de recherche, partie -> les 3 seuls écrans de ce jeu qui affichent #app-bg (le lobby/game poker n'a pas
+  // ce souci, il a déjà sa propre photo/son propre décor).
+  document.body.classList.toggle('cx-bg', name === 'cxhome' || name === 'cxgame' || (name === 'landing' && selectedGame === 'cx'));
+  // décor Puissance 4 (son propre fond, asset "font.png" fourni) : même mécanique que cx-bg ci-dessus.
+  const c4Screen = name === 'c4home' || name === 'c4game' || (name === 'landing' && selectedGame === 'c4');
+  document.body.classList.toggle('c4-bg', c4Screen);
   const bg = document.getElementById('bgm');     // musique du menu : coupée en jeu, reprise au menu
   if (bg) {
-    if (g) bg.pause();
+    // Puissance 4 n'a pas (encore) de thème dédié -> silence plutôt que la musique poker/Connexion
+    // qui jurerait avec le décor spatial.
+    if (g || c4Screen) bg.pause();
     else {
-      const track = MENU_MUSIC[name];
+      // Connexion (accueil si Connexion choisi + recherche + partie) : son propre thème, jamais celui du poker.
+      const cxScreen = name === 'cxhome' || name === 'cxgame' || (name === 'landing' && selectedGame === 'cx');
+      const track = cxScreen ? 'sfx/cx_theme.mp3' : impScreen ? 'sfx/imp_theme.mp3' : lcScreen ? 'sfx/lc_jazz.mp3' : MENU_MUSIC[name]; // en partie, imposteur-client.js change de piste selon la phase
       if (track && bg.getAttribute('src') !== track) {
         bg.src = track;
         const skip = MENU_MUSIC_SKIP[track];
@@ -520,15 +545,21 @@ const savePseudo = (v) => { pseudo = (v || '').trim().slice(0, 16) || pseudo; lo
 /* ============================================================
    CONNEXION
    ============================================================ */
+let pendingListRooms = false; // reprise après refresh : demander la liste des salons dès la WS ouverte
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${proto}://${location.host}/?t=${encodeURIComponent(token)}`);
-  ws.onopen = () => setConn('ok', 'En ligne');
+  ws.onopen = () => {
+    setConn('ok', 'En ligne');
+    // reprise après refresh : le serveur nous remet d'abord dans notre room via le token (si active) ->
+    // on ne demande la liste des salons que si, après ce court délai, on est bien resté au lobby.
+    if (pendingListRooms) { pendingListRooms = false; setTimeout(() => { if (currentScreen === 'lobby') send({ type: 'listRooms' }); }, 450); }
+  };
   ws.onclose = () => { setConn('lost', 'Reconnexion…'); setTimeout(connect, 1500); };
   ws.onerror = () => { try { ws.close(); } catch (e) { } };
   ws.onmessage = (e) => {
     let m; try { m = JSON.parse(e.data); } catch (_) { return; }
-    if (m.type === 'hello') { if (m.token) { token = m.token; localStorage.setItem('pl_token', token); } }
+    if (m.type === 'hello') { if (m.token) { token = m.token; localStorage.setItem('pl_token', token); } if (currentScreen === 'impgame') impExpectState(); if (currentScreen === 'lcgame' && window.lcExpectState) lcExpectState(); }
     else if (m.type === 'rooms') {
       renderRoomList(m.rooms);
       // reçu la liste des salons = on n'est PLUS dans une partie (serveur redémarré / partie finie)
@@ -537,8 +568,26 @@ function connect() {
     else if (m.type === 'state') { awaiting = false; handleState(m.snap); }
     else if (m.type === 'chat') { showChat(m.seat, m.text); }
     else if (m.type === 'emote') { try { playEmote(m.seat, m.emote, m.target); } catch (err) { console.error('emote', m.emote, err); } }
-    else if (m.type === 'error') { toast(m.msg); }
+    else if (m.type === 'error') {
+      if (currentScreen === 'cxgame') { if (!cxSpec) cxRejectWord(); }
+      else { if (currentScreen === 'c4game') SFX.play('c4invalid'); toast(m.msg); }
+    }
     else if (m.type === 'left') { showScreen('lobby'); send({ type: 'listRooms' }); }
+    else if (m.type === 'cxJoined') { cxCode = m.code; cxYou = m.you; }
+    else if (m.type === 'cxSearching') { cxSetSearching(true); }
+    else if (m.type === 'cxState') { cxHandleState(m.snap); }
+    else if (m.type === 'cxLeft') { cxCode = null; cxYou = -1; cxSetSearching(false); showScreen('cxhome'); }
+    else if (m.type === 'cxGames') { cxRenderLive(m.games); }
+    else if (m.type === 'cxSpecState') { if (cxSpec) cxHandleState(m.snap); }
+    else if (m.type === 'cxSpecEnd') { if (cxSpec) cxSpecExit(); }
+    else if (m.type === 'cxEmoji') { if (currentScreen === 'cxgame') cxFloatEmoji(m.emoji); }
+    else if (m.type === 'c4Joined') { c4Code = m.code; c4You = m.you; }
+    else if (m.type === 'c4Searching') { c4SetSearching(true); }
+    else if (m.type === 'c4State') { c4HandleState(m.snap); }
+    else if (m.type === 'c4Left') { c4Code = null; c4You = -1; c4SetSearching(false); showScreen('c4home'); }
+    else if (m.type === 'c4Hover') { c4ShowOppGhost(m.seat, m.col); }
+    else if (m.type.startsWith('imp')) impOnMessage(m); // L'Imposteur : voir imposteur-client.js
+    else if (m.type.startsWith('lc')) lcOnMessage(m);   // L Culture : voir lculture-client.js
   };
 }
 function send(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
@@ -565,8 +614,10 @@ let muted = localStorage.getItem('pl_muted') === '1';
 function applyVolume() {
   bgm.volume = volume; bgm.muted = muted;
   SFX.setVolume(volume); SFX.setMuted(muted);
-  $('#vol').value = Math.round(volume * 100);
-  $('#mute-btn').textContent = (muted || volume === 0) ? '🔇' : '🔊';
+  const pct = Math.round(volume * 100);
+  $('#vol').value = pct;
+  $('#mute-btn').classList.toggle('off', muted || volume === 0);
+  $('#vol').style.setProperty('--p', pct + '%'); // partie remplie de la piste
 }
 $('#vol').oninput = function () { volume = (+this.value) / 100; if (volume > 0) muted = false; localStorage.setItem('pl_vol', volume); applyVolume(); };
 $('#mute-btn').onclick = () => { muted = !muted; localStorage.setItem('pl_muted', muted ? '1' : '0'); applyVolume(); };
@@ -579,14 +630,95 @@ function playMusic() { if (bgm.getAttribute('src')) { musicStarted = true; bgm.v
 let firstInteractionDone = false; // un seul clic déclenche PLUSIEURS types d'événements (pointerdown puis click) -> sans ce garde, l'annonce se jouerait 2 fois
 function onFirstInteraction() {
   if (firstInteractionDone) return; firstInteractionDone = true;
-  SFX.ensure(); playMusic(); if (currentScreen === 'landing') SFX.play('pokerloult'); // annonce une seule fois, seulement si on démarre bien sur l'écran de titre
+  SFX.ensure(); playMusic(); if (currentScreen === 'landing' && selectedGame === 'poker') SFX.play('pokerloult'); // annonce une seule fois, seulement sur l'écran de titre DU POKER (pas l'écran pseudo des autres jeux)
 }
 // plusieurs types d'événements (pas juste pointerdown) : certains navigateurs/mobiles ne comptent pas tous
 // les mêmes gestes comme une "vraie" interaction utilisateur pour débloquer l'autoplay.
 ['pointerdown', 'keydown', 'click', 'touchstart'].forEach(ev => document.addEventListener(ev, onFirstInteraction, { once: true }));
 
 $('#land-name').value = pseudo;
-$('#btn-play').onclick = () => { savePseudo($('#land-name').value); SFX.ensure(); playMusic(); $('#lobby-name').textContent = pseudo; showScreen('lobby'); send({ type: 'listRooms' }); };
+// choix du jeu AVANT le pseudo (hub = tout premier écran) : le bouton JOUER de #landing route ensuite vers
+// le bon jeu selon ce choix, au lieu de toujours foncer sur le poker.
+let selectedGame = 'poker';
+// écran de "chargement" (faux, ~2s) déclenché AU CHOIX DU JEU (pas au chargement de la page : avant, il se
+// jouait systématiquement à la 1re visite, thème Poker ("remplissage des jetons"...) même si on allait
+// ensuite choisir Connexion sur le hub -> aucun sens. Chaque jeu a ses propres messages + son propre
+// préchargement (pas la peine de précharger les images du poker si on part sur Connexion, et vice versa).
+const POKER_LOAD_MSGS = ['Chargement des cartouches', 'Remplissage des jetons', 'Mélange du paquet',
+  'Réveil de Ronflex', 'Cirage du tapis vert', 'Calibrage des bluffs', 'Comptage des mises',
+  'Distribution des sièges', 'Service des boissons', 'Vérification des cartes marquées'];
+const POKER_LOAD_PRELOAD = ['assets/background.webp', 'assets/logo.webp', 'assets/ui/btn_play.webp',
+  'assets/ui/menu_frame.webp', 'assets/ui/salon_bar.webp', 'assets/ui/btn_create.webp',
+  'assets/ui/btn_join.webp', 'assets/ui/btn_refresh.webp'];
+// l'écran pseudo (#landing) est partagé par les 2 jeux -> il affichait TOUJOURS le logo/texte Poker, même en
+// venant de Connexion (le user l'a lu comme "ça lance le poker"). On rebranding son logo/texte selon le jeu choisi.
+function applyLandingBranding() {
+  const cx = selectedGame === 'cx', c4 = selectedGame === 'c4', imp = selectedGame === 'imp', lc = selectedGame === 'lc';
+  // pas de logo image pour L'Imposteur -> le titre texte prend la place
+  $('#logo-img').style.display = imp || lc ? 'none' : ''; $('#logo-text').style.display = imp || lc ? 'block' : '';
+  // L'Imposteur : bouton JOUER dessiné en HTML/CSS (médaillon détective + plaque), pas l'image du poker
+  const bp = $('#btn-play');
+  bp.classList.toggle('play-asset', !imp && !lc); bp.classList.toggle('imp-play', imp); bp.classList.toggle('lc-play', lc);
+  bp.innerHTML = imp && window.ImpAvatar ? `<span class="imp-play-medal">${ImpAvatar.render({ h: 12, t: 3, b: 1 })}</span><span class="imp-play-label">JOUER</span>` : 'JOUER';
+  if (lc) { // L Culture : logo enseigne à ampoules + bouton JOUER rétro (cf. lculture.css)
+    bp.innerHTML = '<span>JOUER</span>';
+    $('#logo-text').innerHTML = '<span class="lc-logo lc-logo-big"><span class="lc-L"></span><span class="lc-word">Culture</span></span>';
+    $('.tagline').textContent = 'Le grand quiz entre amis · 2 à 12 joueurs';
+    if (window.lcDecorateLogos) lcDecorateLogos();
+    return;
+  }
+  if (imp) { $('#logo-text').innerHTML = "<span>L'</span>IMPOSTEUR"; $('.tagline').textContent = "Démasquez l'intrus · 3 à 6 joueurs"; return; }
+  $('#logo-img').src = cx ? 'assets/connexion/logoconnexion.webp' : c4 ? 'assets/c4/logo.webp' : 'assets/logo.webp';
+  $('#logo-text').textContent = cx ? 'CONNEXION' : c4 ? 'PUISSANCE 4' : '';
+  $('.tagline').textContent = cx ? 'Trouvez le même mot que votre partenaire, à 2'
+    : c4 ? 'Alignez 4 pions avant votre adversaire, à 2' : 'Made by Watto & Claude — poker en ligne';
+}
+$('#hub-poker').onclick = () => {
+  selectedGame = 'poker'; $('#btn-rules-land').hidden = false;
+  window.PL_runLoading({ messages: POKER_LOAD_MSGS, preload: POKER_LOAD_PRELOAD, onDone: () => { applyLandingBranding(); showScreen('landing'); } });
+};
+$('#hub-cx').onclick = () => {
+  // pas de faux écran de chargement ici : Connexion n'a pas de "table à préparer" façon poker, et l'ancien
+  // écran de chargement gardait de toute façon le décor "POKER LOULT" en fond -> déroutant pour ce jeu.
+  // La seule vraie attente de Connexion, c'est la recherche d'adversaire (déjà son propre écran, cxhome).
+  selectedGame = 'cx'; $('#btn-rules-land').hidden = true;
+  applyLandingBranding();
+  showScreen('landing');
+};
+$('#hub-c4').onclick = () => {
+  selectedGame = 'c4'; $('#btn-rules-land').hidden = true; // même raisonnement que Connexion ci-dessus
+  applyLandingBranding();
+  showScreen('landing');
+};
+
+// LOULT YAMS : app 3D autonome (build dans /yams/, projet D:\LOULTYAMS). On y va
+// directement — elle a son propre écran de départ (pseudo + "Jouer en ligne" /
+// "Jouer contre le Bot").
+const YAMS_URL = 'yams/';
+$('#hub-yams').onclick = () => { location.href = YAMS_URL; };
+$('#hub-flappy').onclick = () => { location.href = 'flappy-trum/'; };
+$('#hub-toupie').onclick = () => { location.href = 'toupie/'; };
+$('#hub-together').onclick = () => { location.href = 'together/'; };
+$('#hub-geo').onclick = () => { location.href = 'geodesique/'; };
+$('#hub-line').onclick = () => { location.href = 'loultline/'; };
+$('#hub-bomber').onclick = () => { location.href = 'bomberloult/'; };
+$('#land-back').onclick = () => showScreen('hub');
+$('#btn-play').onclick = () => {
+  savePseudo($('#land-name').value); SFX.ensure(); playMusic();
+  if (selectedGame === 'cx') showScreen('cxhome');
+  else if (selectedGame === 'c4') showScreen('c4home');
+  else if (selectedGame === 'imp') impAfterPseudo();
+  else if (selectedGame === 'lc') lcAfterPseudo();
+  else { $('#lobby-name').textContent = pseudo; showScreen('lobby'); send({ type: 'listRooms' }); }
+};
+
+// SFX d'interface : clic léger sur tout bouton de menu, son "annuler" pour retour/quitter.
+// Exclut les boutons d'action en jeu (.act) qui ont déjà leurs propres sons.
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b || b.classList.contains('act') || b.classList.contains('quick')) return;
+  SFX.play(/(^|-)(back|leave|quit)/.test(b.id) ? 'uiback' : 'uiclick');
+}, true);
 
 /* ============================================================
    LOBBY
@@ -604,14 +736,49 @@ function renderRoomList(list) {
     el.appendChild(row);
   });
 }
-function tryJoin(code, locked) {
-  const password = locked ? (prompt('Mot de passe de la room :') || '') : '';
+async function tryJoin(code, locked) {
+  const password = locked ? (await customPrompt('Mot de passe de la room :') || '') : '';
   if (locked && password === '') return;
   send({ type: 'joinRoom', code, password, pseudo });
 }
 $('#btn-refresh').onclick = () => send({ type: 'listRooms' });
-$('#btn-rename').onclick = () => { const v = prompt('Ton pseudo :', pseudo); if (v) { savePseudo(v); $('#lobby-name').textContent = pseudo; $('#land-name').value = pseudo; } };
-$('#btn-join-code').onclick = () => { const code = (prompt('Code de la room :') || '').trim().toUpperCase(); if (code) send({ type: 'joinRoom', code, password: prompt('Mot de passe (laisser vide si aucun) :') || '', pseudo }); };
+$('#btn-rename').onclick = async () => { const v = await customPrompt('Ton pseudo :', pseudo); if (v) { savePseudo(v); $('#lobby-name').textContent = pseudo; $('#land-name').value = pseudo; } };
+$('#btn-back-title').onclick = () => showScreen('landing'); // retour à l'écran titre (musique titlescreen.mp3 reprend via showScreen)
+// modale à un champ (remplace prompt()) : renommer le pseudo, mot de passe d'une room verrouillée
+function customPrompt(msg, value = '') {
+  return new Promise(resolve => {
+    $('#prompt-msg').textContent = msg; $('#prompt-input').value = value;
+    $('#prompt-modal').hidden = false;
+    setTimeout(() => { $('#prompt-input').focus(); $('#prompt-input').select(); }, 30);
+    const done = r => { $('#prompt-modal').hidden = true;
+      $('#prompt-ok').removeEventListener('click', ok); $('#prompt-cancel').removeEventListener('click', ko);
+      $('#prompt-input').removeEventListener('keydown', key); $('#prompt-modal').removeEventListener('click', bg);
+      resolve(r); };
+    const ok = () => done($('#prompt-input').value.trim() || null);
+    const ko = () => done(null);
+    const key = e => { if (e.key === 'Enter') ok(); else if (e.key === 'Escape') ko(); };
+    const bg = e => { if (e.target === $('#prompt-modal')) ko(); };
+    $('#prompt-ok').addEventListener('click', ok); $('#prompt-cancel').addEventListener('click', ko);
+    $('#prompt-input').addEventListener('keydown', key); $('#prompt-modal').addEventListener('click', bg);
+  });
+}
+/* Rejoindre par code : modale maison (fini les prompt() natifs du navigateur). */
+$('#btn-join-code').onclick = () => {
+  $('#join-code').value = ''; $('#join-pass').value = '';
+  $('#join-modal').hidden = false; setTimeout(() => $('#join-code').focus(), 30);
+};
+$('#join-cancel').onclick = () => { $('#join-modal').hidden = true; };
+$('#join-go').onclick = () => {
+  const code = $('#join-code').value.trim().toUpperCase();
+  if (!code) { $('#join-code').focus(); return; }
+  $('#join-modal').hidden = true;
+  send({ type: 'joinRoom', code, password: $('#join-pass').value, pseudo });
+};
+['#join-code', '#join-pass'].forEach(sel => $(sel).addEventListener('keydown', e => {
+  if (e.key === 'Enter') $('#join-go').click();
+  else if (e.key === 'Escape') $('#join-cancel').click();
+}));
+$('#join-modal').addEventListener('click', e => { if (e.target === $('#join-modal')) $('#join-cancel').click(); });
 $('#btn-create-open').onclick = () => { initCreate(); showScreen('create'); };
 
 /* ============================================================
@@ -625,6 +792,8 @@ function initCreate() {
   document.querySelectorAll('#cr-vis button').forEach(b => b.classList.toggle('on', b.dataset.v === 'public'));
   document.querySelectorAll('#cr-avatar button').forEach(b => b.classList.toggle('on', b.dataset.v === 'pokemon'));
   buildBotSeg('#cr-bots', crBots, (n) => crBots = n);
+  // cadre haut-droite : rappel du pseudo courant (+ raccourci pour le changer), comme au lobby
+  // (#cr-info retiré : le cadre `ui_form_frame` porte déjà le titre « NOUVELLE ROOM »)
 }
 function buildBotSeg(id, cur, cb) {
   const c = $(id); c.innerHTML = '';
@@ -691,7 +860,24 @@ function customConfirm(msg) {
 }
 $('#btn-leave-game').onclick = async () => { if (await customConfirm('Quitter la partie ?')) send({ type: 'leaveRoom' }); };
 $('#btn-quit-game').onclick = () => send({ type: 'leaveRoom' });
-$('#btn-newgame').onclick = () => send({ type: 'newGame' });
+// Rejouer : seul face aux bots -> relance directe. À plusieurs humains -> chacun doit accepter
+// (même mécanique "prêt" que la salle d'attente), la revanche démarre quand tout le monde a cliqué.
+$('#btn-newgame').onclick = () => {
+  const r = snap && snap.room;
+  if (!r || (r.humans || 1) <= 1) send({ type: 'newGame' });
+  else send({ type: 'toggleReady', ready: !r.youReady });
+};
+function renderRematch(s) {
+  const r = s.room || {};
+  const btn = $('#btn-newgame'), note = $('#rematch-note');
+  if ((r.humans || 1) <= 1) {
+    btn.textContent = 'Rejouer'; btn.classList.remove('on'); note.textContent = '';
+  } else {
+    btn.textContent = r.youReady ? '✓ Prêt à rejouer' : 'Rejouer';
+    btn.classList.toggle('on', !!r.youReady);
+    note.textContent = `${r.readyCount || 0}/${r.humans} joueurs prêts — la revanche démarre quand tout le monde accepte.`;
+  }
+}
 
 /* ============================================================
    RENDU DU JEU (table)
@@ -715,25 +901,27 @@ function renderGame(s) {
       `<span>${i === 0 ? 'Principal' : 'Side pot ' + i}&nbsp;: <b>${fmtK(p.amount)}</b></span>`).join('');
   } else sideEl.hidden = true;
   // marque "CHECK" persistante : réinitialisée à chaque nouvelle street / main
-  if (s.street !== lastStreet || s.handNo !== lastCheckHand) { checkedSeats.clear(); lastStreet = s.street; lastCheckHand = s.handNo; }
-  // SFX + tag CHECK selon la dernière action jouée
+  if (s.street !== lastStreet || s.handNo !== lastCheckHand) { checkedSeats.clear(); actionTags.clear(); lastStreet = s.street; lastCheckHand = s.handNo; }
+  // SFX + tag CHECK/CALL/RAISE selon la dernière action jouée
   if (s.lastAction && s.lastAction.seq !== lastActionSeq) {
     lastActionSeq = s.lastAction.seq;
     const a = s.lastAction.type, seat = s.lastAction.seat, p = s.seats[seat];
-    if (a === 'check') { SFX.play('check'); checkedSeats.add(seat); }
+    if (a === 'check') { SFX.play('check'); checkedSeats.add(seat); actionTags.delete(seat); }
     else { checkedSeats.delete(seat); }   // toute autre action retire le tag
-    if (a === 'call') { SFX.play('chip'); if (p) sayBet(p, s); }
-    else if (a === 'raise') {
+    if (a === 'fold') actionTags.delete(seat);
+    if (a === 'call') { SFX.play('chip'); if (p) sayBet(p, s); actionTags.set(seat, { type: 'call' }); }
+    else if (a === 'raise' || a === 'allin') {
       const bb = s.blinds ? s.blinds.bb : 0;
-      if (bb > 0 && s.currentBet >= 2 * bb) { SFX.play('wow'); croupierSay('Wow !', 1300); } // mise >= 2x la blinde -> wow (remplace l'ancien crowd)
-      else { SFX.play('miser'); if (p) sayBet(p, s); }
+      if (a === 'raise' && bb > 0 && s.currentBet >= 2 * bb) { SFX.play('wow'); croupierSay('Wow !', 1300); } // mise >= 2x la blinde -> wow (remplace l'ancien crowd)
+      else if (a === 'raise') { SFX.play('miser'); if (p) sayBet(p, s); }
+      actionTags.set(seat, { type: 'raise', amount: p ? p.bet : s.currentBet });
     }
   }
   lastCurrentBet = s.currentBet;
   const myTurn = s.toAct === s.you && s.phase === 'playing';   // c'est mon tour -> son yourturn (au passage)
   if (myTurn && !lastMyTurn) SFX.play('yourturn');
   lastMyTurn = myTurn;
-  document.querySelectorAll('.card.made,.card.win,.card.dim').forEach(c => c.classList.remove('made', 'made-strong', 'win', 'dim'));
+  document.querySelectorAll('.card.made,.card.win,.card.dim').forEach(c => c.classList.remove('made', 'made-high', 'made-trips', 'made-strong', 'win', 'win-high', 'win-trips', 'win-strong', 'dim'));
   seatEls.forEach(el => el.classList.remove('winner', 'loser'));
   renderCommunity(s.board);
   renderSeats(s);
@@ -741,12 +929,16 @@ function renderGame(s) {
   if (s.phase === 'playing' && s.handNo !== lastDealHand) { if (dealAnimation(s)) lastDealHand = s.handNo; } // nouvelle main -> distribution animée (réessaie si pas prêt)
   renderControls(s);
   updateMyHandInfo(s);
-  if (s.phase === 'handComplete' && !winnerShown) {
+  // la MAIN qui élimine l'avant-dernier joueur saute directement en 'tournamentOver' (jamais 'handComplete')
+  // -> sans le || ici, declareWinners() ne tournait jamais pour cette dernière main : ni highlight des
+  // cartes gagnantes, ni jetons qui filent vers le gagnant, ni mise à jour du récap perso (signalé en jeu
+  // réel : un tournoi gagné sur une seule main affichait "0 main gagnée" dans le récap).
+  if ((s.phase === 'handComplete' || s.phase === 'tournamentOver') && !winnerShown) {
     // sur un tapis général, plusieurs cartes du board peuvent arriver d'un coup dans CE snapshot (déjà en
     // handComplete) alors que renderCommunity vient tout juste de programmer leur révélation étalée ->
     // on n'annonce le gagnant qu'une fois cette révélation VISUELLEMENT terminée (winnerRevealAt).
     const wait = winnerRevealAt - Date.now();
-    if (wait > 0) { if (!winnerTimer) winnerTimer = setTimeout(() => { winnerTimer = null; if (snap && snap.phase === 'handComplete') declareWinners(snap); }, wait); }
+    if (wait > 0) { if (!winnerTimer) winnerTimer = setTimeout(() => { winnerTimer = null; if (snap && (snap.phase === 'handComplete' || snap.phase === 'tournamentOver')) declareWinners(snap); }, wait); }
     else declareWinners(s);
   }
   updateShowBtn(s);
@@ -759,11 +951,22 @@ function renderGame(s) {
       const reveal = () => {
         victoryShown = true; $('#victory').hidden = false;
         const w = s.seats.find(p => p && p.id === s.winner);
-        $('#vtitle').textContent = (w ? w.name : 'Le vainqueur') + ' remporte le tournoi !';
+        $('#vtitle').textContent = (w ? w.name : 'Le vainqueur') + ' remporte la partie !';
+        // récap perso : que si t'as vraiment joué au moins une main cette partie (pas de récap vide pour un
+        // spectateur/reconnexion tardive) ; "meilleure main" seulement si t'es allé à l'abattage au moins une fois.
+        const st = $('#vstats');
+        if (myStats.hands > 0 || myStats.bestCat >= 0) {
+          st.hidden = false;
+          $('#vs-hands').textContent = myStats.hands;
+          $('#vs-hands-s').textContent = myStats.hands > 1 ? 's' : ''; $('#vs-hands-s2').textContent = myStats.hands > 1 ? 's' : '';
+          $('#vs-best').textContent = myStats.bestCat >= 0 ? EV.HAND_NAMES[myStats.bestCat] : '—';
+          $('#vs-biggest').textContent = fmtK(myStats.biggest);
+        } else st.hidden = true;
       };
       if (wait > 0) { if (!victoryTimer) victoryTimer = setTimeout(() => { victoryTimer = null; if (snap && snap.phase === 'tournamentOver') reveal(); }, wait); }
       else reveal();
     }
+    if (victoryShown) renderRematch(s);
   } else {
     $('#victory').hidden = true; victoryShown = false; clearTimeout(victoryTimer); victoryTimer = null;
   }
@@ -772,7 +975,7 @@ function renderGame(s) {
 
 function makeCard(c, faceUp) {
   const el = document.createElement('div'); el.className = 'card';
-  const front = c ? `url('cards/${c.code}.png')` : 'none';
+  const front = c ? `url('cards/${c.code}.webp')` : 'none';
   el.innerHTML = `<div class="card-inner"><div class="face back"></div><div class="face front" style="background-image:${front}"></div></div>`;
   if (c && faceUp) el.classList.add('flipped');
   if (c) el._code = c.code;
@@ -821,6 +1024,10 @@ function repaintEquity() { paintEquity(equityAt(snap, revealedBoardLen)); }
 
 let communityDone = 0, winnerRevealAt = 0, winnerTimer = null, winnerShown = false; // #victoire : n'annoncer qu'une fois le board VISUELLEMENT révélé
 let victoryTimer = null, victoryShown = false; // écran de victoire du tournoi : même délai que winnerRevealAt
+// récap perso affiché sur l'écran de victoire : purement client, remis à zéro à chaque nouveau tournoi (pas
+// de compte ni de BDD demandés) -> juste "cette partie-ci".
+let myStats = { hands: 0, biggest: 0, bestCat: -1 };
+function resetMyStats() { myStats = { hands: 0, biggest: 0, bestCat: -1 }; }
 // suspense : un joueur éliminé PENDANT la main en cours ne doit s'afficher grisé/"Éliminé" qu'une fois la
 // révélation du board terminée (déclarée par declareWinners) — sinon le badge spoile le résultat direct.
 let revealedEliminated = new Set(), lastElimHand = -1;
@@ -856,8 +1063,11 @@ function renderCommunity(board) {
       void card.offsetWidth; // force le rendu du DOS avant de retourner (sinon le flip est sauté)
       // setTimeout (pas requestAnimationFrame) : le rAF est throttlé/sauté ici, la carte restait face cachée
       setTimeout(() => { card.classList.add('flipped'); SFX.play('flip'); if (isRiver) setTimeout(() => $('#board').classList.remove('suspense'), 1600); }, isRiver ? EXTRA : 30);
-      if (snap) updateMyHandInfo(snap);
+      // incrémenté AVANT updateMyHandInfo (pas après) : sinon la dernière carte (river) se retournait mais
+      // le calcul des outs restait fait sur les 4 cartes précédentes -> boîte "outs" jamais effacée après la
+      // river, elle restait collée par-dessus la carte fraîchement révélée (signalé en jeu réel).
       revealedBoardLen = i + 1; repaintEquity(); // #10 : % de win recalculé en direct à chaque carte du board
+      if (snap) updateMyHandInfo(snap);
     }, (i - start) * 1000); // révélation plus posée : 1 s entre chaque carte (+ EXTRA géré dans le flip lui-même pour la river)
     communityTimers.push(id);
   }
@@ -887,7 +1097,13 @@ function renderSeats(s) {
   const alive = []; for (let i = 0; i < 6; i++) { const p = s.seats[i]; if (p && p.status !== 'eliminated') alive.push(i); }
   const bi = alive.indexOf(s.button), blind = {};
   if (bi >= 0 && alive.length >= 2) { const hu = alive.length === 2; blind[alive[(bi + (hu ? 0 : 1)) % alive.length]] = 'SB'; blind[alive[(bi + (hu ? 1 : 2)) % alive.length]] = 'BB'; }
-  if (s.handNo !== lastShowdownHand) {
+  // calculé au moment RÉEL de l'abattage (handComplete, ou dès le tapis général avec équité connue), pas au
+  // début de la main : calculé trop tôt (à la donne), Date.now()+délai tombait déjà dans le passé une fois
+  // la main terminée quelques secondes plus tard -> le bandeau WINNER s'affichait instantanément, sans laisser
+  // le temps aux cartes adverses (encore dos face) de se retourner (signalé en jeu réel : "ça met direct le
+  // winner"). Les vraies cartes n'arrivent QUE sur ce genre de snapshot, donc "maintenant" est enfin le bon repère.
+  const live2 = []; for (let i = 0; i < 6; i++) { const p = s.seats[i]; if (p && p.inHand && !p.folded) live2.push(i); }
+  if (s.handNo !== lastShowdownHand && live2.length >= 2 && (s.phase === 'handComplete' || s.equity)) {
     lastShowdownHand = s.handNo; showdownDelays = showdownOrder(s); // 1 seule fois par main -> délais stables
     // le retournement des mains décalé par joueur peut durer plus longtemps que la révélation du board (ex:
     // river déjà affichée depuis un moment, rien de neuf à révéler) -> repousser winnerRevealAt si besoin,
@@ -927,15 +1143,24 @@ function renderSeats(s) {
     const rk = rankMap[seat]; rb.textContent = rk === 1 ? '1er' : rk + 'e'; rb.className = 'rank-badge r' + (rk <= 3 ? rk : 0);
     const st = el.querySelector('.status'); st.textContent = p.allIn ? 'TAPIS' : ''; st.className = 'status' + (p.allIn ? ' allin' : '');
     // tag CHECK (bleu) / FOLD (rouge) sous le bloc
+    const atag = actionTags.get(seat);
     const tag = el.querySelector('.check-tag');
     if (p.folded) { tag.hidden = false; tag.textContent = '✕ FOLD'; tag.className = 'check-tag fold'; }
     else if (checkedSeats.has(seat)) { tag.hidden = false; tag.textContent = '✓ CHECK'; tag.className = 'check-tag'; }
-    else tag.hidden = true;
+    else if (atag && p.bet > 0) {
+      // lettre seule (pas le montant, déjà affiché sur le jeton coloré juste en dessous) : "RAISE 2.8K" en toutes
+      // lettres doublait le chiffre ET débordait sur l'avatar du siège voisin sur une table à 6 (signalé en jeu réel).
+      if (atag.type === 'call') { tag.hidden = false; tag.textContent = 'C'; tag.className = 'check-tag call'; }
+      else { tag.hidden = false; tag.textContent = 'R'; tag.className = 'check-tag raise'; }
+    } else tag.hidden = true;
     const chips = el.querySelector('.chips');
     const prevBet = chips.hidden ? 0 : (+chips.dataset.bet || 0);   // valeur brute (le texte est formaté "3.5K")
     if (prevBet > 0 && !(p.bet > 0) && s.phase === 'playing' && s.handNo === flyHandNo) { flyChipToPot(chips); collected = true; } // fin de tour -> mise vers le pot
     chips.hidden = !(p.bet > 0); chips.dataset.bet = p.bet; chips.classList.toggle('allin', !!p.allIn); chips.querySelector('span').textContent = fmtK(p.bet);
-    chips.classList.toggle('big', p.bet >= 2 * (s.blinds ? s.blinds.bb : 1e9) && !blind[seat]); // grosse mise -> doré
+    // couleur de la mise selon sa nature : blinde -> bleu, suivre -> vert, relance -> doré (tapis reste rose via .allin)
+    chips.classList.toggle('blind', s.street === 'preflop' && !!blind[seat] && !atag);
+    chips.classList.toggle('call', !!atag && atag.type === 'call');
+    chips.classList.toggle('raise', !!atag && atag.type === 'raise');
     if (p.bet > 0) { const ca = chips.querySelector('.chip-ava'), src = p.avatar ? avatarImgSrc(p) : ''; if (ca.getAttribute('src') !== src) ca.src = src; } // mini-avatar du joueur sur la mise
     chips.querySelector('.chip-blind').textContent = s.street === 'preflop' && blind[seat] ? blind[seat] : ''; // SB/BB au préflop
     if (prevBet === 0 && p.bet > 0) { chips.classList.remove('drop'); void chips.offsetWidth; chips.classList.add('drop'); } // le jeton se pose devant
@@ -1008,17 +1233,29 @@ function positionBetChip(chips, seatEl) {
   chips.style.left = '50%'; chips.style.top = '50%'; chips.style.right = 'auto'; chips.style.bottom = 'auto';
   chips.style.transform = `translate(calc(-50% + ${Math.round(dx)}px), calc(-50% + ${Math.round(dy)}px))`;
 }
-// mise collectée en fin de tour : un jeton vole du siège vers le pot
+// piles colorées (assets/chips/pile_*.webp) : une couleur au hasard par jeton animé, pour varier la table
+const CHIP_COLORS = ['violet', 'bleu', 'rouge', 'vert', 'or'];
+function chipPileUrl(kind) { return `assets/chips/${kind}_${CHIP_COLORS[(Math.random() * CHIP_COLORS.length) | 0]}.webp`; }
+// mise collectée en fin de tour : 1-2 piles glissent du siège vers le pot (pas juste 1 petit jeton qui
+// s'estompe -> ça se voyait à peine, signalé en jeu réel)
 function flyChipToPot(chipsEl) {
   if (chipsEl.hidden) return;
   const from = chipsEl.getBoundingClientRect(), pot = $('#pot').getBoundingClientRect();
   if (!from.width || !pot.width) return;
-  const fly = document.createElement('div'); fly.className = 'fly-chip';
-  fly.style.left = (from.left + from.width / 2) + 'px'; fly.style.top = (from.top + from.height / 2) + 'px';
-  document.body.appendChild(fly);
-  const dx = (pot.left + pot.width / 2) - (from.left + from.width / 2), dy = (pot.top + pot.height / 2) - (from.top + from.height / 2);
-  fly.animate([{ transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }, { transform: `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(.5)`, opacity: 0 }],
-    { duration: 430, easing: 'cubic-bezier(.5,0,.9,.5)', fill: 'forwards' }).onfinish = () => fly.remove();
+  const n = 1 + (Math.random() < 0.5 ? 1 : 0); // 1 ou 2 piles, pour varier
+  for (let i = 0; i < n; i++) {
+    setTimeout(() => {
+      const fly = document.createElement('div'); fly.className = 'fly-chip';
+      fly.style.backgroundImage = `url('${chipPileUrl('pile')}')`;
+      const ox = (Math.random() - .5) * 16, oy = (Math.random() - .5) * 10; // léger décalage : ça "glisse" en groupe, pas empilé pile au même pixel
+      fly.style.left = (from.left + from.width / 2 + ox) + 'px'; fly.style.top = (from.top + from.height / 2 + oy) + 'px';
+      document.body.appendChild(fly);
+      const dx = (pot.left + pot.width / 2) - (from.left + from.width / 2 + ox), dy = (pot.top + pot.height / 2) - (from.top + from.height / 2 + oy);
+      fly.animate([{ transform: 'translate(-50%,-50%) scale(.85) rotate(0deg)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(.55) rotate(${(Math.random() * 30 - 15).toFixed(0)}deg)`, opacity: 0 }],
+        { duration: 560, easing: 'cubic-bezier(.4,0,.7,.55)', fill: 'forwards' }).onfinish = () => fly.remove();
+    }, i * 70);
+  }
 }
 // le pot se distribue vers le(s) gagnant(s) (un ou plusieurs jetons animés selon le seat) — appelé depuis declareWinners
 function flyPotToWinner(seat, amount, bb) {
@@ -1031,11 +1268,14 @@ function flyPotToWinner(seat, amount, bb) {
   for (let i = 0; i < N; i++) {
     setTimeout(() => {
       const fly = document.createElement('div'); fly.className = 'fly-chip';
-      fly.style.left = (pot.left + pot.width / 2) + 'px'; fly.style.top = (pot.top + pot.height / 2) + 'px';
+      fly.style.backgroundImage = `url('${chipPileUrl(Math.random() < .5 ? 'pile' : 'duo')}')`;
+      const ox = (Math.random() - .5) * 20, oy = (Math.random() - .5) * 14;
+      fly.style.left = (pot.left + pot.width / 2 + ox) + 'px'; fly.style.top = (pot.top + pot.height / 2 + oy) + 'px';
       document.body.appendChild(fly);
-      const dx = (to.left + to.width / 2) - (pot.left + pot.width / 2), dy = (to.top + to.height / 2) - (pot.top + pot.height / 2);
-      fly.animate([{ transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }, { transform: `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(.6)`, opacity: 0 }],
-        { duration: 480, easing: 'cubic-bezier(.4,0,.7,.6)', fill: 'forwards' }).onfinish = () => fly.remove();
+      const dx = (to.left + to.width / 2) - (pot.left + pot.width / 2 + ox), dy = (to.top + to.height / 2) - (pot.top + pot.height / 2 + oy);
+      fly.animate([{ transform: 'translate(-50%,-50%) scale(.9) rotate(0deg)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(.6) rotate(${(Math.random() * 30 - 15).toFixed(0)}deg)`, opacity: 0 }],
+        { duration: 560, easing: 'cubic-bezier(.4,0,.7,.6)', fill: 'forwards' }).onfinish = () => fly.remove();
     }, i * 90);
   }
   SFX.play('chip');
@@ -1089,7 +1329,7 @@ function renderSeatCards(container, p, mucked, extraDelay) {
     // ABATTAGE : on RETOURNE les cartes existantes (dos -> face) une par une + son, décalé par joueur
     // (extraDelay, voir showdownOrder) pour respecter l'ordre réel : dernier agresseur d'abord, puis sens horaire.
     [...container.children].forEach((card, i) => {
-      card.querySelector('.front').style.backgroundImage = `url('cards/${hole[i].code}.png')`;
+      card.querySelector('.front').style.backgroundImage = `url('cards/${hole[i].code}.webp')`;
       card._code = hole[i].code;
       setTimeout(() => { card.classList.add('flipped'); SFX.play('flip'); }, (extraDelay || 0) + i * 340);
     });
@@ -1122,7 +1362,7 @@ function handDetail(made) {
   return { text: made.name, force: maxRank };
 }
 function updateMyHandInfo(s) {
-  document.querySelectorAll('.card.made').forEach(c => c.classList.remove('made', 'made-strong'));
+  document.querySelectorAll('.card.made').forEach(c => c.classList.remove('made', 'made-high', 'made-trips', 'made-strong'));
   // GARDE-FOU : masque la boîte "MAIN DE DÉPART / Force" sur TOUS les autres sièges à chaque appel. Sans ça,
   // si TON siège change d'une partie à l'autre (tu étais siège 1 avant, un autre joueur occupe ce siège
   // maintenant), le DOM du siège 1 gardait ta VIEILLE main affichée -> ça ressemble à "je vois les cartes
@@ -1146,8 +1386,10 @@ function updateMyHandInfo(s) {
     return;
   }
   const made = EV.evalMade([...me.hole, ...board]);
-  const strong = made.cat >= 3;                          // brelan+ -> doré ; carte haute/paire/double -> bleu
-  if (made.cat >= 1) highlight(new Set(made.cards.map(c => c.code)), strong ? 'made made-strong' : 'made');
+  // néon gradué : carte haute -> cyan léger, paire/double paire -> bleu, brelan -> vert, quinte+ -> doré
+  const strong = made.cat >= 4;
+  const tierCls = made.cat === 0 ? 'made made-high' : made.cat === 3 ? 'made made-trips' : strong ? 'made made-strong' : 'made';
+  highlight(new Set(made.cards.map(c => c.code)), tierCls);
   // rang de catégorie 1-10 (demande explicite) = cat interne (0-9) + 1 ; "Force" = plus haut rang RÉEL
   // -> distingue Paire de 4 (Force 4) de Paire d'As (Force 14) au sein d'une même catégorie
   // (comparaison OFFICIELLE inchangée : ce nombre est un AFFICHAGE, le vrai départage du pot reste EV.cmp).
@@ -1209,7 +1451,13 @@ function toggleShow(idx) {
 }
 function updateShowBtn(s) {
   const me = s.you >= 0 ? s.seats[s.you] : null;
-  const canShow = !!(me && me.folded && me.inHand && (s.phase === 'playing' || s.phase === 'handComplete'));
+  // montrer ses cartes : couché (prouver son coup, à tout moment) OU en fin de main si tout le monde s'est
+  // couché devant toi (gagné sans abattage) -> PAS pendant que tu es encore activement dans le coup, ça n'a
+  // de sens que quand la main est réellement finie pour toi (fold) ou pour tout le monde (demande explicite,
+  // corrige une ouverture trop large : le bouton apparaissait même en plein milieu d'une main en cours).
+  const aliveNoFold = s.seats.filter(p => p && p.inHand && !p.folded).length;
+  const wonUncontested = s.phase === 'handComplete' && aliveNoFold === 1 && me && !me.folded;
+  const canShow = !!(me && me.inHand && (s.phase === 'playing' || s.phase === 'handComplete') && (me.folded || wonUncontested));
   $('#btn-show').hidden = true;                              // remplacé par les 2 boutons SHOW (un par carte)
   const seatEl = s.you >= 0 ? seatEls[s.you] : null;
   if (seatEl) seatEl.querySelectorAll('.show-btn').forEach(b => {
@@ -1218,17 +1466,28 @@ function updateShowBtn(s) {
     b.classList.toggle('on', showCard[idx]);
   });
   // fin de main : on envoie les cartes armées non encore envoyées
-  if (s.phase === 'handComplete' && me && me.folded && me.inHand) {
+  if (s.phase === 'handComplete' && me && me.inHand) {
     [0, 1].forEach(idx => { if (showCard[idx] && !shownCard[idx]) { send({ type: 'show', card: idx }); shownCard[idx] = true; } });
   }
 }
 function highlightWinners(s) {
   const winners = (s.results || []).filter(r => r.won > 0);
   if (!winners.length) return;
-  const winCodes = new Set();
-  winners.forEach(r => { const p = s.seats[r.seat]; if (p && p.hole && p.hole[0] && s.board.length >= 3) { const bh = EV.bestHand([...p.hole, ...s.board]); if (bh) bh.cards.forEach(c => winCodes.add(c.code)); } }); // >=3 cartes board sinon bestHand (5 cartes) renvoie null (gain preflop par fold)
-  // 5 cartes du combo surélevées + brillantes ; toutes les autres grisées
-  document.querySelectorAll('.card').forEach(c => { if (!c._code) return; c.classList.add(winCodes.has(c._code) ? 'win' : 'dim'); });
+  const winCodes = new Set(), winTier = {}; // code -> classe de teinte (même barème que le néon en jeu, voir updateMyHandInfo)
+  winners.forEach(r => {
+    const p = s.seats[r.seat];
+    if (p && p.hole && p.hole[0] && s.board.length >= 3) { // sinon evalMade (5 cartes mini) ne veut rien dire (gain préflop par fold)
+      const made = EV.evalMade([...p.hole, ...s.board]);
+      const tier = made.cat === 0 ? 'win-high' : made.cat === 3 ? 'win-trips' : made.cat >= 4 ? 'win-strong' : '';
+      made.cards.forEach(c => { winCodes.add(c.code); winTier[c.code] = tier; });
+    }
+  });
+  // 5 cartes du combo surélevées + aura, à la bonne couleur ; toutes les autres grisées
+  document.querySelectorAll('.card').forEach(c => {
+    if (!c._code) return;
+    if (winCodes.has(c._code)) { c.classList.add('win'); if (winTier[c._code]) c.classList.add(winTier[c._code]); }
+    else c.classList.add('dim');
+  });
   const winSeats = new Set(winners.map(r => r.seat));
   winners.forEach(r => { // label "WINNER !" + pseudo, tout en haut du pod
     const el = seatEls[r.seat]; if (!el) return;
@@ -1247,8 +1506,36 @@ function highlightWinners(s) {
 }
 // annonce complète du gagnant (highlight + son + bannière combo) — appelée une seule fois par main,
 // seulement une fois le board VISUELLEMENT révélé en entier (voir winnerRevealAt dans renderCommunity)
+// rattrapage : force la création + le retournement de TOUTE carte (plateau ou main d'un joueur à l'abattage)
+// qui n'aurait pas encore eu le temps de le faire quand on annonce le gagnant -> sinon elle reste bloquée
+// dos face (voire carrément absente de la case) pour le reste de la main (signalé en jeu réel, à plusieurs
+// reprises : cartes du plateau non gagnantes, et mains de joueurs allés à l'abattage sans avoir foldé).
+function forceCompleteReveal(s) {
+  communityTimers.forEach(clearTimeout); communityTimers = [];
+  const slots = $('#community').children;
+  for (let i = 0; i < s.board.length; i++) {
+    let card = slots[i] && slots[i].firstChild;
+    if (!card) { card = makeCard(s.board[i], false); slots[i].appendChild(card); void card.offsetWidth; }
+    if (!card.classList.contains('flipped')) card.classList.add('flipped');
+  }
+  communityDone = s.board.length; revealedBoardLen = s.board.length;
+  for (let seat = 0; seat < 6; seat++) {
+    const p = s.seats[seat];
+    if (!p || !p.inHand || p.folded || !p.hole || !p.hole[0]) continue; // couché : rien à forcer (voir showCards/SHOW)
+    const cardsEl = seatEls[seat] && seatEls[seat].querySelector('.cards');
+    if (!cardsEl) continue;
+    [...cardsEl.children].forEach((card, i) => {
+      const c = p.hole[i]; if (!c) return;
+      if (!card.classList.contains('flipped')) {
+        card.querySelector('.front').style.backgroundImage = `url('cards/${c.code}.webp')`;
+        card._code = c.code; card.classList.add('flipped');
+      }
+    });
+  }
+}
 function declareWinners(s) {
   if (winnerShown) return; winnerShown = true;
+  forceCompleteReveal(s);
   highlightWinners(s);
   // le board vient de finir de se révéler visuellement : les éliminations de CETTE main peuvent enfin s'afficher
   let newlyRevealed = false;
@@ -1266,7 +1553,13 @@ function declareWinners(s) {
       const p = s.seats[winners[0].seat];
       if (p && p.hole && p.hole[0]) showComboBanner(EV.evalMade([...p.hole, ...s.board]).name);
     }
+    const myWin = winners.find(r => r.seat === s.you);
+    if (myWin) { myStats.hands++; myStats.biggest = Math.max(myStats.biggest, myWin.won); }
   }
+  // meilleure main de la partie : dispo dès qu'on est allé à l'abattage, gagnée ou pas (fierté perso, pas
+  // besoin d'avoir gagné LA main pour que ce soit ta meilleure de la soirée)
+  const myResult = (s.results || []).find(r => r.seat === s.you && r.made);
+  if (myResult) { const cat = EV.HAND_NAMES.indexOf(myResult.made); if (cat > myStats.bestCat) myStats.bestCat = cat; }
 }
 
 function hideControls() { ['#btn-fold', '#btn-check', '#btn-call', '#btn-allin'].forEach(x => $(x).hidden = true); $('#raise-box').hidden = true; }
@@ -1314,16 +1607,17 @@ function wireControls() {
   $('#btn-call').onclick = () => sendAction({ type: 'call' });
   $('#btn-allin').onclick = () => sendAction({ type: 'allin' });
   $('#btn-raise').onclick = () => sendAction({ type: 'raise', amount: +$('#raise-slider').value });
-  document.querySelectorAll('.quick').forEach(b => b.onclick = () => quickRaise(+b.dataset.mult));
+  document.querySelectorAll('.quick').forEach(b => b.onclick = () => quickPotRaise(+b.dataset.pot));
   $('#raise-slider').oninput = function () { $('#raise-amount').textContent = (+this.value === +this.max ? this.value + ' (tapis)' : this.value); };
   ['checkfold', 'check', 'callany'].forEach(a => $('#pa-' + a).onclick = () => togglePre(a));
 }
-// mise rapide ×N : relance à N fois la mise en cours (ou la BB si personne n'a misé), clampée
-function quickRaise(mult) {
+// raccourci POT ½ / POT ×1 : relance à une fraction du pot actuel, clampée aux bornes légales
+function quickPotRaise(frac) {
   const la = snap && snap.legal;
   if (!la || !la.canRaise || snap.toAct !== snap.you) return;
-  const base = snap.currentBet > 0 ? snap.currentBet : (snap.blinds ? snap.blinds.bb : 0);
-  const amt = Math.max(la.minRaiseTo, Math.min(la.maxRaiseTo, Math.round(base * mult)));
+  const potsTotal = snap.pots ? snap.pots.reduce((a, p) => a + p.amount, 0) : 0;
+  const pot = snap.pot || potsTotal;
+  const amt = Math.max(la.minRaiseTo, Math.min(la.maxRaiseTo, Math.round(pot * frac)));
   sendAction({ type: 'raise', amount: amt });
 }
 
@@ -1348,6 +1642,11 @@ function rippleAllIn(seat) {
 function detectEvents(s) {
   if (s.phase === 'playing' && s.handNo !== lastHandNo) {
     SFX.play('deal'); $('#combo-banner').hidden = true; $('#allin-banner').hidden = true; // (les règles restent ouvertes : un joueur qui les lit ne doit pas les voir se fermer à chaque main)
+    // le pot de la main précédente passe VRAIMENT par 0 à l'écran avant que les blindes de la nouvelle main
+    // ne s'affichent (sinon ça enchaînait directement l'ancien total sur le nouveau, jamais de "remise à
+    // zéro" visible entre 2 mains - signalé en jeu réel) ; le prochain snapshot réaffichera le vrai montant.
+    $('#pot-amount').textContent = '0'; $('#side-pots').hidden = true;
+    if (s.handNo === 1) resetMyStats(); // 1re main d'un tournoi tout neuf -> le récap précédent ne doit pas trainer
     allInSeen.clear(); showCard[0] = showCard[1] = shownCard[0] = shownCard[1] = false; preAction = null; lastHandNo = s.handNo;
     winnerShown = false; clearTimeout(winnerTimer); winnerTimer = null; victoryShown = false; clearTimeout(victoryTimer); victoryTimer = null;
     lastAnnouncedToAct = -2; // réarme l'annonce "au tour de X" pour cette nouvelle main
@@ -1356,7 +1655,9 @@ function detectEvents(s) {
     else if (alive === 2 && !headsUpSaid) { headsUpSaid = true; croupierSay('Tête à tête !', 1800); } // une seule fois (évident dès qu'on y est, pas la peine de le répéter à chaque main)
     if (alive > 2) headsUpSaid = false; // réarme si le duel se termine (rejoin/nouvelle partie à plus de 2)
   }
-  if (s.phase === 'playing') for (let i = 0; i < 6; i++) { const p = s.seats[i]; if (p && p.allIn && !allInSeen.has(i)) { allInSeen.add(i); flashAllIn(s); rippleAllIn(i); } }
+  // tapis : en plus de la bannière, les piles du joueur glissent vers le pot (demande explicite — jusqu'ici
+  // seul un call/raise "normal" collecté en fin de tour déclenchait l'anim, jamais le tapis lui-même)
+  if (s.phase === 'playing') for (let i = 0; i < 6; i++) { const p = s.seats[i]; if (p && p.allIn && !allInSeen.has(i)) { allInSeen.add(i); flashAllIn(s); rippleAllIn(i); const chipsEl = seatEls[i] && seatEls[i].querySelector('.chips'); if (chipsEl) flyChipToPot(chipsEl); } }
   // "au tour de X" à chaque changement de joueur actif — attend la fin de la distribution (dealingUntil,
   // voir dealAnimation) pour ne pas parler par-dessus le "Distribution…" pendant que les cartes volent encore.
   if (s.phase === 'playing' && s.toAct >= 0 && s.toAct !== lastAnnouncedToAct) {
@@ -1409,6 +1710,457 @@ function fitBoard() {
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+/* ============================================================
+   CONNEXION — 2e mini-jeu (jeu de mots à 2). Préfixe "cx" partout pour ne jamais confondre avec la
+   fonction connect()/WebSocket ("connexion" réseau) déjà présente dans ce fichier.
+   ============================================================ */
+let cxCode = null, cxYou = -1, cxSnap = null, cxLastRound = -1, cxSearching = false, cxLastLives = null;
+let cxLastCanType = false, cxLastPhase = null; // pour ne jouer les sons qu'AU MOMENT du changement, pas à chaque re-render
+let cxTimerBase = null; // { leftMs, at } — la base du dernier snapshot serveur ; le compte à rebours entre 2 snapshots tourne en local (voir cxTickTimer)
+function cxHandleState(s) {
+  cxSnap = s; cxSearching = false;
+  // matchmaking : dès que 2 joueurs sont appariés côté serveur, la partie démarre toute seule (voir
+  // cxSearch dans server.js) -> jamais de vrai "salon d'attente" à afficher, on va direct sur le jeu.
+  showScreen('cxgame'); cxRenderGame(s);
+}
+function cxFmtTime(ms) { const t = Math.max(0, Math.round(ms / 1000)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); }
+function cxTickTimer() {
+  if (!cxTimerBase || currentScreen !== 'cxgame' || !cxSnap || cxSnap.phase !== 'playing') return;
+  const left = cxTimerBase.leftMs - (Date.now() - cxTimerBase.at);
+  const el = $('#cx-timer');
+  el.textContent = cxFmtTime(left);
+  el.classList.toggle('low', left <= 10000);
+}
+setInterval(cxTickTimer, 500);
+function cxRenderGame(s) {
+  const spec = !!s.spectating;
+  const opp = s.seats[cxYou === 0 ? 1 : 0];
+  // spectateur : les 2 pseudos + qui a déjà écrit (✅) ou cherche encore (✍️) — jamais le mot en attente
+  $('#cx-players').textContent = spec
+    ? s.seats.map((p, i) => (p ? p.name : '…') + (s.phase === 'playing' ? (s.submitted[i] ? ' ✅' : ' ✍️') : '')).join('  &  ')
+    : (s.seats[cxYou] ? s.seats[cxYou].name : 'Toi') + ' 🆚 ' + (opp ? opp.name + (opp.connected ? '' : ' (déco)') : '…');
+  $('#cx-spec-count').hidden = !s.spectators;
+  $('#cx-spec-count').textContent = '👀 ' + s.spectators;
+  $('#cx-spec-bar').hidden = !spec;
+  $('#cx-prompt-box .cx-prompt-label').textContent = spec ? 'Ils cherchent le mot qui relie :' : 'Trouve le mot qui relie les deux derniers mots :';
+  $('#cx-starter-box .cx-prompt-label').textContent = spec ? 'Manche 1 : chacun écrit un mot librement…' : 'Lancez la partie : écrivez chacun un mot, en même temps !';
+  $('#cx-round-label').textContent = s.phase === 'finished' ? 'Terminé' : ('Manche ' + s.round);
+  // cœurs : 1 par vie de départ, plein/cassé selon les vies restantes ; celui qu'on vient de perdre "pop"
+  // (comparaison avec le rendu précédent -> ne rejoue l'anim que sur la manche où on perd VRAIMENT un cœur).
+  const justLost = cxLastLives != null && s.lives < cxLastLives ? cxLastLives - 1 : -1; // index du cœur qui vient de casser
+  if (justLost >= 0) SFX.play('slap'); // cœur perdu
+  $('#cx-lives').innerHTML = Array.from({ length: s.livesStart }, (_, i) => {
+    const alive = i < s.lives;
+    return `<img class="cx-heart${i === justLost ? ' lost' : ''}" src="assets/connexion/heart-${alive ? 'full' : 'lost'}.webp" alt="">`;
+  }).join('');
+  cxLastLives = s.lives;
+  cxTimerBase = { leftMs: s.timeLeftMs, at: Date.now() };
+  cxTickTimer();
+  // historique des manches déjà révélées : le mot de CHACUN (manche 1 incluse : les 2 écrivent librement,
+  // symétrique, donc toujours 2 mots à afficher, plus de cas "starter en 1 seul mot").
+  if (s.round !== cxLastRound || s.phase === 'finished') {
+    cxLastRound = s.round;
+    $('#cx-history').innerHTML = s.history.map(h =>
+      `<div class="cx-hist-row${h.matched ? ' cx-hist-match' : ''}"><span>${escapeHtml(h.words[0])}</span><span class="cx-hist-vs">/</span><span>${escapeHtml(h.words[1])}</span></div>`
+    ).join('');
+    $('#cx-history').scrollTop = $('#cx-history').scrollHeight;
+  }
+  const form = $('#cx-form'), input = $('#cx-word-input');
+  $('#cx-prompt-box').hidden = !s.prompt;
+  if (s.prompt) { $('#cx-prompt-word-0').textContent = s.prompt[0]; $('#cx-prompt-word-1').textContent = s.prompt[1]; }
+  $('#cx-starter-box').hidden = !(s.phase === 'playing' && !s.prompt); // manche 1 (pas de prompt) : les 2 écrivent librement
+  const canType = !spec && s.phase === 'playing' && !s.youSubmitted;
+  if (canType && !cxLastCanType) SFX.play('yourturn'); // le tour de taper un mot commence
+  cxLastCanType = canType;
+  form.hidden = !canType;
+  if (canType) { input.disabled = false; if (document.activeElement !== input) input.focus(); }
+  $('#cx-waitmsg').hidden = spec || !(s.phase === 'playing' && s.youSubmitted);
+  if (s.youSubmitted) input.value = ''; // soumission acceptée -> on vide (un rejet, lui, s'efface après l'anim de secousse, voir cx-form.onsubmit)
+  const result = $('#cx-result');
+  if (s.phase === 'finished') {
+    if (cxLastPhase !== 'finished') SFX.play(s.winner === 'match' ? 'win' : 'wow'); // victoire vs perdu (cœurs/temps/abandon)
+    result.hidden = false;
+    const title = s.winner === 'match' ? `🎉 ${spec ? 'Ils ont' : 'Vous avez'} trouvé le même mot : "${s.matchedWord}" !`
+      : s.winner === 'lives' ? `💔 Plus de cœurs — ${spec ? 'ils n\'ont' : 'vous n\'avez'} pas convergé à temps.`
+      : s.winner === 'timeout' ? `⏱️ Temps écoulé — ${spec ? 'ils n\'ont' : 'vous n\'avez'} pas convergé à temps.`
+      : spec ? 'La partie s\'est arrêtée (un joueur est parti).' : 'La partie s\'est arrêtée (partenaire parti).';
+    $('#cx-result-title').textContent = title;
+    $('#cx-game-leave').hidden = spec;
+    if (spec) { // spectateur : pas de "Rejouer", retour auto au menu après avoir vu le résultat
+      $('#cx-rematch').hidden = $('#cx-rematch-wait').hidden = true;
+      if (cxLastPhase !== 'finished') { const gen = cxSpecGen; setTimeout(() => { if (cxSpec && gen === cxSpecGen) cxSpecExit(); }, 4000); }
+      cxLastPhase = s.phase;
+      return;
+    }
+    // il faut que les 2 cliquent "Rejouer" pour relancer (voir requestRematch côté serveur) : sinon un
+    // seul clic faisait disparaître le récap SOUS LES YEUX de l'autre, qui n'avait rien demandé.
+    const youWant = s.rematchWanted[cxYou];
+    $('#cx-rematch').hidden = s.winner === 'abandon' || youWant;
+    $('#cx-rematch-wait').hidden = s.winner === 'abandon' || !youWant;
+  } else result.hidden = true;
+  cxLastPhase = s.phase;
+}
+function cxSetSearching(on) {
+  cxSearching = on;
+  $('#cx-search').hidden = on;
+  $('#cx-searching').hidden = !on;
+}
+$('#cx-search').onclick = () => { cxSetSearching(true); send({ type: 'cxSearch', pseudo }); };
+$('#cx-cancel-search').onclick = () => { cxSetSearching(false); send({ type: 'cxCancelSearch' }); };
+$('#cx-home-back').onclick = () => { if (cxSearching) { cxSetSearching(false); send({ type: 'cxCancelSearch' }); } showScreen('hub'); };
+$('#cx-game-leave').onclick = () => { send({ type: 'cxLeaveRoom' }); showScreen('cxhome'); };
+$('#cx-rematch').onclick = () => send({ type: 'cxRematch' });
+
+/* ---------- Connexion : mode spectateur (voir les mots révélés + réagir en emoji, rien d'autre) ---------- */
+let cxSpec = false, cxSpecGen = 0, cxLiveHtml = '';
+const CX_EMOJIS = ['👏', '😂', '🔥', '😮', '😭', '❤️', '🤯', '💀']; // même liste blanche que server.js
+function cxResetView() { cxSnap = null; cxLastRound = -1; cxLastLives = null; cxLastPhase = null; cxLastCanType = false; }
+function cxRenderLive(games) {
+  if (currentScreen !== 'cxhome') return;
+  $('#cx-live').hidden = !games.length;
+  const html = games.map(g =>
+    `<button class="cx-live-item" data-code="${escapeHtml(g.code)}"><b>${escapeHtml(g.names[0])} &amp; ${escapeHtml(g.names[1])}</b><span>Manche ${g.round} · ${'❤️'.repeat(Math.max(0, g.lives))}${g.spectators ? ' · 👀 ' + g.spectators : ''}</span></button>`
+  ).join('');
+  // ne recrée les boutons que si la liste a changé : sinon un clic pile pendant le polling serait perdu
+  if (html !== cxLiveHtml) $('#cx-live-list').innerHTML = cxLiveHtml = html;
+}
+setInterval(() => { if (currentScreen === 'cxhome') send({ type: 'cxListGames' }); }, 3000);
+$('#cx-live-list').onclick = (e) => {
+  const b = e.target.closest('.cx-live-item'); if (!b) return;
+  if (cxSearching) { cxSetSearching(false); send({ type: 'cxCancelSearch' }); }
+  cxSpec = true; cxSpecGen++; cxResetView();
+  send({ type: 'cxSpectate', code: b.dataset.code });
+};
+function cxSpecExit() {
+  cxSpec = false; cxSpecGen++;
+  send({ type: 'cxSpecLeave' });
+  cxResetView();
+  $('#cx-spec-bar').hidden = true; $('#cx-game-leave').hidden = false;
+  showScreen('cxhome');
+}
+$('#cx-spec-leave').onclick = cxSpecExit;
+$('#cx-spec-emojis').innerHTML = CX_EMOJIS.map(e => `<button class="cx-emoji-btn" data-e="${e}">${e}</button>`).join('');
+$('#cx-spec-emojis').onclick = (e) => { const b = e.target.closest('.cx-emoji-btn'); if (b) send({ type: 'cxEmoji', emoji: b.dataset.e }); };
+// réaction reçue (spectateurs ET joueurs la voient) : l'emoji monte depuis le bas et s'efface
+function cxFloatEmoji(emoji) {
+  if (!CX_EMOJIS.includes(emoji)) return;
+  const el = document.createElement('div');
+  el.className = 'cx-emoji-float'; el.textContent = emoji;
+  el.style.left = (10 + Math.random() * 80) + '%';
+  $('#cx-emoji-layer').appendChild(el);
+  setTimeout(() => el.remove(), 2200);
+}
+$('#cx-form').onsubmit = (e) => {
+  e.preventDefault();
+  const v = $('#cx-word-input').value.trim();
+  if (!v) return;
+  send({ type: 'cxWord', word: v });
+  // pas de clear ici : si le serveur rejette (mot déjà utilisé...), le mot doit rester affiché le temps de
+  // l'anim de rejet (cxRejectWord) ; s'il est accepté, cxRenderGame le vide dès que youSubmitted passe à true.
+};
+// rejet serveur (mot déjà utilisé, etc.) : le mot secoue + passe en rouge, puis s'efface — au lieu d'un
+// simple toast générique, invisible si l'attention est sur le clavier plutôt que sur le coin de l'écran.
+function cxRejectWord() {
+  const input = $('#cx-word-input');
+  input.classList.remove('cx-rejected'); void input.offsetWidth; // relance l'anim même sur un 2e rejet d'affilée
+  input.classList.add('cx-rejected');
+  setTimeout(() => { input.classList.remove('cx-rejected'); input.value = ''; }, 500);
+}
+
+/* ============================================================
+   PUISSANCE 4 — 3e mini-jeu (2 joueurs, tour par tour, aucune info cachée). Préfixe
+   "c4" partout. Plateau VU DE FACE (assets/c4/plateau.png, la photo du vrai jouet) :
+   les 42 trous sont positionnés en % ABSOLUS mesurés directement sur les pixels de
+   l'image (script d'analyse, pas une grille CSS générique) — C4_COL_X/C4_ROW_Y
+   ci-dessous. La grille DOM est construite une seule fois (c4BuildBoard) ; chaque
+   snapshot ne fait QUE repeindre (c4PaintGrid) + piloter l'anim de chute en cours.
+   ============================================================ */
+const C4_COLS = 7, C4_ROWS = 6;
+// % gauche de chaque colonne, mesuré sur plateau.png (1377x1142) — la largeur du
+// conteneur == largeur de l'image, donc inchangé par la marge haute ajoutée en CSS.
+const C4_COL_X = [17.23, 28.03, 38.87, 49.67, 60.57, 71.31, 82.35];
+// % haut de chaque ligne MOTEUR (0 = case du bas, qui se remplit en 1er), reconverties
+// en % du CONTENEUR (image ancrée en bas, occupant 81.97% de sa hauteur — voir .c4-board
+// dans play.css) : newY = 18.03 + oldY*0.8197, oldY mesuré directement sur l'image.
+const C4_ROW_Y = [80.34, 70.21, 60.02, 49.90, 39.70, 29.59];
+const C4_TOP_Y = 6; // % du conteneur : point de départ du fantôme de visée / de la chute, DANS la marge réservée en haut (jamais un top négatif -> voir commentaire sur .c4-board)
+const C4_COIN_SRC = ['assets/c4/yellowcoin.webp', 'assets/c4/bluecoin.webp']; // seat0/seat1
+let c4Code = null, c4You = -1, c4Snap = null, c4Searching = false;
+let c4BoardBuilt = false, c4LastPhase = null, c4LastTurn = null, c4LastMoves = null;
+let c4PieceEls = null, c4FallEl = null, c4GhostMineEl = null, c4GhostOppEl = null;
+let c4Anim = null;       // { col, row, seat, y, vy, target, bounces, last } — pion en cours de chute physique
+let c4HoverCol = null;   // colonne actuellement visée par MOI (fantôme local)
+let c4LocalRoom = null;  // room C4Room en cours SI mode "vs Bot" (100% local, pas de réseau) ; null = mode réseau normal
+let c4TurnLocked = false; // vrai ~1s après un coup : le temps de VOIR la pièce tomber avant de pouvoir en rejouer une
+let c4TurnLockTimer = null;
+function c4HandleState(s) {
+  // pas de son d'entrée ici (retiré : sa longue traîne couvrait le bruit de la 1re pièce qui tombe
+  // quand le bot joue tout de suite).
+  c4Snap = s; c4Searching = false;
+  showScreen('c4game'); c4RenderGame(s);
+}
+function c4MakePieceEl(extraClass) {
+  const el = document.createElement('div');
+  el.className = 'c4-' + extraClass;
+  el.hidden = true;
+  el.innerHTML = '<img alt="">';
+  return el;
+}
+function c4BuildBoard() {
+  const el = $('#c4-board');
+  el.innerHTML = '';
+  c4PieceEls = [];
+  for (let col = 0; col < C4_COLS; col++) {
+    c4PieceEls[col] = [];
+    for (let row = 0; row < C4_ROWS; row++) {
+      const p = c4MakePieceEl('piece');
+      p.style.left = C4_COL_X[col] + '%'; p.style.top = C4_ROW_Y[row] + '%';
+      el.appendChild(p);
+      c4PieceEls[col][row] = p;
+    }
+  }
+  c4FallEl = c4MakePieceEl('piece falling'); el.appendChild(c4FallEl);
+  c4GhostMineEl = c4MakePieceEl('ghost'); el.appendChild(c4GhostMineEl);
+  c4GhostOppEl = c4MakePieceEl('ghost'); el.appendChild(c4GhostOppEl);
+  // bornes de chaque zone de clic = MILIEU entre 2 centres de colonnes voisins (pas une
+  // largeur uniforme 100/7 : l'écart réel entre trous, mesuré sur l'image, est plus petit
+  // que ça — une largeur uniforme ferait largement CHEVAUCHER les colonnes voisines).
+  for (let col = 0; col < C4_COLS; col++) {
+    const lo = col === 0 ? 0 : (C4_COL_X[col - 1] + C4_COL_X[col]) / 2;
+    const hi = col === C4_COLS - 1 ? 100 : (C4_COL_X[col] + C4_COL_X[col + 1]) / 2;
+    const hit = document.createElement('div');
+    hit.className = 'c4-colhit';
+    hit.style.left = lo + '%'; hit.style.width = (hi - lo) + '%';
+    hit.onmouseenter = () => c4Hover(col);
+    hit.onclick = () => c4TryDrop(col);
+    el.appendChild(hit);
+  }
+  el.onmouseleave = () => c4Hover(null);
+  c4BoardBuilt = true;
+}
+// repeint les 42 emplacements depuis le snapshot serveur (source de vérité) ; saute la
+// case en cours de chute physique (c4Anim) -> évite le pion en double (statique + qui tombe).
+function c4PaintGrid(s) {
+  for (let col = 0; col < C4_COLS; col++) {
+    const colData = s.grid[col] || [];
+    for (let row = 0; row < C4_ROWS; row++) {
+      const el = c4PieceEls[col][row];
+      const seat = colData[row];
+      const falling = c4Anim && c4Anim.col === col && c4Anim.row === row;
+      el.classList.remove('win');
+      if (seat == null || falling) { el.hidden = true; continue; }
+      el.hidden = false;
+      el.firstChild.src = C4_COIN_SRC[seat];
+    }
+  }
+  if (s.winLine) for (const [col, row] of s.winLine) c4PieceEls[col][row].classList.add('win');
+}
+function c4UpdateColHits(s) {
+  const hits = $('#c4-board').querySelectorAll('.c4-colhit');
+  for (let col = 0; col < C4_COLS; col++) {
+    const canPlay = !c4TurnLocked && s.phase === 'playing' && s.turn === c4You && (s.grid[col] || []).length < C4_ROWS;
+    hits[col].classList.toggle('disabled', !canPlay);
+  }
+}
+// fantôme de visée : LOCAL instantané (pas d'attente réseau pour soi-même) + diffusé à
+// l'adversaire (c4Hover réseau) pour qu'il voie en direct où on hésite, comme le lancé de
+// dés en direct de Loult Yams.
+function c4Hover(col) {
+  if (col === c4HoverCol) return;
+  c4HoverCol = col;
+  const canPlay = !c4TurnLocked && c4Snap && c4Snap.phase === 'playing' && c4Snap.turn === c4You;
+  const valid = canPlay && col != null && (c4Snap.grid[col] || []).length < C4_ROWS;
+  c4GhostMineEl.hidden = !valid;
+  if (valid) {
+    c4GhostMineEl.style.left = C4_COL_X[col] + '%'; c4GhostMineEl.style.top = C4_TOP_Y + '%';
+    c4GhostMineEl.firstChild.src = C4_COIN_SRC[c4You];
+    SFX.play('c4hover');
+  }
+  if (!c4LocalRoom) send({ type: 'c4Hover', col: valid ? col : null }); // mode vs Bot : pas d'adversaire réseau à prévenir
+}
+function c4ShowOppGhost(seat, col) {
+  if (!c4BoardBuilt || seat === c4You) return; // ne concerne que le fantôme de L'AUTRE
+  c4GhostOppEl.hidden = col == null;
+  if (col != null) {
+    c4GhostOppEl.style.left = C4_COL_X[col] + '%'; c4GhostOppEl.style.top = C4_TOP_Y + '%';
+    c4GhostOppEl.firstChild.src = C4_COIN_SRC[seat];
+  }
+}
+function c4TryDrop(col) {
+  if (c4TurnLocked || !c4Snap || c4Snap.phase !== 'playing' || c4Snap.turn !== c4You) return;
+  if ((c4Snap.grid[col] || []).length >= C4_ROWS) return;
+  c4Hover(null); // efface mon fantôme tout de suite : le vrai pion va tomber à la place
+  if (c4LocalRoom) {
+    C4Room.dropPiece(c4LocalRoom, C4_HUMAN_TOKEN, col);
+    c4HandleState(C4Room.roomSnapshot(c4LocalRoom, c4You));
+    c4BotMaybeMove();
+  } else send({ type: 'c4Drop', col });
+}
+// chute PHYSIQUE (gravité + petit rebond amorti à l'atterrissage), pas un simple fondu/
+// glissement CSS — but explicite du user : "une réelle physique des pièces".
+function c4StartDrop(col, row, seat) {
+  c4Anim = { col, row, seat, y: C4_TOP_Y, vy: 0, target: C4_ROW_Y[row], bounces: 0, last: null };
+  c4FallEl.hidden = false;
+  c4FallEl.firstChild.src = C4_COIN_SRC[seat];
+  c4FallEl.style.left = C4_COL_X[col] + '%'; c4FallEl.style.top = c4Anim.y + '%';
+  requestAnimationFrame(c4TickDrop);
+}
+function c4TickDrop(now) {
+  const a = c4Anim; if (!a) return;
+  const dt = a.last ? Math.min(0.032, (now - a.last) / 1000) : 1 / 60;
+  a.last = now;
+  const GRAV = 340; // %/s² : calibré à l'œil sur la hauteur du plateau, pas une vraie unité physique
+  a.vy += GRAV * dt;
+  a.y += a.vy * dt;
+  if (a.y >= a.target) {
+    const overshoot = a.y - a.target;
+    a.y = a.target - overshoot * 0.3; a.vy = -a.vy * 0.3; a.bounces++;
+    if (a.bounces >= 3 || Math.abs(a.vy) < 25) {
+      c4FallEl.hidden = true; c4Anim = null;
+      SFX.play('c4land');
+      if (c4Snap) c4PaintGrid(c4Snap); // fait réapparaître le pion dans la grille statique, à sa place
+      return;
+    }
+  }
+  c4FallEl.style.top = a.y + '%';
+  requestAnimationFrame(c4TickDrop);
+}
+// pions restants par siège : total fixe de 21 chacun (42 cases / 2, atteignable seulement si l'alternance
+// stricte des tours garantit un nombre égal de coups -> toujours vrai ici), moins ceux déjà posés.
+const C4_PIECES_PER_SEAT = (C4_COLS * C4_ROWS) / 2;
+function c4RemainingFor(s, seat) {
+  let used = 0;
+  for (const col of s.grid) for (const v of col) if (v === seat) used++;
+  return C4_PIECES_PER_SEAT - used;
+}
+// pseudos + pions restants, avec la couleur du pion de chacun (jaune seat0 / bleu seat1) pour les
+// distinguer d'un coup d'œil sur le décor chargé -> plus lisible qu'une simple ligne de texte plate.
+function c4RenderPlayers(s, opp) {
+  const meName = s.seats[c4You] ? s.seats[c4You].name : 'Toi';
+  const oppName = opp ? opp.name + (opp.connected ? '' : ' (déco)') : '…';
+  const oppSeat = c4You === 0 ? 1 : 0;
+  $('#c4-players').innerHTML =
+    `<span class="c4-player c4-player-${c4You}">${escapeHtml(meName)} <b>×${c4RemainingFor(s, c4You)}</b></span>` +
+    `<span class="c4-vs">🆚</span>` +
+    `<span class="c4-player c4-player-${oppSeat}">${escapeHtml(oppName)} <b>×${c4RemainingFor(s, oppSeat)}</b></span>`;
+}
+// tour/résultat : appliqué soit tout de suite (pas d'animation en cours), soit ~1s après le début
+// d'une chute (cf. c4RenderGame) -> sans ça le tour passait AVANT que le pion ait fini de tomber
+// visuellement, et l'adversaire (ou le bot) pouvait rejouer par-dessus l'animation en cours,
+// la coupant net (signalé par le user). c4UpdateColHits/c4Hover/c4TryDrop respectent aussi
+// c4TurnLocked directement, pas seulement l'affichage ici.
+function c4ApplyTurnUI(s) {
+  const opp = s.seats[c4You === 0 ? 1 : 0];
+  c4UpdateColHits(s);
+  const turnLabel = $('#c4-turn-label');
+  if (s.phase === 'playing') {
+    const myTurn = s.turn === c4You;
+    turnLabel.textContent = myTurn ? 'À toi de jouer' : `Tour de ${opp ? opp.name : 'l\'adversaire'}`;
+    turnLabel.classList.toggle('my-turn', myTurn);
+    if (myTurn && c4LastTurn !== c4You) SFX.play('c4turn');
+    c4LastTurn = s.turn;
+  } else turnLabel.textContent = '';
+  const result = $('#c4-result');
+  if (s.phase === 'finished') {
+    if (c4LastPhase !== 'finished') SFX.play(s.winner === c4You ? 'win' : 'c4lose');
+    result.hidden = false;
+    const title = s.winner === 'draw' ? '🤝 Match nul !'
+      : s.winner === 'abandon' ? 'La partie s\'est arrêtée (adversaire parti).'
+      : s.winner === c4You ? '🎉 Tu as gagné !' : '😔 Tu as perdu.';
+    $('#c4-result-title').textContent = title;
+    // il faut que les 2 cliquent "Rejouer" pour relancer (même raison que Connexion) :
+    const youWant = s.rematchWanted[c4You];
+    $('#c4-rematch').hidden = s.winner === 'abandon' || youWant;
+    $('#c4-rematch-wait').hidden = s.winner === 'abandon' || !youWant;
+  } else result.hidden = true;
+  c4LastPhase = s.phase;
+}
+function c4RenderGame(s) {
+  if (!c4BoardBuilt) c4BuildBoard();
+  if (c4LastPhase === 'finished' && s.phase === 'playing') { // rematch : repart de zéro
+    c4LastMoves = null; c4LastTurn = null; c4Anim = null; c4FallEl.hidden = true; c4GhostOppEl.hidden = true;
+    clearTimeout(c4TurnLockTimer); c4TurnLockTimer = null; c4TurnLocked = false;
+  }
+  c4RenderPlayers(s, s.seats[c4You === 0 ? 1 : 0]);
+  const isNewMove = s.moves !== c4LastMoves;
+  let animating = false;
+  if (isNewMove) {
+    c4GhostOppEl.hidden = true; // l'adversaire a joué (ou moi) -> son fantôme de visée n'a plus lieu d'être
+    if (c4LastMoves != null && s.lastMove) {
+      SFX.play('c4drop');
+      const [col, row] = s.lastMove;
+      c4StartDrop(col, row, s.grid[col][row]);
+      animating = true;
+    }
+    c4LastMoves = s.moves;
+  }
+  c4PaintGrid(s);
+  if (animating) {
+    c4TurnLocked = true;
+    c4UpdateColHits(s); // applique le verrou tout de suite (colonnes grisées le temps de l'anim)
+    clearTimeout(c4TurnLockTimer);
+    c4TurnLockTimer = setTimeout(() => { c4TurnLocked = false; c4ApplyTurnUI(s); }, 1000);
+  } else {
+    c4ApplyTurnUI(s);
+  }
+}
+function c4SetSearching(on) {
+  c4Searching = on;
+  $('#c4-search').hidden = on;
+  $('#c4-bot-play').hidden = on;
+  $('#c4-searching').hidden = !on;
+}
+$('#c4-search').onclick = () => { c4SetSearching(true); send({ type: 'c4Search', pseudo }); };
+$('#c4-cancel-search').onclick = () => { SFX.play('c4cancel'); c4SetSearching(false); send({ type: 'c4CancelSearch' }); };
+$('#c4-home-back').onclick = () => { SFX.play('c4cancel'); if (c4Searching) { c4SetSearching(false); send({ type: 'c4CancelSearch' }); } showScreen('hub'); };
+$('#c4-game-leave').onclick = () => {
+  SFX.play('c4cancel');
+  if (c4LocalRoom) c4LocalRoom = null; else send({ type: 'c4LeaveRoom' });
+  clearTimeout(c4TurnLockTimer); c4TurnLockTimer = null; c4TurnLocked = false; // pas de verrou qui traîne sur la prochaine partie
+  showScreen('c4home');
+};
+$('#c4-rematch').onclick = () => {
+  if (c4LocalRoom) {
+    C4Room.requestRematch(c4LocalRoom, C4_HUMAN_TOKEN);
+    C4Room.requestRematch(c4LocalRoom, C4_BOT_TOKEN); // le bot est toujours partant pour une revanche
+    c4HandleState(C4Room.roomSnapshot(c4LocalRoom, c4You));
+    c4BotMaybeMove();
+  } else send({ type: 'c4Rematch' });
+};
+
+/* ---------- mode "vs Bot" : 100% local, aucune partie réseau (le moteur n'a pas d'info cachée à
+   protéger -> pas besoin du serveur). Réutilise TEL QUEL le moteur/room/bot serveur (window.C4Engine/
+   window.C4Room/window.C4Bot, cf. server/c4-*.js) : même règles, même rematch, même IA testée côté
+   serveur (server/test_c4_bot.js) -> zéro logique de partie dupliquée côté client. ---------- */
+const C4_HUMAN_TOKEN = 'human', C4_BOT_TOKEN = 'bot', C4_BOT_NAME = 'Bot';
+function c4StartBotMatch() {
+  c4LocalRoom = C4Room.createRoom();
+  const humanFirst = Math.random() < 0.5; // qui commence (siège 0) est tiré au sort, comme un vrai match
+  if (humanFirst) { C4Room.join(c4LocalRoom, C4_HUMAN_TOKEN, pseudo); C4Room.join(c4LocalRoom, C4_BOT_TOKEN, C4_BOT_NAME); c4You = 0; }
+  else { C4Room.join(c4LocalRoom, C4_BOT_TOKEN, C4_BOT_NAME); C4Room.join(c4LocalRoom, C4_HUMAN_TOKEN, pseudo); c4You = 1; }
+  C4Room.start(c4LocalRoom);
+  c4HandleState(C4Room.roomSnapshot(c4LocalRoom, c4You));
+  c4BotMaybeMove();
+}
+function c4BotMaybeMove() {
+  if (!c4LocalRoom) return;
+  const g = c4LocalRoom.game, botSeat = c4You === 0 ? 1 : 0;
+  if (g.phase !== 'playing' || g.turn !== botSeat) return;
+  setTimeout(function think() {
+    // re-vérifié à l'exécution (pas juste à la planification) : la partie a pu être quittée, rejouée,
+    // ou ce tour déjà joué entre-temps (ex. double appel accidentel) -> sans ce re-check, un timeout
+    // orphelin pourrait rejouer un coup pour le bot alors que ce n'est plus (ou plus encore) son tour.
+    if (!c4LocalRoom || c4LocalRoom.game.phase !== 'playing' || c4LocalRoom.game.turn !== botSeat) return;
+    // la chute précédente (le coup humain qui vient de passer la main au bot) est peut-être encore
+    // verrouillée à l'écran (cf. c4TurnLocked, ~1s) -> on patiente pour ne pas couper son animation.
+    if (c4TurnLocked) { setTimeout(think, 120); return; }
+    const col = C4Bot.chooseCol(c4LocalRoom.game, botSeat);
+    C4Room.dropPiece(c4LocalRoom, C4_BOT_TOKEN, col);
+    c4HandleState(C4Room.roomSnapshot(c4LocalRoom, c4You));
+  }, 500 + Math.random() * 400); // petit délai de "réflexion", sinon le coup tombe instantanément (pas naturel)
+}
+$('#c4-bot-play').onclick = () => c4StartBotMatch();
+
 /* boot */
 wireControls();
 /* ---------- panneau de règles (3 onglets), ouvert depuis le menu ET en jeu ---------- */
@@ -1432,5 +2184,43 @@ initEmote();
 window.addEventListener('resize', fitBoard);
 window.addEventListener('orientationchange', () => setTimeout(fitBoard, 200));
 requestAnimationFrame(tick);
-showScreen('landing');
+// reprise après refresh : si on avait dépassé l'accueil, on repart du lobby (le serveur nous remet
+// automatiquement dans notre room via le token si elle est encore active -> handleState bascule alors
+// vers waiting/game). Sinon : accueil normal.
+(function () {
+  // lien direct loultparty.fr/c4 (cf. server.js) : ouvre Puissance 4 directement, sans passer par le
+  // hub de choix du jeu -> permet de partager un lien qui va droit au jeu.
+  const directC4 = /^\/c4\/?$/.test(location.pathname);
+  const directImp = /^\/imposteur\/?$/.test(location.pathname);
+  const directLc = /^\/lculture\/?$/.test(location.pathname); // + ?r=CODE (lien d'invitation) -> rejoint après le pseudo
+  let last; try { last = localStorage.getItem('pl_screen'); } catch (e) { }
+  // reprise UNIQUEMENT sur un rechargement (F5) : une nouvelle visite de loultparty.fr (lien, favori, onglet
+  // rouvert le lendemain) doit retomber sur le hub, pas sur le dernier jeu joué (retour joueurs : "redirigé sur des jeux").
+  // Une partie réellement en cours reste rattrapée par le serveur via le token (handleState -> waiting/game).
+  const isReload = (performance.getEntriesByType('navigation')[0] || {}).type === 'reload';
+  if (isReload && last && last !== 'landing' && last !== 'hub' && localStorage.getItem('pl_name')) {
+    $('#land-name').value = pseudo; $('#lobby-name').textContent = pseudo;
+    // Connexion : le serveur nous remet dans notre room (voir cxJoined/cxState) si elle est encore active ;
+    // sinon on retombe simplement sur l'accueil du jeu (créer/rejoindre), pas de salon public à réafficher.
+    if (last === 'cxhome' || last === 'cxgame') { selectedGame = 'cx'; showScreen('cxhome'); }
+    else if (last === 'c4home' || last === 'c4game') { selectedGame = 'c4'; showScreen('c4home'); }
+    else if (directLc) { selectedGame = 'lc'; if (new URLSearchParams(location.search).get('r')) { $('#btn-rules-land').hidden = true; applyLandingBranding(); showScreen('landing'); } else showScreen('lchome'); }
+    else if ((last === 'lchome' || last === 'lcgame') && !directImp) { selectedGame = 'lc'; showScreen('lchome'); } // le serveur nous remet dans l'émission si elle existe
+    else if (directImp && !new URLSearchParams(location.search).get('r')) { selectedGame = 'imp'; showScreen('imphome'); }
+    else if ((last === 'imphome' || last === 'impgame') && !directImp) { selectedGame = 'imp'; showScreen('imphome'); } // le serveur nous remet dans le salon s'il existe encore
+    else if (directImp) { selectedGame = 'imp'; $('#btn-rules-land').hidden = true; applyLandingBranding(); showScreen('landing'); }
+    else if (directC4) { selectedGame = 'c4'; $('#btn-rules-land').hidden = true; applyLandingBranding(); showScreen('landing'); } // dernière partie = un autre jeu, mais le lien direct l'emporte
+    else { selectedGame = 'poker'; showScreen('lobby'); pendingListRooms = true; }
+  } else if (directLc) {
+    selectedGame = 'lc'; $('#btn-rules-land').hidden = true; applyLandingBranding(); showScreen('landing');
+  } else if (directImp) {
+    selectedGame = 'imp'; $('#btn-rules-land').hidden = true; applyLandingBranding(); showScreen('landing');
+  } else if (directC4) {
+    selectedGame = 'c4'; $('#btn-rules-land').hidden = true; applyLandingBranding(); showScreen('landing');
+  } else { showScreen('hub'); } // 1re visite / pas encore de partie en cours -> choix du jeu, tout premier écran
+  // on TENTE la musique tout de suite : ça passe si le navigateur nous fait confiance (visiteur
+  // habitué du domaine, ou geste hérité de la navigation) ; sinon `.catch` avale l'erreur et
+  // `onFirstInteraction` prend le relais au 1er clic.
+  playMusic();
+})();
 connect();
