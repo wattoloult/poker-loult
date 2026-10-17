@@ -99,14 +99,14 @@
     <h2>Commandes</h2>
     <div class="cols">
       <div><h3><i class="c0"></i>Grimpeur 1 (ou en ligne)</h3>
-        <p><kbd>Z Q S D</kbd> / <kbd>W A S D</kbd> se déplacer</p><p><kbd>Espace</kbd> sauter (maintenir = plus haut)</p>
-        <p><kbd>Maj gauche</kbd> s'arc-bouter · pendu : grimper à la chaîne</p><p><kbd>V</kbd> maintenu : tirer la chaîne (remonter le partenaire)</p><p><kbd>C</kbd> lâcher la prise · <kbd>F</kbd> interagir (levier)</p></div>
+        <p><kbd>Z Q S D</kbd> / <kbd>W A S D</kbd> se déplacer</p><p><kbd data-bind="jump">Espace</kbd> sauter (maintenir = plus haut)</p>
+        <p><kbd data-bind="brace">Maj gauche</kbd> s'arc-bouter · pendu : grimper à la chaîne</p><p><kbd data-bind="pull">E</kbd> maintenu : tirer la chaîne (remonter le partenaire)</p><p><kbd data-bind="drop">C</kbd> lâcher la prise · <kbd data-bind="use">F</kbd> interagir (levier)</p></div>
       <div><h3><i class="c1"></i>Grimpeur 2 (même clavier)</h3>
         <p><kbd>Flèches</kbd> se déplacer</p><p><kbd>0 pavé num.</kbd> / <kbd>Ctrl droit</kbd> sauter</p>
         <p><kbd>Maj droit</kbd> / <kbd>1 pavé</kbd> s'arc-bouter, grimper à la chaîne</p><p><kbd>4 pavé</kbd> / <kbd>/</kbd> tirer la chaîne</p><p><kbd>2 pavé</kbd> / <kbd>Fin</kbd> lâcher · <kbd>5 pavé</kbd> interagir</p></div>
     </div>
     <p class="muted">En l'air, pousser vers un rebord = s'y accrocher. Contre une paroi couverte de prises et de lierre = l'escalader (endurance). Sur un rebord : avancer ou sauter = se hisser, côté = se décaler. Saut depuis un mur = rebond.<br>Tirer la chaîne remonte un partenaire tombé, mais l'effort fait glisser vers lui : reculez d'abord sur un appui stable, sinon vous tomberez ensemble.
-      <br>Souris (glisser) ou <kbd>A</kbd>/<kbd>E</kbd> : tourner la caméra · molette : recul · <kbd>R</kbd> maintenu : retour au point de passage · <kbd>Échap</kbd> : pause · Manette : stick, A saut, gâchettes droites et LB s'arc-bouter, gâchette gauche tirer, B lâcher.</p>
+      <br>Souris (glisser) ou <kbd data-bind="camL">Z</kbd>/<kbd data-bind="camR">X</kbd> : tourner la caméra · molette : recul · <kbd data-bind="reset">R</kbd> maintenu : retour au point de passage · <kbd>Échap</kbd> : pause · Manette : stick, A saut, gâchettes droites et LB s'arc-bouter, gâchette gauche tirer, B lâcher.</p>
     <p class="muted credits">Sons des mécanismes : johanwestling (Freesound, CC BY 4.0), qubodup (CC0), bart (OpenGameArt, CC0). Ambiances de la jungle : © Blender Foundation | apricot.blender.org (CC BY 3.0). Musique du Japon : Tozan (OpenGameArt, CC0). Modèles : Quaternius, Kenney (CC0). Détail des sons et modèles de chaque monde : assets/credits-*.txt.</p>
     <button id="help-close" class="big">C'est parti</button>
   </div>
@@ -139,6 +139,9 @@
     <label>Entrée audio (micro) <select id="s-in"></select></label>
     <label id="s-out-row">Sortie audio <select id="s-out"></select></label>
     <label>Sensibilité caméra <input id="p-sens" type="range" min="0.3" max="2" step="0.1"></label>
+    <h3 class="sub">Touches (grimpeur 1)</h3>
+    <div id="s-keys"></div>
+    <button id="s-keys-reset" class="mini">Rétablir par défaut</button>
     <button id="set-close" class="big">Fermer</button>
   </div>
 </div>

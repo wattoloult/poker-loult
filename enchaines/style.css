@@ -223,3 +223,9 @@ body[data-screen="room"] #chat { left: 50%; transform: translateX(-50%); bottom:
 #settings .card label { display: flex; flex-direction: row !important; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; font: 600 16px 'Grenze', serif; color: var(--bone2); }
 #settings .card input[type=range] { width: 52%; }
 #settings .card select { width: 52%; background: #1a1411; color: var(--bone2); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 3px; padding: 4px; font: 600 14px 'Grenze', serif; }
+
+#settings .sub { margin: 14px 0 4px; font: 800 15px 'Grenze', serif; color: var(--ember2, #ffb36b); letter-spacing: 0.04em; }
+#s-keys .krow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 0; font: 600 15px 'Grenze', serif; color: var(--bone2); }
+#s-keys .krow button { min-width: 52%; padding: 4px 8px; font: 700 14px 'Grenze', serif; }
+#s-keys .krow button.wait { outline: 2px solid var(--ember); animation: pulse 0.8s ease-in-out infinite alternate; }
+@keyframes pulse { from { opacity: 1; } to { opacity: 0.6; } }

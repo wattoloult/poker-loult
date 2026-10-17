@@ -47,7 +47,10 @@ export const EN = {
   "· à deux sur ce clavier": "· two players, one keyboard", "· pour ton salon": "· for your room", "Étage {0} · {1}": "Floor {0} · {1}", "Bientôt…": "Coming soon…",
   "pas encore gravi": "not climbed yet", "Lien copié : envoie-le à ton partenaire": "Link copied: send it to your partner", "Choisis d'abord un pseudo": "Pick a nickname first",
   "Mode test refusé": "Test mode refused", "Mode test actif : F9 pour le panneau": "Test mode on: F9 for the panel", "Grimpeur": "Climber", "Grimpeur 1": "Climber 1", "Grimpeur 2": "Climber 2",
-  "Zone {0}": "Zone {0}", "Réglages": "Settings", "Volume général": "Master volume", "Musique et ambiance": "Music and ambience", "Effets (saut, pas, mécanismes)": "Effects (jump, footsteps, mechanisms)",
+  "Zone {0}": "Zone {0}", "Touches (grimpeur 1)": "Keys (climber 1)", "Haut": "Up", "Bas": "Down", "Gauche": "Left", "Droite": "Right", "Sauter": "Jump", "S'arc-bouter": "Brace",
+  "Tirer la chaîne": "Pull the chain", "Lâcher la prise": "Let go", "Interagir": "Interact", "Retour au point de passage": "Back to checkpoint", "Caméra gauche": "Camera left", "Caméra droite": "Camera right",
+  "Appuie sur une touche ou un bouton de souris…": "Press a key or a mouse button…", "Rétablir par défaut": "Reset to defaults", "non assignée": "unbound", "Clic gauche": "Left click", "Clic molette": "Middle click",
+  "Clic droit": "Right click", "Souris 4": "Mouse 4", "Souris 5": "Mouse 5", "Ctrl gauche": "Left Ctrl", "Entrée": "Enter", "Maj gauche": "Left Shift", "Réglages": "Settings", "Volume général": "Master volume", "Musique et ambiance": "Music and ambience", "Effets (saut, pas, mécanismes)": "Effects (jump, footsteps, mechanisms)",
   "Voix du partenaire": "Partner's voice", "Volume du micro": "Microphone level", "Entrée audio (micro)": "Audio input (microphone)", "Sortie audio": "Audio output", "Fermer": "Close",
   "Par défaut": "Default", "Microphone": "Microphone", "Haut-parleurs": "Speakers", "L'Envol": "The Take-off", "L'Atelier": "The Workshop", "L'Avalanche": "The Avalanche", "L'Orage": "The Thunderstorm", "L'Arche": "The Arch", "Salon introuvable.": "Room not found.", "Salon complet.": "Room full.", "English": "English", "Français": "Français",
   // ---- mondes ----

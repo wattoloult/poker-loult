@@ -20,12 +20,13 @@ G.play = (id) => { G.course = id; return startLocal(); }; // tests / mode test
 G.tp = (i) => { if (G.mode !== 'local') return; G.W.cp = i; G.W.cpMax = Math.max(G.W.cpMax, i); spawnAt(G.W, i); Scene.onEvent(G.W, { k: 'respawn' }); };
 
 /* ------------------------------ réglages persistants ------------------------------ */
-const CFG = Object.assign({ name: '', vol: 0.8, sens: 1, invert: false, vMusic: 1, vSfx: 1, vChain: 1, vVoice: 1, vMic: 1, devIn: '', devOut: '' }, safe(() => JSON.parse(localStorage.getItem('ch-cfg')), {}));
+const CFG = Object.assign({ name: '', vol: 0.8, sens: 1, invert: false, vMusic: 1, vSfx: 1, vChain: 1, vVoice: 1, vMic: 1, devIn: '', devOut: '', keys: {} }, safe(() => JSON.parse(localStorage.getItem('ch-cfg')), {}));
 const saveCfg = () => safe(() => localStorage.setItem('ch-cfg', JSON.stringify(CFG)));
 
 /* ------------------------------ entrées ------------------------------ */
 const keys = new Set(), pressed = new Set();
 addEventListener('keydown', (e) => {
+  if (G.capturing) { e.preventDefault(); e.stopImmediatePropagation(); endCapture(e.code === 'Escape' ? null : e.code); return; }
   if (e.target.tagName === 'INPUT') return;
   // chat du salon : Entrée pour écrire (en ligne), M pour couper / ouvrir le micro
   if (G.room && (e.code === 'Enter' || e.code === 'NumpadEnter') && G.mode !== 'local') { e.preventDefault(); keys.clear(); $('#chat-in').focus(); return; }
@@ -40,8 +41,12 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
+// touches du grimpeur 1 (réglables : clavier ou boutons de souris « Mouse0..4 ») ; défauts : E = tirer la chaîne, Z / X = tourner la caméra
+const KEYDEF = { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space'], brace: ['ShiftLeft'], pull: ['KeyE'], drop: ['KeyC'], use: ['KeyF'], reset: ['KeyR'], camL: ['KeyZ'], camR: ['KeyX'] };
+const BIND = {}; const rebuildBind = () => { for (const a in KEYDEF) BIND[a] = CFG.keys?.[a] ?? KEYDEF[a]; };
+rebuildBind();
 const SCHEMES = {
-  k1: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space'], brace: ['ShiftLeft'], pull: ['KeyV'], drop: ['KeyC'], use: ['KeyF'], reset: ['KeyR'] },
+  k1: BIND,
   k2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], jump: ['Numpad0', 'ControlRight', 'Enter'], brace: ['ShiftRight', 'Numpad1'], pull: ['Numpad4', 'Slash'], drop: ['Numpad2', 'End'], use: ['Numpad5', 'Period'], reset: ['Numpad3', 'Backspace'] },
 };
 const anyKey = (l) => l.some((k) => keys.has(k)), anyPress = (l) => l.some((k) => pressed.has(k));
@@ -71,12 +76,19 @@ function readInput(k, schemes, pads) {
 }
 // souris : glisser = tourner la caméra, molette = recul
 let drag = null;
-addEventListener('pointerdown', (e) => { Music.unlock(); Snd.unlock(); Sfx.load(); if (e.target.id === 'gl') drag = { x: e.clientX, y: e.clientY }; });
+addEventListener('pointerdown', (e) => {
+  Music.unlock(); Snd.unlock(); Sfx.load();
+  if (G.capturing && G.capturing.armed) { e.preventDefault(); endCapture('Mouse' + e.button); return; }
+  if (e.target.id === 'gl') { drag = { x: e.clientX, y: e.clientY }; const k = 'Mouse' + e.button; if (!keys.has(k)) pressed.add(k); keys.add(k); }
+});
+addEventListener('mousedown', (e) => { if (e.button > 0 && (e.target.id === 'gl' || G.capturing)) e.preventDefault(); }); // clic molette / boutons latéraux : pas de défilement ni de navigation
+addEventListener('pointerup', (e) => { keys.delete('Mouse' + e.button); });
+addEventListener('pointercancel', () => { for (let b = 0; b < 5; b++) keys.delete('Mouse' + b); });
 addEventListener('pointermove', (e) => { if (!drag) return; Scene.camInput(-(e.clientX - drag.x) * 0.006 * CFG.sens, (e.clientY - drag.y) * 0.004 * (CFG.invert ? -1 : 1), 0); drag = { x: e.clientX, y: e.clientY }; });
 addEventListener('pointerup', () => { drag = null; });
 addEventListener('contextmenu', (e) => { if (e.target.tagName !== 'INPUT') e.preventDefault(); }); // pas de menu du clic droit dans le jeu
 addEventListener('wheel', (e) => { if (G.mode) Scene.camInput(0, 0, Math.sign(e.deltaY) * 1.2); }, { passive: true });
-function camKeys(dt) { const r = (keys.has('KeyE') ? 1 : 0) - (keys.has('KeyQ') ? 1 : 0); if (r) Scene.camInput(-r * 1.8 * dt * CFG.sens, 0, 0); }
+function camKeys(dt) { const r = (anyKey(BIND.camR) ? 1 : 0) - (anyKey(BIND.camL) ? 1 : 0); if (r) Scene.camInput(-r * 1.8 * dt * CFG.sens, 0, 0); }
 
 /* ------------------------------ écrans ------------------------------ */
 function show(id) { for (const s of $$('.screen')) s.classList.toggle('on', s.id === id); document.body.dataset.screen = id || 'game'; }
@@ -271,10 +283,10 @@ function hud(W, dt) {
   }
   // astuce du coin
   let hint = '';
-  for (const h of LV().hints) for (const p of W.pl) if (Math.hypot(p.x - h.x, p.y - h.y, p.z - h.z) < 4.5) hint = tr(h.txt);
+  for (const h of LV().hints) for (const p of W.pl) if (Math.hypot(p.x - h.x, p.y - h.y, p.z - h.z) < 4.5) hint = hintKeys(tr(h.txt));
   const resetting = Math.max(...W.resetHold);
   if (resetting > 0.05) hint = tr('Retour au point de passage… {0}', Math.ceil((1 - resetting) * 10) / 10);
-  else if (Math.max(a.y, b.y) < LV().checkpoints[W.cp].y - 10 && a.st === ST.GROUND && b.st === ST.GROUND) hint = tr('Tombés bien bas ? Maintenez R pour revenir au point de passage');
+  else if (Math.max(a.y, b.y) < LV().checkpoints[W.cp].y - 10 && a.st === ST.GROUND && b.st === ST.GROUND) hint = hintKeys(tr('Tombés bien bas ? Maintenez R pour revenir au point de passage'));
   $('#h-hint').textContent = hint; $('#h-hint').classList.toggle('on', !!hint);
   // débogage : états, tension, longueur
   if (G.debug) $('#dbg').textContent = W.pl.map((p, k) => `J${k + 1} ${['sol', 'air', 'rebord', 'paroi', 'hisse'][p.st]} y=${p.y.toFixed(2)} v=${Math.hypot(p.vx, p.vz).toFixed(1)}/${p.vy.toFixed(1)} end=${p.sta.toFixed(2)} ${p.brace ? 'ARC' : ''} ${p.dangling ? 'PEND' : ''}`).join('\n') + `\nchaîne ${W.Lc.toFixed(2)}/${W.L} tension ${W.ten.toFixed(2)}  tick ${W.tick}  ${G.mode === 'online' ? 'rtt ' + Math.round(net.rtt) + ' ms, en attente ' + G.pend.length : ''}`;
@@ -467,7 +479,33 @@ async function fillDevices() {
 $('#s-in').addEventListener('change', (e) => { CFG.devIn = e.target.value; Voice.setInput(CFG.devIn); saveCfg(); });
 $('#s-out').addEventListener('change', (e) => { CFG.devOut = e.target.value; Snd.setSink(CFG.devOut); Music.setSink(CFG.devOut); Voice.setOutput(CFG.devOut); saveCfg(); });
 safe(() => navigator.mediaDevices.addEventListener('devicechange', () => { if ($('#settings').classList.contains('on')) fillDevices(); }));
-const openSettings = () => { fillDevices(); $('#settings').classList.add('on'); };
+let LAYOUT = null; safe(() => navigator.keyboard?.getLayoutMap?.().then((l) => { LAYOUT = l; refreshKeys(); }));
+const SPECIAL = { Space: 'Espace', ShiftLeft: 'Maj gauche', ShiftRight: 'Maj droit', ControlLeft: 'Ctrl gauche', ControlRight: 'Ctrl droit', Enter: 'Entrée', Escape: 'Échap', Mouse0: 'Clic gauche', Mouse1: 'Clic molette', Mouse2: 'Clic droit', Mouse3: 'Souris 4', Mouse4: 'Souris 5', Tab: 'Tab', Backquote: '²' };
+const keyLabel = (code) => !code ? tr('non assignée') : SPECIAL[code] ? tr(SPECIAL[code]) : /^Key[A-Z]$/.test(code) ? (LAYOUT?.get(code) || code.slice(3)).toUpperCase() : /^Digit\d$/.test(code) ? code.slice(5) : LAYOUT?.get(code)?.toUpperCase() || code.replace('Numpad', 'Pavé ').replace('Arrow', 'Flèche ');
+const KEYROWS = [['up', 'Haut'], ['down', 'Bas'], ['left', 'Gauche'], ['right', 'Droite'], ['jump', 'Sauter'], ['brace', "S'arc-bouter"], ['pull', 'Tirer la chaîne'], ['drop', 'Lâcher la prise'], ['use', 'Interagir'], ['reset', 'Retour au point de passage'], ['camL', 'Caméra gauche'], ['camR', 'Caméra droite']];
+function refreshKeys() {
+  for (const el of $$('[data-bind]')) el.textContent = keyLabel(BIND[el.dataset.bind]?.[0]);
+  const box = $('#s-keys'); if (!box) return;
+  box.innerHTML = KEYROWS.map(([a, label]) => `<div class="krow"><span>${esc(tr(label))}</span><button data-act="${a}">${esc(keyLabel(BIND[a]?.[0]))}</button></div>`).join('');
+}
+// capture : on clique sur l'action, puis on appuie sur une touche ou un bouton de souris (Échap annule)
+function endCapture(code) {
+  const cap = G.capturing; G.capturing = null; if (!cap) return;
+  if (code) { for (const a in BIND) if (a !== cap.act && BIND[a].includes(code)) (CFG.keys ||= {})[a] = []; (CFG.keys ||= {})[cap.act] = [code]; saveCfg(); rebuildBind(); }
+  refreshKeys();
+}
+$('#s-keys').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-act]'); if (!b || G.capturing) return;
+  G.capturing = { act: b.dataset.act, armed: false }; b.textContent = tr('Appuie sur une touche ou un bouton de souris…'); b.classList.add('wait'); setTimeout(() => { if (G.capturing) G.capturing.armed = true; }, 150);
+});
+$('#s-keys-reset').addEventListener('click', () => { CFG.keys = {}; saveCfg(); rebuildBind(); refreshKeys(); });
+// astuces à l'écran : les touches citées suivent les réglages (V = tirer, F = interagir, R = retour, Maj = s'arc-bouter, Espace = sauter)
+const hintKeys = (txt) => {
+  const L = (a) => keyLabel(BIND[a]?.[0]), shift = (c) => (c === 'ShiftLeft' || c === 'ShiftRight' ? (LANG === 'en' ? 'Shift' : 'Maj') : null);
+  return txt.replace(/\bV\b/g, L('pull')).replace(/\bF\b/g, L('use')).replace(/\bR\b/g, L('reset')).replace(/\b(Maj|Shift)\b/g, shift(BIND.brace[0]) || L('brace')).replace(/\b(Espace|Space)\b/g, L('jump'));
+};
+refreshKeys();
+const openSettings = () => { fillDevices(); refreshKeys(); $('#settings').classList.add('on'); };
 $('#p-sens').value = CFG.sens; $('#p-sens').addEventListener('input', (e) => { CFG.sens = +e.target.value; saveCfg(); });
 
 /* ------------------------------ mode playtest privé (?pt=CLÉ) ------------------------------ */
