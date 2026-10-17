@@ -5,7 +5,9 @@ import { EN } from './i18n-en.js';
 
 const safe = (f, d) => { try { return f(); } catch { return d; } };
 const stored = safe(() => localStorage.getItem('ch-lang'), null);
-export const LANG = stored || (/^fr/i.test(navigator.language || 'fr') ? 'fr' : 'en');
+// par défaut : français si l'une des langues du navigateur est le français (ou si on ne sait pas), anglais pour tout le monde ailleurs ; le bouton de l'accueil retient le choix
+const prefs = [...(navigator.languages || []), navigator.language].filter(Boolean);
+export const LANG = stored || (prefs.length === 0 || prefs.some((l) => /^fr/i.test(l)) ? 'fr' : 'en');
 export const t = (fr, ...a) => {
   let s = LANG === 'en' ? (EN[fr] ?? fr) : fr;
   if (a.length) s = s.replace(/\{(\d+)\}/g, (_, i) => a[+i] ?? '');
