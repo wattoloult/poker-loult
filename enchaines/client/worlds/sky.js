@@ -102,13 +102,13 @@ export default {
       q.v.at(b.px, b.py, b.pz).set(m !== 0 && near(b.px, b.py, b.pz, 40) ? 0.5 : 0, m > 0 ? 1.1 : 0.85);
       if (q.g) { q.g.rotation.z = Math.sin(t * 1.3 + b.i) * 0.05 + (m > 0 ? -0.04 : 0); q.g.rotation.x = Math.cos(t * 1.1 + b.i) * 0.04; q.g.position.y += (Math.sin(t * 2.2 + b.i) * 0.04 - (q.g.userData.bob || 0)); q.g.userData.bob = Math.sin(t * 2.2 + b.i) * 0.04; }
     } });
-    // nuages-ressorts : écrasés et bouffée au moment du rebond
+    // nuages-ressorts : écrasés et bouffée au moment du rebond (le rebond ne vaut que pendant 0,5 s : avant, (0,5 - t) devenait très négatif et le nuage s'étirait de plus en plus haut avec le temps = colonne rose géante)
     guard(() => { for (const q of V.springs) {
       const b = q.b, top = b.py + b.hh; q.t += dt;
       if (q.t > 0.5) for (const p of W.pl) if (p.vy > 11 && Math.abs(p.x - b.px) < b.hw + 0.4 && Math.abs(p.z - b.pz) < b.hd + 0.4 && p.y - top < 1.2 && p.y >= top - 0.2) {
         q.t = 0; Sfx.one('sky/pop', b.px, top, b.pz, { v: 0.8, key: 'sp' + b.i, gap: 0.3 }); Sfx.one('sky/puff', b.px, top, b.pz, { v: 0.7, key: 'sq' + b.i, gap: 0.3 });
       }
-      if (q.m) { const k = q.t < 0.45 ? Math.sin((q.t / 0.45) * Math.PI) : 0; q.m.scale.y = (q.m.userData.sy ??= q.m.scale.y) * (1 - 0.28 * k + 0.12 * Math.max(0, Math.sin(q.t * 18) * (0.5 - q.t))); }
+      if (q.m) { const k = q.t < 0.45 ? Math.sin((q.t / 0.45) * Math.PI) : 0; q.m.scale.y = (q.m.userData.sy ??= q.m.scale.y) * (1 - 0.28 * k + 0.12 * (q.t < 0.5 ? Math.max(0, Math.sin(q.t * 18) * (0.5 - q.t)) : 0)); }
     } });
     // ponts de cordes : les planches gémissent en s'enfonçant ; lianes : claquement de corde à l'accroche
     guard(() => {
