@@ -9,6 +9,7 @@ import { windOn } from '../core/sim.js';
 import * as Mechs from './mechs.js';
 import * as Portal from './portal.js';
 import * as Totems from './totems.js';
+import * as Decor from './decor.js';
 import { VIEWS } from './worlds/index.js';
 import * as Sfx from './sfx.js';
 import { HP } from '../core/sim.js';
@@ -157,6 +158,7 @@ export function build(W) {
     mechVisual(world, th, b, o);
   }
   Mechs.build(W, grp);
+  Decor.build(L, grp);
   S.wv = VIEWS[world] || null; S.wa = { THREE, S, LIB, PACK: PACK[world] || {}, place, matFor: (name) => matFor(th, name, world), sprite, linkRow, boxGeo, Sfx, HP, th };
   try { S.wv?.build?.(W, grp, S.wa); } catch (e) { console.error('monde ' + world, e); }
   Portal.build(L, grp, nextCourse(L.id, true)?.world || world);
@@ -344,7 +346,7 @@ export function update(W, dt, t) {
   }
   for (const v of S.cwViews) { const b = W.bodies[v.b.i]; for (const ox of [-b.hw + 0.2, b.hw - 0.2]) { HA.set(b.px + ox, v.top, b.pz); HB.set(b.px + ox, b.py + b.hh, b.pz); n = linkRow(S.hangLinks, n, HA, HB, b.i); } }
   for (const wv of S.wheels) for (const id of wv.ids) { const b = W.bodies[id]; HA.set(wv.c.cx, wv.c.cy, b.pz - 1); HB.set(b.px, b.py, b.pz - 1); n = linkRow(S.hangLinks, n, HA, HB, id); }
-  n = Mechs.links(W, n); Mechs.update(W, dt); Portal.update(W, dt, t); Totems.update(W, dt, t);
+  n = Mechs.links(W, n); Mechs.update(W, dt); Portal.update(W, dt, t); Totems.update(W, dt, t); Decor.update(dt);
   if (S.wv) try { n = S.wv.links?.(W, n, S.wa) ?? n; S.wv.update?.(W, dt, t, S.wa); } catch (e) { console.error(e); S.wv = null; } // une erreur d'un monde ne fige pas le jeu
   S.hangLinks.count = n; S.hangLinks.instanceMatrix.needsUpdate = true;
   for (const h of S.gearHubs) { const arm = W.bodies.find((x) => x.move?.k === 'orbit' && Math.abs(x.move.cx - h.b.x) < 0.1); if (arm) h.g.rotation.y = arm.yaw; }

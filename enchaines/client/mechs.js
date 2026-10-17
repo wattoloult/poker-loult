@@ -11,17 +11,17 @@ import * as Sfx from './sfx.js';
 
 const M = {}; // modèles : M[nom] (scène du .glb)
 let loading = null;
-export const needs = (L) => L.bodies.some((b) => b.herse || b.dbseg || b.cw);
+export const needs = (L) => L.bodies.some((b) => b.herse || b.dbseg || b.cw) || !!L.deco?.length;
 export function load() {
   if (loading) return loading;
   const ld = new GLTFLoader(), base = new URL('../assets/castle/', import.meta.url);
-  loading = Promise.all(['metal-gate', 'gate', 'bridge-draw', 'wall-pillar', 'siege-trebuchet'].map(async (n) => {
+  loading = Promise.all(['metal-gate', 'gate', 'bridge-draw', 'wall-pillar', 'siege-trebuchet', 'tower-square-mid', 'tower-square-mid-windows', 'tower-square-top-roof-high', 'tower-square-base-border', 'wall-half', 'flag-pennant'].map(async (n) => {
     try { const g = await ld.loadAsync(new URL(n + '.glb', base).href); g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); M[n] = g.scene; } catch { /* modèle absent */ }
   }));
   return loading;
 }
 // pièce détachée du trébuchet (roue, poids), recentrée sur son origine
-function part(name) { const t = M['siege-trebuchet']; const n = t?.getObjectByName(name); if (!n) return null; const c = n.clone(false); c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); const g = new THREE.Group(); g.add(c); return g; }
+export function part(name) { const t = M['siege-trebuchet']; const n = t?.getObjectByName(name); if (!n) return null; const c = n.clone(false); c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); const g = new THREE.Group(); g.add(c); return g; }
 // copie d'un modèle mise aux dimensions voulues (sx, sy, sz en mètres ; le modèle garde son origine), habillée d'un matériau du jeu :
 // les modèles Kenney sont peints par une palette pastel ; on garde leur forme et on projette nos textures (pierre, bois, fer) dessus
 export function sized(name, sx, sy, sz, mat) {

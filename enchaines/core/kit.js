@@ -20,7 +20,7 @@
 // Autres données : ropes (lianes / cordes), winds (courants d'air, cascades), cams (cadrages par zone), music (par zone).
 
 export function course(meta) {
-  const B = [], CP = [], HINTS = [], ROPES = [], WINDS = [], CAMS = [], ZN = [''], MUS = [];
+  const B = [], CP = [], HINTS = [], ROPES = [], WINDS = [], CAMS = [], ZN = [''], MUS = [], DECO = [];
   let Z = 1;
   const K = {
     zone(n, name) { Z = n; ZN[n] = name; return K; },
@@ -37,6 +37,8 @@ export function course(meta) {
     // cadrage : dans la boîte, la caméra prend ce mode (side | three | behind | far | tunnel) et ces angles
     cam(x0, y0, z0, x1, y1, z1, o) { CAMS.push({ min: [Math.min(x0, x1), Math.min(y0, y1), Math.min(z0, z1)], max: [Math.max(x0, x1), Math.max(y0, y1), Math.max(z0, z1)], ...o }); },
     music(y, key) { MUS.push({ y, key }); },
+    // décor composé, sans collision (rendu par client/decor.js) : tower, ruin, arch, chain, banner, wheel, scaffold, lantern, flag
+    deco(kind, x, y, z, o = {}) { DECO.push({ kind, x, y, z, zone: Z, ...o }); },
     // pont suspendu : planches qui s'enfoncent entre deux points (même hauteur), espacées de `gap`
     bridge(x0, x1, top, z, o = {}) {
       const w = o.w || 1.2, gap = o.gap ?? 0.25, d = o.d || 2.2, n = Math.max(2, Math.round(Math.abs(x1 - x0) / (w + gap))), s = (x1 - x0) / n;
@@ -63,7 +65,7 @@ export function course(meta) {
     bars(x0, x1, y, z, n, o = {}) { const ids = []; for (let i = 0; i < n; i++) ids.push(K.plat(x0 + ((x1 - x0) * i) / Math.max(1, n - 1), y, z, 0.18, o.len || 2.4, { mat: 'metal', h: 0.18, bar: 1, ...o })); return ids; },
     done(extra = {}) {
       const tops = B.filter((b) => !b.cliff).map((b) => b.y + b.h / 2);
-      return { ...meta, bodies: B, checkpoints: CP, hints: HINTS, ropes: ROPES, winds: WINDS, cams: CAMS, music: MUS, zones: ZN,
+      return { ...meta, bodies: B, checkpoints: CP, hints: HINTS, ropes: ROPES, winds: WINDS, cams: CAMS, music: MUS, zones: ZN, deco: DECO,
         abyss: meta.abyss ?? Math.min(...tops) - 18, top: CP[CP.length - 1]?.y ?? Math.max(...tops), ...extra };
     },
     get count() { return B.length; },

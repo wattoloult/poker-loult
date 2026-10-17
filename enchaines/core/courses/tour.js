@@ -111,6 +111,29 @@ block(22, 78, 90, 11.5, 4, 2, { mat: 'rock', climb: 1, climbFaces: [3] });
 block(14, 84, 91.2, 9, 8, 8, { mat: 'brick', summit: 1 });
 cp(14, 91.2, 9, { name: 'Le Sommet', finish: true, r: 4 });
 
+/* ------------------------- décor composé (sans collision) ------------------------- */
+// LA TOUR : elle monte derrière toute l'ascension, à moitié prise dans la falaise ; on la longe d'étage en étage jusqu'à son toit
+K.deco('tower', 4, -12, -9.8, { size: 6.2, y1: 92 });
+K.deco('tower', -30, 30, -10.5, { size: 4.2, y1: 70 }); // tourelle voisine, plus basse : la silhouette du château
+// 1. le pied : une porte en ruine et des murs écroulés, l'entrée du château (zone calme, quelques lanternes)
+K.deco('arch', -5.2, 0, -4.6, { h: 5.4 }); K.deco('ruin', 5.5, 0, -4.9, { w: 4.4, h: 3.2 }); K.deco('lantern', 1.2, 2.6, -6.5, { light: 1 });
+K.deco('banner', -7.4, 0, -4.8, { h: 3.4 }); K.deco('banner', 9.2, 2.2, -6.4, { h: 2.6, style: 2 });
+// 2. les piquets : un échafaudage abandonné, des chaînes tendues entre la tour et les poteaux
+K.deco('scaffold', -6.4, 3, 9.4, { h: 6.4 }); K.deco('chain', 1, 19, -6.8, { to: [8.4, 13.8, 2], sag: 1.6 });
+// 3. le vide : de grosses chaînes traversent le gouffre (les poutres y sont suspendues)
+K.deco('chain', 7, 27.5, -6.8, { to: [17.5, 25, -6.2], sag: 2.2 }); K.deco('chain', -8, 28, -6.8, { to: [1, 30, -6.8], sag: 1.4 });
+// 4. la paroi : un treuil abandonné sur la falaise, une lanterne pour repérer le haut de la paroi
+K.deco('wheel', -1.5, 41, -6.6, { r: 2.2, spin: 0.08 }); K.deco('lantern', 2.6, 39.6, -2.6);
+// 5. les rouages : les roues qui entraînent le plateau tournant tournent avec lui
+K.deco('wheel', 12, 59.5, -6.6, { r: 2.8, spin: -0.45 }); K.deco('wheel', 17.4, 57.2, -6.6, { r: 1.6, spin: 0.8 }); K.deco('wheel', 24.5, 56, -6.4, { r: 1.2, spin: -1.1 });
+// 6. la chaîne : la grande chaîne du château pend au-dessus du passage risqué, bannières sur le mur
+K.deco('chain', -14, 66, -6.6, { to: [-36, 68, -6.6], sag: 3.4 }); K.deco('banner', -8.4, 56.6, 0.4, { h: 3, style: 2 }); K.deco('banner', -37.5, 57.4, 0.4, { h: 3 });
+// 7. l'épreuve : ruines sur la crête, un fanion qui indique le chemin
+K.deco('ruin', -37.5, 62.6, -5.8, { w: 4, h: 2.4 }); K.deco('flag', 10.25, 76.4, -4.2, { h: 4.5 });
+// 8. le sommet : les couleurs de Loult flottent au sommet de la tour
+K.deco('flag', 10.6, 91.2, 6, { h: 5.5 }); K.deco('flag', 17.4, 91.2, 12, { h: 5.5, color: 0xd8a020 }); K.deco('banner', 14, 91.2, 5.2, { h: 3.4, style: 2 });
+K.deco('lantern', 22, 84, -0.6, { light: 1 });
+
 // falaise derrière tout le parcours (collision plate ; le relief est dessiné par le client, toujours derrière z = -7)
 block(0, -50, 110, -14, 100, 14, { mat: 'cliff', zone: 0, cliff: 1, nograb: 1 });
 
