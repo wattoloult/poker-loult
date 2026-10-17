@@ -19,7 +19,8 @@ export function createNet(getName) {
     ws.onmessage = (e) => {
       let m; try { m = JSON.parse(e.data); } catch { return; }
       if (m.t === 'pong') { const r = performance.now() - m.n; N.rtt = N.rtt ? N.rtt * 0.7 + r * 0.3 : r; return; }
-      if (m.t === 'hi' && N.room) N.send({ t: 'join', code: N.room }); // reprise après une coupure
+      if (m.t === 'hi' && N.room) { N.auto = true; N.send({ t: 'join', code: N.room }); } // reprise après une coupure (si le salon n'existe plus : on l'oublie sans message d'erreur)
+      if (m.t === 'room' || m.t === 'start') N.auto = false;
       N.handlers[m.t]?.(m);
     };
     ws.onclose = () => { N.up = false; N.onState?.(false); if (N.closed) return; setTimeout(open, Math.min(4000, 400 * 2 ** N.tries++)); };

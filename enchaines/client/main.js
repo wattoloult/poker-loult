@@ -339,7 +339,7 @@ function getNet() {
   net.on('rtc', (m) => Voice.onSignal(m.d));
   net.on('rooms', (m) => renderRooms(m.list));
   net.on('hi', () => { if (G.pt?.key) net.send({ t: 'pt', key: G.pt.key }); if (document.body.dataset.screen === 'board') net.send({ t: 'board', course: $('#b-course').value }); if (document.body.dataset.screen === 'online') net.send({ t: 'list' }); });
-  net.on('err', (m) => toast(m.m));
+  net.on('err', (m) => { if (net.auto) { net.auto = false; net.setRoom(null); G.room = null; return; } toast(m.m); }); // reprise automatique sur un salon disparu : silence
   net.on('left', () => { net.setRoom(null); G.room = null; Voice.stop(); chatShow(false); stopGame(); show('online'); });
   net.on('start', async (m) => {
     await ensureScene();
