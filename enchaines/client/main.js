@@ -92,6 +92,18 @@ async function ensureScene(quiet) {
   }
   Scene.S.debugCam = null;
 }
+const setLoad = (k, msg) => { $('#loadbar i').style.width = Math.round(k * 100) + '%'; if (msg) $('#load-msg').textContent = msg; };
+// tout charger AVANT le départ : décor (déjà construit), textures + géométries de TOUTE la montagne envoyées au GPU, sons communs et du monde, musique du monde.
+// Rien ne doit arriver en cours de partie (à-coups, sons absents les premières secondes). La simulation attend (G.prep) ; l'écran de chargement reste affiché.
+async function prepare(W) {
+  const cap = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(r, ms))]);
+  setLoad(0.35, 'Textures et décor…'); await Scene.warm((k) => setLoad(0.35 + k * 0.3));
+  setLoad(0.68, 'Sons…'); await cap(Sfx.load() || Promise.resolve(), 8000);
+  for (let i = 0; i < 4; i++) { Scene.frame(W, 0.016, { me: G.me }); await new Promise((r) => setTimeout(r, 30)); } // quelques images : les mondes demandent leurs sons à ce moment
+  await cap(Sfx.idle(), 8000);
+  setLoad(0.88, 'Musique…'); await Music.ready(6000);
+  setLoad(1, 'Prêt !'); await new Promise((r) => setTimeout(r, 150));
+}
 // fond du menu : la vraie montagne, caméra qui longe lentement la paroi (les grimpeurs attendent au pied)
 async function backdrop() {
   await ensureScene(true);
@@ -107,8 +119,10 @@ function demoFrame(dt) {
 async function startLocal() {
   await ensureScene();
   show('loading');
+  G.prep = true; setLoad(0.05, 'Construction du décor…');
   G.mode = 'local'; G.me = null; G.demo = null; G.W = createWorld({ L: G.L, course: G.course }); G.names = ['Grimpeur 1', 'Grimpeur 2'];
   await Scene.buildLevel(G.W); Scene.setRoster(); G.acc = 0; G.done = false; Music.playWorld(G.W.level.world);
+  await prepare(G.W); G.prep = false; G.last = performance.now();
   G.pt?.onStart?.();
   show(null); $('#hud').classList.add('on'); $('#help').classList.add('show'); setTimeout(() => $('#help').classList.remove('show'), 9000);
   $('#hud').dataset.mode = 'local';
@@ -210,7 +224,8 @@ function loop(now) {
     camKeys(dt);
     if (!G.paused || G.mode === 'online') {
       G.acc += dt; let n = 0;
-      while (G.acc >= DT && n++ < 24) { if (G.mode === 'local') stepLocal(); else stepOnline(); G.acc -= DT; }
+      if (G.prep) G.acc = 0; // chargement : la simulation attend
+      while (!G.prep && G.acc >= DT && n++ < 24) { if (G.mode === 'local') stepLocal(); else stepOnline(); G.acc -= DT; }
       if (G.acc > DT * 4) G.acc = 0;
     } else pressed.clear();
     footsteps(G.W, dt);
@@ -312,10 +327,12 @@ function getNet() {
   net.on('left', () => { net.setRoom(null); G.room = null; Voice.stop(); chatShow(false); stopGame(); show('online'); });
   net.on('start', async (m) => {
     await ensureScene();
+    show('loading'); G.prep = true; setLoad(0.05, 'Construction du décor…');
     G.mode = 'online'; G.demo = null; G.me = m.seat; G.names = m.names; G.L = m.L;
     G.course = m.course || DEFAULT_COURSE; setTimeout(() => $('#fade').classList.remove('on'), 400);
     G.W = applySnap(createWorld({ L: m.L, course: G.course }), m.s); G.ct = 0; G.pend = []; G.out = []; G.partnerIn = IDLE; G.done = false; slot[0].jc = slot[0].dc = slot[0].uc = 0;
     await Scene.buildLevel(G.W); Scene.setRoster(); Music.playWorld(G.W.level.world);
+    await prepare(G.W); G.prep = false; G.last = performance.now(); G.acc = 0;
     show(null); $('#hud').classList.add('on'); $('#hud').dataset.mode = 'online'; $('#end').classList.remove('on');
     $('#help').classList.add('show'); setTimeout(() => $('#help').classList.remove('show'), 9000);
   });

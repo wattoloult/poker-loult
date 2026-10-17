@@ -130,9 +130,7 @@ function decorate(W, grp, A, M, tok) {
     else if (kind === 3) { stand(A, M.bench, grp, 0.7, c.x + 2.2, c.y, z, 0); stand(A, M.signpost, grp, 1.5, c.x - 2.4, c.y, z); }
     else { stand(A, M['snow-bunker'], grp, 2.2, c.x + 3, c.y, z - 0.5, -0.2); stand(A, M['sled-long'], grp, 0.55, c.x - 2.2, c.y, z, 1.2); }
   });
-  // ---- couloir de l'avalanche et lisière : sapins enneigés en arrière-plan ----
-  for (let i = 0, x = 208; x < 278; i++, x += 4.5 + rnd(i, 1) * 3) { const gy = 12.2 + (x - 208) * 0.02; stand(A, i % 2 ? M['tree-snow-a'] : M['tree-snow-b'], grp, 5 + rnd(i, 2) * 4, x, gy - 0.4, -4.4 - rnd(i, 3) * 1.4, rnd(i, 4) * 6); }
-  for (let i = 0, x = 6; x < 100; i++, x += 7 + rnd(i, 1) * 5) stand(A, i % 2 ? M['tree-snow-b'] : M['tree-snow-a'], grp, 4 + rnd(i, 2) * 3, x, groundBelowY(W, x) - 0.3, -4.6 - rnd(i, 3), rnd(i, 4) * 6);
+  // ---- couloir de l'avalanche et lisière : (les sapins d'arrière-plan flottaient dans le vide : retirés) ----
   for (let i = 0, x = 285; x < 400; i++, x += 9 + rnd(i, 1) * 6) stand(A, M['rocks-large'], grp, 2 + rnd(i, 2) * 1.5, x, groundBelowY(W, x) - 0.2, -4.8, rnd(i, 4) * 6);
   // ---- sommet : bonhomme de neige au pied de l'arche ----
   void THREE;

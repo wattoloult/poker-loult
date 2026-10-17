@@ -278,6 +278,17 @@ export function linkRow(mesh, i0, a, b, phase = 0) {
 
 /* ------------------------------ niveau (voir levelview.js) ------------------------------ */
 export async function buildLevel(W) { S.building = true; try { await LV.loadPack(W.level.world || 'medieval'); if (Mechs.needs(W.level)) await Mechs.load(); await (await import('./totems.js')).load(W.level.world || 'medieval'); LV.build(W); } finally { S.building = false; } }
+// préchauffage : envoie TOUT le niveau au GPU avant le départ (textures + géométries de toute la montagne, même hors champ), compile les shaders
+export async function warm(report) {
+  const r = S.renderer; if (!r || !S.scene) return;
+  const seen = new Set(), texs = [];
+  S.scene.traverse((o) => { for (const m of [].concat(o.material || [])) for (const k in m) { const t = m[k]; if (t && t.isTexture && !seen.has(t)) { seen.add(t); texs.push(t); } } });
+  for (let i = 0; i < texs.length; i++) { try { r.initTexture(texs[i]); } catch { } if (i % 6 === 5) { report?.(i / texs.length); await new Promise((f) => setTimeout(f)); } }
+  const meshes = []; S.scene.traverse((o) => { if (o.isMesh || o.isSkinnedMesh || o.isInstancedMesh) meshes.push([o, o.frustumCulled]); });
+  for (const [o] of meshes) o.frustumCulled = false;
+  try { r.compile(S.scene, S.cam); r.render(S.scene, S.cam); } catch { }
+  for (const [o, f] of meshes) o.frustumCulled = f;
+}
 export function sprite(color, size) {
   if (!S.glowTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); S.glowTex = new THREE.CanvasTexture(c); }
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: S.glowTex, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));

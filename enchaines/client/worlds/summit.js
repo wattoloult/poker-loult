@@ -101,7 +101,6 @@ export default {
       const fire = fit(A, M.campfire_stones, 1.3, 0.25, 1.3); if (fire) { fire.position.set(cx + 0.8, ct, camp.pz - 2.6); grp.add(fire); const f = sprite(0xff9a3c, 1.6); f.position.set(cx + 0.8, ct + 0.6, camp.pz - 2.6); grp.add(f); S.fires.push(f); }
       const lg = fit(A, M.log, 0.5, 0.45, 1.8); if (lg) { lg.position.set(cx + 0.8, ct, camp.pz - 1.3); lg.rotation.y = 1.5; grp.add(lg); }
       const sg = fit(A, M.sign, 1.0, 1.4, 0.2); if (sg) { sg.position.set(cx + 4, ct, camp.pz + 3); sg.rotation.y = -0.5; grp.add(sg); }
-      for (let k = 0; k < 6; k++) { const p = fit(A, k % 2 ? M.tree_pineTallA : M.tree_pineSmallA, 2.1 + rnd(k, 1), 6 + rnd(k, 2) * 4, 2.1 + rnd(k, 1)); if (p) { p.position.set(cx - 8 + k * 3.4, ct - 0.2, camp.pz - 5.5 - rnd(k, 3) * 1.5); grp.add(p); } }
       // roches et abris : sur chaque grande plateforme de pierre, un bloc de roche en arrière-plan ; les abris reçoivent un vrai surplomb de roche
       for (const b of W.bodies) {
         const i = b.i, o = S.bodyMesh[i], top = b.py + b.hh;
@@ -114,7 +113,6 @@ export default {
           if (rnd(i, 4) > 0.3) { const r = fit(A, [M.rock_tallA, M.stone_tallB, M.rock_tallG, M.rock_tallC][i % 4], 0.9 + rnd(i, 5) * 0.7, 1 + rnd(i, 6) * 1.5, 0.8 + rnd(i, 7) * 0.6); if (r) { r.position.set(b.px + (rnd(i, 8) - 0.5) * (b.w - 1.6), top - 0.05, b.pz - b.hd + 0.5); r.rotation.y = rnd(i, 9) * 6; grp.add(r); } }
           if (rnd(i, 10) > 0.5) { const r = fit(A, M.rock_largeC, 1.3, 0.35, 1.2); if (r) { r.position.set(b.px + (rnd(i, 11) - 0.5) * (b.w - 1.4), top - 0.04, b.pz + b.hd - 0.5); r.rotation.y = rnd(i, 12) * 6; grp.add(r); } }
         }
-        if (b.zone <= 2 && b.post && rnd(i, 13) > 0.5) { const p = fit(A, M.tree_pineTallA, 2.2, 7, 2.2); if (p) { p.position.set(b.px + 1, b.py - b.hh - 3.2, b.pz - 4.5); grp.add(p); } }
       }
       // rochers qui roulent
       for (const r of V.rocks) { const m = fit(A, [M.stone_largeD, M.stone_largeB][r.b.i % 2], 1.8, 1.7, 2.0); if (m) { m.position.y = -0.85; r.spin.add(m); } }

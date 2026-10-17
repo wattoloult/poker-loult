@@ -28,10 +28,13 @@ let lastJump = 0;
 export function jump(x, y, z, o = {}) { if (!BUF['voice/jump_1']) return false; let k; do k = 1 + Math.floor(Math.random() * 3); while (k === lastJump); lastJump = k; one('voice/jump_' + k, x, y, z, { gap: 0.08, v: 0.9, ...o, key: 'j' + (o.key ?? '') }); return true; }
 export function chain(kind, x, y, z, o = {}) { if (!chainReady()) return false; one('chain/' + kind + '_' + (1 + Math.floor(Math.random() * CHAIN[kind])), x, y, z, { gap: 0.06, ...o, key: 'ch' + kind + (o.key || '') }); return true; }
 // sons propres à un monde : assets/sfx/<dir>/<nom>.mp3, joués sous la clé '<dir>/<nom>'
-const ADDED = {};
+const ADDED = {}, PEND = new Set();
+// résolu quand tous les sons demandés (communs + du monde) sont décodés : écran de chargement
+export const idle = () => Promise.all([loading, ...PEND]);
 export function add(dir, names) {
   const C = ctx(); if (!C) return null; const base = new URL('../assets/sfx/' + dir + '/', import.meta.url);
-  return Promise.all(names.filter((n) => !ADDED[dir + '/' + n]).map(async (n) => { ADDED[dir + '/' + n] = 1; try { const r = await fetch(new URL(n + '.mp3', base)); BUF[dir + '/' + n] = await C.decodeAudioData(await r.arrayBuffer()); } catch { ADDED[dir + '/' + n] = 0; } }));
+  const p = Promise.all(names.filter((n) => !ADDED[dir + '/' + n]).map(async (n) => { ADDED[dir + '/' + n] = 1; try { const r = await fetch(new URL(n + '.mp3', base)); BUF[dir + '/' + n] = await C.decodeAudioData(await r.arrayBuffer()); } catch { ADDED[dir + '/' + n] = 0; } }));
+  PEND.add(p); p.finally(() => PEND.delete(p)); return p;
 }
 // auditeur = caméra (position + orientation)
 export function listen(cam) {

@@ -22,6 +22,12 @@ export function playWorld(world) {
   M.music = el(t.music); M.amb = el(t.amb);
   for (const [a, v] of [[M.music, M.vMusic], [M.amb, M.vAmb]]) { a.play().then(() => fadeTo(a, v * M.k, FADE)).catch(() => {}); }
 }
+// résolu quand musique et ambiance du monde sont jouables sans coupure (ou après ms)
+export function ready(ms = 6000) {
+  const els = [M.music, M.amb].filter(Boolean);
+  const all = Promise.all(els.map((a) => (a.readyState >= 3 ? 1 : new Promise((r) => { a.addEventListener('canplaythrough', r, { once: true }); a.addEventListener('error', r, { once: true }); }))));
+  return Promise.race([all, new Promise((r) => setTimeout(r, ms))]);
+}
 export function unlock() { if (M.unlocked) return; M.unlocked = true; if (M.want) { const w = M.want; M.cur = null; playWorld(w); } }
 // curseur Volume des options (0.8 = réglage d'origine) : s'applique aussi à la musique et à l'ambiance (éléments <audio>, hors du bus Web Audio)
 export function setMaster(vol) { M.k = vol / 0.8; if (M.music) fadeTo(M.music, M.vMusic * M.k, 0.2); if (M.amb) fadeTo(M.amb, M.vAmb * M.k, 0.2); }
