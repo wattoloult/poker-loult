@@ -222,8 +222,7 @@ function loop(now) {
 }
 // une exception dans une image ne doit JAMAIS figer le jeu : on replanifie d'abord, on signale l'erreur (une fois par message) au serveur
 const SEEN = new Set();
-function oops(e) { const m = String(e?.message || e); console.error(e); if (SEEN.size < 20 && !SEEN.has(m)) { SEEN.add(m); try { net?.send({ t: 'err', m, at: String(e?.stack || '').split('
-').slice(0, 3).join(' / ') }); } catch { } } }
+function oops(e) { const m = String(e?.message || e); console.error(e); if (SEEN.size < 20 && !SEEN.has(m)) { SEEN.add(m); try { net?.send({ t: 'err', m, at: String(e?.stack || '').split('\n').slice(0, 3).join(' / ') }); } catch { } } }
 addEventListener('error', (e) => oops(e.error || e.message)); addEventListener('unhandledrejection', (e) => oops(e.reason));
 function rafLoop(now) { requestAnimationFrame(rafLoop); try { loop(now); } catch (e) { oops(e); } }
 requestAnimationFrame(rafLoop);
