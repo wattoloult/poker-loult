@@ -1,0 +1,25 @@
+LES ENCHAÎNÉS — monde « ice » (Le Col gelé) : crédits des ressources ajoutées pour les mécanismes glacés.
+Tous les éléments ci-dessous sont sous licence CC0 1.0 (domaine public) ; le crédit n'est pas obligatoire mais il est dû.
+Les sons sont des aperçus HQ Freesound (mp3) découpés, mono 32 kHz, normalisés à -20 LUFS ; découpes choisies sur la durée,
+NON écoutées par Claude : à valider à l'oreille.
+
+== Modèles 3D (assets/worlds/ice/) — Kenney, https://kenney.nl — CC0 1.0 (voir KENNEY_LICENSE.txt) ==
+Holiday Kit 2.0 (https://kenney.nl/assets/holiday-kit) : snow-bunker, snow-pile, snowman, sled-long, tree-snow-a, tree-snow-b, lantern-hanging, rocks-large, bench
+Survival Kit 2.0 (https://kenney.nl/assets/survival-kit) : tent, campfire-pit, barrel, signpost, tool-pickaxe, tool-axe
+Nature Kit 2.1 (https://kenney.nl/assets/nature-kit) : rock_tallA, rock_tallC, rock_tallE, rock_tallH, stone_tallB (retournés et givrés = stalactites)
+Décor déjà présent (assets/props/ice.glb, voir ASSET_CREDITS.md) : sapins enneigés, rochers, blocs de glace, cristaux.
+
+== Sons (assets/sfx/ice/) — Freesound, filtre « Creative Commons 0 » ==
+ice_crack.mp3      « ice cracking »                           — getwecked      — https://freesound.org/s/764657/ — CC0 (0-1,5 s)
+ice_break.mp3      « ice break »                              — thatonecode            — https://freesound.org/s/755506/ — CC0
+icicle_break.mp3   « Icicles breaking.wav »                   — GodofPH                — https://freesound.org/s/114253/ — CC0 (0-2,2 s)
+ice_creak.mp3      « Ice Crack 1 »                            — j_p_higgins    — https://freesound.org/s/262635/ — CC0
+wind_gust.mp3      « wind 8 »                                 — ZIP.Creates            — https://freesound.org/s/726319/ — CC0 (0-7 s)
+avalanche.mp3      « Snow - Collapse and fall »               — Vrymaa                 — https://freesound.org/s/775014/ — CC0 (2-14 s, boucle du grondement)
+avalanche_hit.mp3  « Avalanche Hit »                          — Breviceps              — https://freesound.org/s/457528/ — CC0
+chime.mp3          « OWI_Crystal class ping.wav »             — matthewHoldenSound     — https://freesound.org/s/542561/ — CC0 (0-4 s)
+ice_land.mp3       « ICEImpt_Ice Piece Drop On Frozen Puddle »— jakubp.jp              — https://freesound.org/s/557110/ — CC0
+ice_cave.mp3       « ice cave.wav »                           — symphoid               — https://freesound.org/s/157379/ — CC0 (boucle d'ambiance de la grotte)
+
+== Fabriqué par le jeu (code) ==
+Chevrons animés du tapis de la pente glacée (canvas), voûte de la grotte, givrage des modèles, nuages de neige et éclats de glace (sprites).

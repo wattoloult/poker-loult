@@ -1,0 +1,18 @@
+LES ENCHAÎNÉS — monde « Rouages anciens » (parcours « La Grande Horloge ») : crédits des ressources ajoutées pour ce monde.
+Tout est en domaine public (CC0 1.0, http://creativecommons.org/publicdomain/zero/1.0/) : aucune attribution n'est exigée, elle est donnée par courtoisie.
+
+MODÈLES 3D (assets/worlds/mech/*.glb + Textures/colormap.png — fichiers GLB d'origine, copiés sans modification)
+- Kenney — « Factory Kit » 3.0 (https://kenney.nl/assets/factory-kit, CC0) :
+    conveyor-long-sides (bâti des tapis roulants), piston-square (pistons des presses), cog-a / cog-b (roues dentées sous les plateaux tournants),
+    pipe-large-long (tuyau des jets de vapeur), button-floor-round (plaques de pression).
+    
+
+SONS (assets/sfx/mech/*.mp3 — extraits, filtrés / réencodés en mono avec ffmpeg ; aucun son généré par code)
+- Kenney — « Sci-fi Sounds » (https://kenney.nl/assets/sci-fi-sounds, CC0) :
+    belt_loop (spaceEngineLow_001), steam (thrusterFire_002, filtre passe-haut), gear_loop (engineCircular_002, filtre passe-bas),
+    door_open / door_close (doorOpen_001 / doorClose_001), swing (forceField_001, filtre passe-bas).
+- Kenney — « Impact Sounds » (https://kenney.nl/assets/impact-sounds, CC0) :
+    press_slam (impactMetal_heavy_002), piston (impactMetal_medium_001), gear_click (impactMetal_light_003), lever_clunk (impactMetal_light_000).
+
+DÉJÀ DANS LE JEU, UTILISÉS PAR CE MONDE : pack de décor assets/props/mech.glb (engrenages géants du fond, panneaux, réservoirs), sons de contrepoids /
+chaîne / treuil (assets/sfx/*.mp3), voir ASSET_CREDITS.md.

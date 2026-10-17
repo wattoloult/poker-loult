@@ -1,0 +1,16 @@
+CRÉDITS — monde « Jungle oubliée » (parcours La Canopée)
+
+MODÈLES 3D (assets/worlds/jungle/*.glb) — copiés tels quels depuis le pack
+  Kenney « Nature Kit » 2.1 — https://kenney.nl/assets/nature-kit — licence CC0 1.0 (voir KENNEY_LICENSE.txt)
+  Utilisés : lily_large, lily_small, mushroom_red / redTall / redGroup / tan, flower_purpleA / redA / yellowA, plant_bushLarge / bushDetailed / flatTall,
+  hanging_moss, tree_palmTall / palmDetailedTall / palmBend, log_large, stump_roundDetailed, statue_obelisk / head / column / columnDamaged.
+  (cliff_waterfall_rock et bridge_woodRound sont copiés mais pas utilisés.)
+
+SONS (assets/sfx/jungle/*.mp3) — extraits d'OpenGameArt, réencodés en mono 32 kHz (coupés à 14 s max, fondu aux bords des boucles)
+  boing.mp3        « BOING! » par Aeva — https://opengameart.org/content/boing — CC0
+  waterfall.mp3    amb_waterfall — « Ambient Mountain, River, Wind and Forest and Waterfall » (Blender Foundation / projet Apricot, dépôt par Lamoot)
+  river.mp3        amb_river — même pack
+  frog.mp3         amb_frog_1 — « Ambient Bird, Cricket and Frog » (Blender Foundation / projet Apricot, dépôt par Lamoot)
+  bird.mp3         amb_bird_1 — même pack
+  Les 4 derniers : licence CC-BY 3.0 (http://creativecommons.org/licenses/by/3.0/) — attribution OBLIGATOIRE : « © Blender Foundation | apricot.blender.org ».
+  https://opengameart.org/content/ambient-mountain-river-wind-and-forest-and-waterfall  /  https://opengameart.org/content/ambient-bird-cricket-and-frog

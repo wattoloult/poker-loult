@@ -1,0 +1,20 @@
+LES ENCHAÎNÉS — monde « Ruines célestes » (parcours « Les Îles du Vent ») : crédits des ressources ajoutées pour ce monde.
+Tout est en domaine public (CC0 1.0, http://creativecommons.org/publicdomain/zero/1.0/) : aucune attribution n'est exigée, elle est donnée par courtoisie.
+
+MODÈLES 3D (assets/worlds/sky/*.glb — copiés tels quels)
+- cloud_a.glb, cloud_b.glb, cloud_c.glb — « Cloud » — Quaternius — poly.pizza/m/KdFNOVn1Gf, /pjiBiLJwAl, /P1cMV8qtN2 — CC0
+    nuages-ressorts, nuages d'orage, grande roue, mer de nuages et nuages lointains
+- windmill.glb — « Windmill » — Quaternius — https://poly.pizza/m/WUbU1Nct2W — CC0 (moulins posés sur les îles)
+- balloons.glb — « Balloons » — loafbrr1 — https://opengameart.org/content/balloons-2 — CC0 (pack complet ; on n'en utilise que le ballon rond, l'étoile, le cœur
+    et la fleur pour les grappes au-dessus des nacelles)
+
+DÉJÀ DANS LE JEU, UTILISÉS PAR CE MONDE (voir assets/props/credits.json et ASSET_CREDITS.md) : île flottante, colonnes, arches, forteresse (assets/props/sky.glb) ;
+herse et chaînes (assets/sfx/gate_*.mp3, chain_loop.mp3).
+
+SONS (assets/sfx/sky/*.mp3 — extraits, réencodés en mono 32 kHz ; aucun son généré par code ; NON écoutés par Claude : à valider à l'oreille)
+- wind_loop.mp3 — « Mild Wind Background Noise » (OpenGameArt, CC0 ; https://opengameart.org/content/mild-wind-background-noise), 14 s découpées avec fondus de boucle
+    (voix des courants ascendants, des ballons en montée)
+- gust.mp3 — « Short wind sound » (OpenGameArt, CC0 ; https://opengameart.org/content/short-wind-sound) (début de chaque rafale)
+- Kenney « RPG Audio » (https://kenney.nl/assets/rpg-audio, CC0) : creak.mp3 (creak1 : nacelle, planches), puff.mp3 (cloth3 : bouffée des nuages), rope.mp3 (clothBelt2 : accroche d'une liane)
+- Kenney « Impact Sounds » (https://kenney.nl/assets/impact-sounds, CC0) : chime.mp3 (impactBell_heavy_002 : arrivée du ballon), pop.mp3 (impactGlass_light_002 accéléré : rebond du nuage-ressort),
+    thud.mp3 (impactPlank_medium_001 : nacelle qui touche le haut / le bas)

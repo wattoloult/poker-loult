@@ -1,0 +1,27 @@
+LES ENCHAÎNÉS — monde « summit » (Le Sommet du monde, parcours « Le Toit du monde ») : crédits des ressources ajoutées.
+Tout ce qui suit est sous licence CC0 1.0 (domaine public) ; le crédit n'est pas obligatoire mais il est dû.
+Les sons sont les aperçus HQ de Freesound (mp3), découpés, mono 32 kHz, normalisés à -20 LUFS ; découpes choisies sur l'enveloppe de volume,
+NON écoutées par Claude : à valider à l'oreille.
+
+== Modèles 3D (assets/worlds/summit/*.glb) — copiés tels quels depuis le pack ==
+Kenney « Nature Kit » 2.1 — https://kenney.nl/assets/nature-kit — CC0 1.0 (assets/worlds/summit/KENNEY_LICENSE.txt)
+  Utilisés : rock_largeA / C / E, rock_tallA / C / G, stone_largeB / D, stone_tallB, stone_smallFlatA (roches, rochers qui roulent, surplombs, blocs de l'avalanche),
+  tent_detailedClosed, tent_smallClosed, campfire_stones, campfire_logs, log, sign, fence_simpleLow (camp de base), tree_pineTallA / SmallA (pins du camp),
+  statue_column, statue_columnDamaged, statue_obelisk, statue_ring, statue_block (balises, piliers de l'arche).
+  Recolorés par le code (client/worlds/summit.js) : roches gris ardoise + neige, pins vert sombre (le pack les peint bruns / turquoise).
+
+== Sons (assets/sfx/summit/*.mp3) — Freesound, tous CC0 ==
+thunder_strike.mp3  « Closeup Thunder Strike 01 »                    — loganzsound         — https://freesound.org/s/840628/ (0,3-4,5 s)    coup de foudre
+thunder_roll.mp3    « Thunder strike »                               — AyaDrevis           — https://freesound.org/s/652690/ (0-8 s)        grondement qui suit / arche verrouillée / début d'avalanche
+charge.mp3          « Static 2 »                                     — colorsCrimsonTears  — https://freesound.org/s/607405/ (1,2-4,3 s)    grésillement d'annonce de la foudre
+gale.mp3            « blizzard looped.aif »                          — m0ments             — https://freesound.org/s/679941/ (boucle)       rafales de vent des cimes
+rock_roll.mp3       « Rock tumbler filled with Obsidian »            — todorrobot          — https://freesound.org/s/716692/ (0-6 s)        rocher qui roule (boucle)
+rock_hit.mp3        « rock falling 010.wav »                         — yottasounds         — https://freesound.org/s/232137/                choc de roche (rocher qui s'écrase, départ / éboulis d'avalanche, arche en butée)
+avalanche.mp3       « rock slide.wav »                               — 21100495             — https://freesound.org/s/655368/ (1,8-10,2 s)   gronde de l'avalanche (boucle)
+ignite.mp3          « Tumbleweed Firestarter Torch Ignite Denoised 02 » — loganzsound      — https://freesound.org/s/872960/ (0-4 s)        balise qui s'allume
+crackle.mp3         « fire crackling loop.wav »                      — soundofsong         — https://freesound.org/s/650574/ (boucle)       crépitement d'une balise allumée
+arch_open.mp3       « Heavy stone door opens 2 »                     — PostProdDog         — https://freesound.org/s/578491/ (0-9 s)        porte de l'arche qui monte
+
+== Fabriqué par le jeu (code) ==
+Lueur d'annonce et éclair de la foudre, flash du ciel, nuage de neige de l'avalanche (texture canvas), flammes et compte à rebours des balises, runes de la porte.
+Musique et ambiance du monde : assets/music/summit.mp3, assets/amb/summit.mp3 (déjà présents, non modifiés).

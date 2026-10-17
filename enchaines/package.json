@@ -1,0 +1,1 @@
+{ "name": "les-enchaines", "private": true, "type": "module", "scripts": { "test": "node --test core/*.test.js server.test.js", "start": "node server.js" }, "dependencies": { "ws": "^8.18.0" } }

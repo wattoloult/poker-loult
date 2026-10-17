@@ -1,0 +1,23 @@
+LES ENCHAÎNÉS — monde « Profondeurs » (parcours « La Mine engloutie ») : crédits des ressources ajoutées pour ce monde.
+Tout est en domaine public (CC0 1.0, http://creativecommons.org/publicdomain/zero/1.0/) : aucune attribution n'est exigée, elle est donnée par courtoisie.
+
+SONS (assets/sfx/deep/*.mp3 — extraits, montés et réencodés en mono 96 kbit/s ; aucun son généré par code)
+- Kenney — « Impact Sounds » (https://kenney.nl/assets/impact-sounds, CC0) :
+    stone_hit / stone_hit2 (impactMining_001 / _003), plank_fall (impactPlank_medium_002), clack (impactMetal_light_002),
+    cart_loop (impactMetal_light_002 + _004 en cadence de joints de rail), brake (impactMetal_heavy_001), lamp_on (impactGlass_light_000),
+    chime (impactBell_heavy_002, accéléré), ladder (footstep_wood_001 + _003), snap (impactWood_heavy_001).
+- Kenney — « RPG Audio » (https://kenney.nl/assets/rpg-audio, CC0) :
+    creak (creak1 + creak2), brake (creak3 accélérée), lamp_click (metalClick), snap (chop).
+- StarNinjas — « Cave In » (https://opengameart.org/content/cave-in, CC0) :
+    rockfall (tel quel, 4 s), rumble (même enregistrement ralenti et filtré, pour le grondement du mur d'éboulis).
+
+MODÈLES 3D (assets/worlds/deep/*.glb — téléchargés sur poly.pizza, licence « Public Domain (CC0) » indiquée sur chaque page)
+- Ladder — Quaternius — https://poly.pizza/m/h2xOIRr1OP (échelles des parois)
+- Hanging Lantern — Kay Lousberg — https://poly.pizza/m/3jzk3YShv1 (lanternes suspendues, lampe à manivelle)
+- Debris Pile — Quaternius — https://poly.pizza/m/WrIiMMxyEP (gravats du mur d'éboulis)
+- Stone Pickaxe — Quaternius — https://poly.pizza/m/pvOeJ5EcpW (pioches aux points de passage)
+- Gold ore — Quaternius — https://poly.pizza/m/i1ic0r7FUI (filons d'or)
+- Wood Planks — Quaternius — https://poly.pizza/m/hwQ1Fx5P8U (planches au pied des quais)
+
+DÉJÀ DANS LE JEU, UTILISÉS PAR CE MONDE (voir assets/props/credits.json et ASSET_CREDITS.md) : wagonnet, rails, chevalets (« Support »),
+cristaux, torche, rochers (pack assets/props/deep.glb) ; sons de herse / treuil / chaîne (assets/sfx/*.mp3).

@@ -1,0 +1,200 @@
+/* LES ENCHAÎNÉS — direction artistique « ascension épique » : fer forgé riveté, cuir cousu, maillons de chaîne, braises.
+   Polices : Grenze Gotisch (titres forgés), Grenze (texte, boutons, chiffres). Couleurs des grimpeurs : orange (1), bleu (2). */
+:root {
+  --bone: #efe2c8; --bone2: #c9b796; --rivet: #a99c8e; --leather: #4b2a19; --leather2: #2f190e; --stitch: rgba(214, 170, 110, 0.55);
+  --ember: #e8792c; --ember2: #ffb15a; --blood: #c43a24; --p1: #ff9a3c; --p2: #46b8ff;
+  --chain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 16'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23d8d0c6'/%3E%3Cstop offset='.5' stop-color='%23847a70'/%3E%3Cstop offset='1' stop-color='%233a342f'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cellipse cx='11' cy='8' rx='10' ry='5.2' fill='none' stroke='%23120f0d' stroke-width='4.2'/%3E%3Cellipse cx='11' cy='8' rx='10' ry='5.2' fill='none' stroke='url(%23g)' stroke-width='2.6'/%3E%3Crect x='19' y='6.2' width='24' height='3.6' rx='1.8' fill='url(%23g)' stroke='%23120f0d' stroke-width='1'/%3E%3C/svg%3E");
+  --vchain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 44'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%233a342f'/%3E%3Cstop offset='.5' stop-color='%23d8d0c6'/%3E%3Cstop offset='1' stop-color='%233a342f'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cellipse cx='8' cy='11' rx='5.2' ry='10' fill='none' stroke='%23120f0d' stroke-width='4.2'/%3E%3Cellipse cx='8' cy='11' rx='5.2' ry='10' fill='none' stroke='url(%23g)' stroke-width='2.6'/%3E%3Crect x='6.2' y='19' width='3.6' height='24' rx='1.8' fill='url(%23g)' stroke='%23120f0d' stroke-width='1'/%3E%3C/svg%3E");
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  /* plaque de fer : brossée, rivets aux quatre coins */
+  --rivets: radial-gradient(circle at 9px 9px, #d9cfc4 0 1px, var(--rivet) 1.5px 2.5px, #241f1b 3.2px, transparent 3.8px),
+            radial-gradient(circle at calc(100% - 9px) 9px, #d9cfc4 0 1px, var(--rivet) 1.5px 2.5px, #241f1b 3.2px, transparent 3.8px),
+            radial-gradient(circle at 9px calc(100% - 9px), #d9cfc4 0 1px, var(--rivet) 1.5px 2.5px, #241f1b 3.2px, transparent 3.8px),
+            radial-gradient(circle at calc(100% - 9px) calc(100% - 9px), #d9cfc4 0 1px, var(--rivet) 1.5px 2.5px, #241f1b 3.2px, transparent 3.8px);
+  --iron: linear-gradient(180deg, #4d4642 0%, #332e2b 45%, #24201d 100%);
+  --brush: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 3px);
+  --hide: var(--grain), linear-gradient(180deg, var(--leather), var(--leather2));
+  --seam: inset 0 4px 0 -2px var(--stitch), inset 0 -4px 0 -2px var(--stitch);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0908; color: var(--bone); font: 600 17px/1.35 'Grenze', Georgia, serif; user-select: none; }
+#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#sky { position: fixed; inset: 0; background: radial-gradient(ellipse at 50% 30%, #3a2a22, #0b0908 70%); z-index: -1; }
+/* vignette dramatique sur le fond des menus */
+body:not([data-screen="game"])::before { content: ''; position: fixed; inset: 0; z-index: 4; pointer-events: none;
+  background: radial-gradient(ellipse 75% 70% at 50% 45%, transparent 35%, rgba(8, 5, 3, 0.8) 100%), linear-gradient(180deg, rgba(10, 6, 4, 0.55), transparent 30%, transparent 62%, rgba(10, 6, 4, 0.85)); }
+
+.screen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 18px; padding: 16px; z-index: 5; }
+.screen.on { display: flex; }
+
+/* ---------- panneaux : plaques de fer rivetées, titre sur une sangle de cuir cousue ---------- */
+.card, .tower { background: var(--rivets), var(--brush), var(--iron); border: 1px solid #0c0a09; border-radius: 6px; position: relative;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -3px 0 rgba(0, 0, 0, 0.45), 0 0 0 3px #1a1714, 0 0 0 4px #4a423b, 0 18px 40px rgba(0, 0, 0, 0.75); }
+.card { width: min(400px, 100%); padding: 26px 26px 22px; display: flex; flex-direction: column; gap: 11px; }
+.card.wide { width: min(640px, 100%); max-height: calc(100vh - 32px); overflow: auto; }
+.card > h2:first-child, .tower > h2 { margin: -26px -26px 6px; padding: 13px 22px 11px; background: var(--hide); border-bottom: 1px solid #120a06; box-shadow: var(--seam); border-radius: 5px 5px 0 0; }
+.card h2, .tower h2 { font: 900 32px/1 'Grenze Gotisch', serif; color: var(--bone); text-shadow: 0 2px 0 #000, 0 0 18px rgba(232, 121, 44, 0.25); margin: 0 0 4px; }
+.card h2 b { color: var(--ember2); }
+.card h2 small, .tower h2 small { font: 600 16px 'Grenze'; color: var(--bone2); margin-left: 8px; }
+.card h3 { margin: 8px 0 2px; font: 800 18px 'Grenze'; color: var(--ember2); display: flex; align-items: center; gap: 8px; }
+.muted { color: var(--bone2); font-weight: 500; font-size: 15px; }
+
+/* boutons : plaques de fer ; le principal est chauffé au rouge */
+button { font: 700 17px 'Grenze', serif; color: var(--bone); border: 1px solid #0c0a09; border-radius: 4px; padding: 10px 16px; cursor: pointer; position: relative;
+  background: var(--brush), var(--iron); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -2px 0 rgba(0, 0, 0, 0.5), 0 3px 0 #0c0a09, 0 5px 10px rgba(0, 0, 0, 0.45);
+  text-shadow: 0 1px 0 #000; transition: transform 0.07s, filter 0.12s, box-shadow 0.15s; }
+button:hover:not(:disabled) { filter: brightness(1.2); }
+button:active:not(:disabled) { transform: translateY(2px); }
+button:disabled { opacity: 0.5; cursor: default; }
+button.big { font: 900 26px/1 'Grenze Gotisch', serif; padding: 15px 24px; color: #fff4dc;
+  background: var(--rivets), var(--brush), linear-gradient(180deg, #6a3a1e 0%, #3d2112 55%, #2a160b 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 210, 160, 0.35), inset 0 -3px 0 rgba(0, 0, 0, 0.5), inset 0 0 22px rgba(232, 121, 44, 0.25), 0 3px 0 #0c0a09, 0 0 0 1px #7a4422, 0 8px 22px rgba(232, 121, 44, 0.22); }
+button.big:hover:not(:disabled) { filter: none; box-shadow: inset 0 1px 0 rgba(255, 220, 180, 0.5), inset 0 -3px 0 rgba(0, 0, 0, 0.5), inset 0 0 30px rgba(255, 150, 60, 0.45), 0 3px 0 #0c0a09, 0 0 0 1px #c46a2c, 0 0 26px rgba(255, 140, 50, 0.45); }
+button.big.alt { background: var(--rivets), var(--brush), var(--iron); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -3px 0 rgba(0, 0, 0, 0.5), 0 3px 0 #0c0a09, 0 0 0 1px #5a524b, 0 8px 18px rgba(0, 0, 0, 0.5); }
+button.big.alt:hover:not(:disabled) { filter: brightness(1.2); }
+button.mini { padding: 4px 10px; font-size: 14px; }
+.row { display: flex; gap: 10px; } .row > * { flex: 1; }
+.hub { text-align: center; color: var(--bone2); font-weight: 600; text-decoration: none; font-size: 16px; text-shadow: 0 2px 0 #000; } .hub:hover { color: var(--ember2); }
+
+/* sélecteur : sangle de cuir, le choix est une plaquette de fer */
+.seg { display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 5px; background: var(--hide); box-shadow: var(--seam), 0 2px 6px rgba(0, 0, 0, 0.5); }
+.seg span { font: 700 15px 'Grenze'; color: var(--bone2); padding: 0 8px; }
+.seg button { flex: 1; padding: 6px 4px; font-size: 15px; background: transparent; box-shadow: none; border-color: transparent; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.seg button.on { background: var(--brush), var(--iron); border-color: #0c0a09; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 0 1px var(--ember), 0 0 12px rgba(232, 121, 44, 0.35); color: #fff; }
+.lk { display: inline-block; height: 9px; background: var(--chain) left center / auto 9px repeat-x; filter: drop-shadow(0 1px 0 #000); }
+.lk.s { width: 16px; } .lk.m { width: 26px; } .lk.l { width: 38px; }
+
+label { display: flex; flex-direction: column; gap: 4px; font: 700 15px 'Grenze'; color: var(--bone2); }
+input, select { font: 700 18px 'Grenze'; color: var(--bone); background: #0f0d0c; border: 1px solid #000; border-radius: 4px; padding: 10px 12px; outline: none;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.08); }
+select option { background: #1a1614; }
+input:focus, select:focus { box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8), 0 0 0 1px var(--ember); }
+input[type=range] { padding: 0; accent-color: var(--ember); box-shadow: none; background: none; border: 0; }
+.join { display: flex; gap: 8px; } .join input { flex: 1; min-width: 0; }
+#o-code { text-transform: uppercase; }
+.list, .players, .board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.list li, .players li, .board li { background: #15120f; border: 1px solid #000; border-radius: 4px; padding: 8px 12px; box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.6); }
+.list li { display: flex; align-items: center; gap: 10px; } .list li b { flex: 1; } .list li button { padding: 5px 12px; }
+.players li { display: flex; align-items: center; gap: 10px; font-size: 20px; }
+.players li i { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 0 2px #000, 0 0 10px currentColor; }
+.players li.empty { color: var(--bone2); font-style: italic; font-weight: 500; }
+.players small { font-size: 13px; color: var(--ember2); }
+.board li { display: grid; grid-template-columns: 34px 1fr auto auto; gap: 10px; align-items: baseline; }
+.board li span { font: 900 22px 'Grenze Gotisch'; color: var(--ember2); } .board li em { font-style: normal; font-weight: 800; } .board li small { color: var(--bone2); }
+.board li.me { box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--ember); }
+.board li.muted { display: block; }
+#loadbar, .mload { height: 10px; border-radius: 2px; background: #0b0908; border: 1px solid #000; overflow: hidden; box-shadow: inset 0 2px 4px #000; }
+#loadbar i, .mload i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #7a2a10, var(--ember), var(--ember2)); box-shadow: 0 0 10px var(--ember); transition: width 0.2s; }
+.mload { height: 4px; border: 0; } body.live .mload { opacity: 0; }
+
+/* ---------- accueil : la caméra grimpe la tour, l'altitude défile ---------- */
+.alti { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: baseline; gap: 6px; text-shadow: 0 2px 0 #000, 0 0 20px rgba(0, 0, 0, 0.9); z-index: 6; }
+.alti svg, .hbig svg { width: 22px; height: 22px; fill: var(--ember2); filter: drop-shadow(0 0 6px var(--ember)); align-self: center; }
+.alti b { font: 800 54px/1 'Grenze'; font-variant-numeric: tabular-nums; } .alti span { font: 700 24px 'Grenze'; color: var(--bone2); }
+.title { position: relative; text-align: center; z-index: 6; margin-top: 40px; }
+.title h1 { position: relative; margin: 0; font: 900 clamp(68px, 13vw, 168px)/0.86 'Grenze Gotisch', serif;
+  background: linear-gradient(180deg, #fff6e2 0%, #e9d5b0 38%, #a28a68 52%, #f3dfba 60%, #8a6c4a 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 3px 0 #1b120c) drop-shadow(0 6px 0 #0c0806) drop-shadow(0 0 30px rgba(232, 121, 44, 0.35)); }
+.title h1 em { display: block; font-style: normal; font-size: 0.34em; line-height: 1; }
+.title p { margin: 12px 0 0; font: 600 22px 'Grenze'; color: var(--bone2); text-shadow: 0 2px 0 #000, 0 0 12px #000; }
+/* une chaîne tendue traverse l'écran derrière le titre et se balance */
+.chainband { position: absolute; left: -60vw; right: -60vw; top: 58%; height: 22px; background: var(--chain) left center / auto 22px repeat-x;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.8)); animation: sway 6s ease-in-out infinite; z-index: -1; }
+@keyframes sway { 0%, 100% { transform: rotate(-2.2deg) translateY(0); } 50% { transform: rotate(1.4deg) translateY(6px); } }
+.menu { z-index: 6; width: min(380px, 100%); display: flex; flex-direction: column; gap: 10px; margin-top: 22px; }
+
+/* ---------- la tour des mondes (choix du parcours) : le sommet en haut ---------- */
+.tower { width: min(780px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 26px 26px 18px; display: flex; flex-direction: column; gap: 10px; }
+.floors { display: flex; flex-direction: column-reverse; gap: 8px; position: relative; padding-left: 34px; }
+.floors::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 16px; background: var(--vchain) center top / 16px 44px repeat-y; filter: drop-shadow(0 2px 2px #000); }
+.floor { display: grid; grid-template-columns: 54px 1fr auto; align-items: center; gap: 14px; padding: 10px 14px; text-align: left; width: 100%;
+  background: var(--rivets), var(--brush), linear-gradient(90deg, color-mix(in srgb, var(--wc) 50%, #1d1916) 0%, #2c2724 40%, #221e1b 100%);
+  border: 1px solid #0c0a09; border-radius: 5px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -2px 0 rgba(0, 0, 0, 0.5), 0 3px 0 #0c0a09; }
+.floor .lvl { font: 900 38px/1 'Grenze Gotisch'; color: #fff4dc; text-align: center; text-shadow: 0 2px 0 #000, 0 0 14px var(--wc); }
+.floor .w { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.floor .w small { font: 600 14px 'Grenze'; color: var(--bone2); }
+.floor .w b { font: 900 24px/1.05 'Grenze Gotisch'; color: var(--bone); }
+.floor .w i { font: 500 14px 'Grenze'; font-style: normal; color: #b9a98c; }
+.floor .side { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.floor .notch { display: flex; gap: 3px; } .floor .notch u { width: 9px; height: 14px; background: #120f0d; border: 1px solid #000; transform: skewX(-12deg); }
+.floor .notch u.on { background: linear-gradient(180deg, var(--ember2), var(--ember)); box-shadow: 0 0 6px var(--ember); }
+.floor .rec { font: 700 14px 'Grenze'; color: var(--bone2); display: flex; align-items: center; gap: 6px; }
+.floor.sel { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 3px 0 #0c0a09, 0 0 0 1px var(--ember), 0 0 18px rgba(232, 121, 44, 0.35); }
+.floor.none { opacity: 0.5; padding: 4px 14px; } .floor.none .lvl { font-size: 24px; } .floor.none .w b, .floor.none .w i { display: none; }
+.tag-pt { font: 700 12px 'Grenze'; color: #fff; background: #5a3cb0; border-radius: 3px; padding: 0 6px; margin-left: 8px; vertical-align: middle; }
+.coin { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; align-items: center; justify-content: center; font: 900 13px 'Grenze Gotisch'; color: #2a1a08; text-shadow: none;
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.35), inset 0 2px 2px rgba(255, 255, 255, 0.6), 0 2px 0 #000; }
+.gold { background: radial-gradient(circle at 35% 30%, #fff1b0, #e2a313 55%, #8a5a08); } .silver { background: radial-gradient(circle at 35% 30%, #ffffff, #b4bcc8 55%, #5a6270); }
+.bronze { background: radial-gradient(circle at 35% 30%, #ffd2a6, #b0642a 55%, #5a2c10); }
+
+/* ---------- en jeu ---------- */
+#hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 3; color: var(--bone); text-shadow: 0 2px 0 #000, 0 0 10px rgba(0, 0, 0, 0.7); }
+#hud.on { display: block; }
+#hud .hl { position: absolute; left: 50px; top: 14px; display: flex; flex-direction: column; gap: 2px; }
+#hud .hl b { font: 900 28px/1 'Grenze Gotisch'; } #hud .hl span { font: 600 15px 'Grenze'; color: var(--bone2); }
+.hbig { position: absolute; left: 46px; bottom: 16px; display: flex; align-items: baseline; gap: 6px; }
+.hbig b { font: 800 64px/0.9 'Grenze'; font-variant-numeric: tabular-nums; } .hbig span { font: 700 24px 'Grenze'; color: var(--bone2); }
+#hud .hc { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); padding: 6px 22px 4px; border-radius: 4px; font: 800 30px 'Grenze'; font-variant-numeric: tabular-nums;
+  background: var(--rivets), var(--brush), var(--iron); border: 1px solid #000; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 4px 10px rgba(0, 0, 0, 0.6); min-width: 150px; text-align: center; }
+#hud .hr { position: absolute; right: 16px; top: 12px; display: flex; gap: 8px; font: 700 15px 'Grenze'; }
+#hud .hr span { padding: 4px 10px; border-radius: 4px; background: var(--hide); box-shadow: inset 0 3px 0 -1px var(--stitch), inset 0 -3px 0 -1px var(--stitch), 0 3px 8px rgba(0, 0, 0, 0.6); }
+#hud .hr b { font: 800 20px 'Grenze'; color: #fff; }
+/* jauge de hauteur : une chaîne verticale, chaque grimpeur y est accroché */
+#h-bar { position: absolute; left: 16px; top: 18px; bottom: 96px; width: 16px; background: var(--vchain) center top / 16px 44px repeat-y; filter: drop-shadow(0 2px 3px #000); }
+#h-bar i { position: absolute; left: 50%; width: 18px; height: 18px; margin: 0 0 -9px -9px; border-radius: 50%; border: 2px solid #120f0d; transition: bottom 0.2s; }
+#h-dot0 { background: var(--p1); box-shadow: 0 0 10px var(--p1); } #h-dot1 { background: var(--p2); box-shadow: 0 0 10px var(--p2); }
+/* tension : la chaîne chauffe puis s'embrase */
+#h-ten { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; font: 700 15px 'Grenze'; }
+#h-ten div { position: relative; width: 240px; height: 16px; background: var(--chain) left center / auto 16px repeat-x; filter: drop-shadow(0 2px 2px #000); }
+#h-ten i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; mix-blend-mode: color; background: linear-gradient(90deg, #ffcf80, var(--ember)); transition: width 0.1s; }
+#h-ten.hot i { background: linear-gradient(90deg, var(--ember), var(--blood)); }
+#h-ten.hot div { filter: drop-shadow(0 0 6px var(--ember)) drop-shadow(0 2px 2px #000); }
+#h-ten em { font-style: normal; min-width: 50px; }
+#h-hint { position: absolute; left: 50%; bottom: 60px; transform: translate(-50%, 10px); max-width: min(680px, 92vw); text-align: center; font: 600 18px 'Grenze'; padding: 9px 20px; border-radius: 4px; opacity: 0; transition: opacity 0.3s, transform 0.3s; text-shadow: 0 1px 0 #000;
+  background: var(--hide); box-shadow: var(--seam), 0 6px 16px rgba(0, 0, 0, 0.6); }
+#h-hint.on { opacity: 1; transform: translate(-50%, 0); }
+#zonecard { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); text-align: center; opacity: 0; }
+#zonecard small { display: block; font: 700 19px 'Grenze'; color: var(--ember2); }
+#zonecard b { font: 900 64px/1 'Grenze Gotisch'; background: linear-gradient(180deg, #fff6e2, #e9d5b0 45%, #a28a68 55%, #f3dfba); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; filter: drop-shadow(0 3px 0 #0c0806) drop-shadow(0 0 18px rgba(232, 121, 44, 0.4)); }
+#zonecard.show { animation: zone 3.2s ease forwards; }
+@keyframes zone { 0% { opacity: 0; transform: translate(-50%, 16px) scale(0.92); } 12% { opacity: 1; transform: translate(-50%, 0) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -10px); } }
+.sta { position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 50%; opacity: 0; transition: opacity 0.25s; --v: 1;
+  background: conic-gradient(#e8d6a8 calc(var(--v) * 360deg), rgba(0, 0, 0, 0.5) 0); -webkit-mask: radial-gradient(circle, transparent 9px, #000 10px); mask: radial-gradient(circle, transparent 9px, #000 10px); }
+.sta.warn { background: conic-gradient(var(--blood) calc(var(--v) * 360deg), rgba(0, 0, 0, 0.5) 0); }
+.tag { position: absolute; left: 0; top: 0; font: 700 14px 'Grenze'; padding: 1px 8px; border-radius: 3px; translate: -50% -100%; white-space: nowrap; color: #fff; border: 1px solid #000; }
+.tag.t0 { background: #8a4a16; } .tag.t1 { background: #1d5f8a; }
+#hud[data-mode="local"] .tag { display: none; }
+#dbg { position: absolute; left: 60px; top: 70px; margin: 0; font: 12px/1.4 ui-monospace, monospace; background: rgba(0, 0, 0, 0.7); padding: 8px; border-radius: 4px; text-shadow: none; display: none; }
+
+.overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 16px; z-index: 8; background: radial-gradient(ellipse at center, rgba(20, 12, 8, 0.45), rgba(5, 3, 2, 0.85)); }
+.overlay.on, #help.show { display: flex; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.cols p { margin: 5px 0; font-weight: 600; }
+.cols i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; } .c0 { background: var(--p1); } .c1 { background: var(--p2); }
+kbd { font: 700 14px 'Grenze'; color: var(--bone); background: linear-gradient(180deg, #4d4642, #2a2623); border: 1px solid #000; border-bottom-width: 3px; border-radius: 3px; padding: 0 7px; }
+.card > h2.win { margin: 0; padding: 0; border: 0; box-shadow: none; text-align: center; font-size: 58px; background: linear-gradient(180deg, #fff6e2, #e9d5b0 45%, #a28a68 55%, #f3dfba); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; filter: drop-shadow(0 3px 0 #0c0806) drop-shadow(0 0 18px rgba(232, 121, 44, 0.4)); }
+.names { text-align: center; margin: 0; font: 700 20px 'Grenze'; color: var(--bone2); }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.stats div { background: #15120f; border: 1px solid #000; border-radius: 4px; padding: 8px; text-align: center; box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7); }
+.stats small { display: block; font: 700 14px 'Grenze'; color: var(--bone2); }
+.stats b { font: 800 30px 'Grenze'; font-variant-numeric: tabular-nums; }
+/* médailles frappées : elles tombent et s'impriment */
+.medal { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.medal:empty { display: none; }
+.medal i { font-style: normal; display: flex; align-items: center; justify-content: center; width: 104px; height: 104px; border-radius: 50%; text-align: center; font: 900 19px/1.05 'Grenze Gotisch'; color: #2a1a08; padding: 10px; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 0 0 4px rgba(0, 0, 0, 0.3), inset 0 0 0 7px rgba(255, 255, 255, 0.25), inset 0 4px 6px rgba(255, 255, 255, 0.5), 0 4px 0 #000, 0 8px 20px rgba(0, 0, 0, 0.6); animation: stamp 0.5s cubic-bezier(.2, 1.6, .4, 1) both; }
+.medal i:nth-child(2) { animation-delay: 0.15s; } .medal i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes stamp { from { transform: scale(1.8) rotate(-18deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.medal .clean { background: radial-gradient(circle at 35% 30%, #d8ffd0, #4aa85a 55%, #1d5a28); color: #0c2410; }
+.medal .rec { background: radial-gradient(circle at 35% 30%, #ffe0c0, var(--ember) 55%, #6a2a0a); color: #2a0e02; }
+#toast { position: fixed; left: 50%; top: 74px; transform: translate(-50%, -20px); color: var(--bone); font: 700 17px 'Grenze'; padding: 10px 20px; border-radius: 4px; opacity: 0; transition: 0.25s; z-index: 20; pointer-events: none;
+  background: var(--hide); box-shadow: var(--seam), 0 8px 20px rgba(0, 0, 0, 0.7); }
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+@media (max-width: 640px) {
+  .cols { grid-template-columns: 1fr; } .stats { grid-template-columns: repeat(2, 1fr); } #hud .hc { top: 64px; font-size: 24px; } #h-ten div { width: 140px; }
+  .hbig b { font-size: 44px; } .alti b { font-size: 40px; } .floor { grid-template-columns: 40px 1fr; } .floor .side { grid-column: 2; align-items: flex-start; }
+}
+/* portail : fondu lumineux entre deux parcours */
+#fade { position: fixed; inset: 0; z-index: 30; pointer-events: none; opacity: 0; transition: opacity 0.8s ease; background: radial-gradient(circle at 50% 55%, #fff7e0, #ffc46a 45%, #3a1a08 100%); }
+#fade.on { opacity: 1; }
+.credits { font-size: 13px; opacity: 0.8; }

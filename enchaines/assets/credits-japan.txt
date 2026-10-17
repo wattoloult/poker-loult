@@ -1,0 +1,25 @@
+LES ENCHAÎNÉS — monde « japan » (Les Mille Torii) : crédits des ressources ajoutées pour les mécanismes japonais.
+Tous les éléments ci-dessous sont sous licence CC0 1.0 (domaine public) ; le crédit n'est pas obligatoire mais il est dû.
+Les sons sont des aperçus HQ Freesound (mp3) découpés, mono 32 kHz, normalisés à -20 LUFS ; découpes choisies sur l'enveloppe de volume,
+NON écoutées par Claude : à valider à l'oreille.
+
+== Modèles 3D (assets/worlds/japan/) — poly.pizza ==
+kane.glb      « Bell »   — Quaternius              — https://poly.pizza/m/cILuaO115Y — CC0 1.0 — cloches (kane) à frapper
+shrine.glb    « Shrine » — Kay Lousberg            — https://poly.pizza/m/tFxdxO5clk — CC0 1.0 — sanctuaire du sommet
+
+== Modèles déjà présents (assets/props/japan.glb, voir ASSET_CREDITS.md) réutilisés par ce parcours ==
+Shoji Interior (Quaternius, https://poly.pizza/m/JHWjGn5rtL) : panneaux coulissants et écrans muraux
+Hanging Lantern (Kay Lousberg, https://poly.pizza/m/3jzk3YShv1) : lanternes suspendues des salles
+
+== Sons (assets/sfx/japan/) — Freesound ==
+kane.mp3          « Bell at Daitokuji temple,kyoto.wav »  — nahmandub        — https://freesound.org/s/131348/ — CC0 (0-6,5 s)
+gong.mp3          « gong hit loud close.wav »             — thma             — https://freesound.org/s/245878/ — CC0 (0-6 s)
+shoji_open.mp3    « wooden sliding door »                 — Diramus          — https://freesound.org/s/346776/ — CC0 (0,4-2,1 s)
+shoji_close.mp3   « wooden sliding door »                 — Diramus          — https://freesound.org/s/346776/ — CC0 (3,45-6,55 s)
+bamboo.mp3        « Bamboo hit »                          — michorvath       — https://freesound.org/s/386888/ — CC0
+chimes.mp3        « Wind chimes 1 »                       — giddster         — https://freesound.org/s/437337/ — CC0 (7,1-9,7 s)
+creak.mp3         « Creaking Wooden Floor [8] »           — SoundDesignForYou — https://freesound.org/s/646696/ — CC0
+bridge_creak.mp3  « Creaking Bridge »                     — flumpytripod     — https://freesound.org/s/828794/ — CC0 (0-6 s)
+
+== Fabriqué par le jeu (code) ==
+Texture de tatami (canvas), cadres et portiques laqués, rendu des panneaux, cloches animées.
