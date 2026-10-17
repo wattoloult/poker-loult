@@ -30,7 +30,8 @@ const approach = (v, t, d) => (v < t ? Math.min(t, v + d) : Math.max(t, v - d));
 /* ------------------------------ niveau ------------------------------ */
 // pose d'une boîte animée au temps t (fonctions du temps : rien à synchroniser)
 export function poseAt(b, t, o) {
-  o.x = b.x; o.y = b.y; o.z = b.z; o.yaw = b.yaw || 0;
+  if (b.yaw0 === undefined) b.yaw0 = b.yaw || 0; // cap d'origine, jamais écrasé : b.yaw est la pose COURANTE (avant : on repartait de la pose courante à chaque pas, le plateau tournant accélérait sans fin)
+  o.x = b.x; o.y = b.y; o.z = b.z; o.yaw = b.yaw0;
   const m = b.move; if (!m) return o;
   const ph = 2 * Math.PI * (t / m.T) + (m.ph || 0);
   if (m.k === 'lin') { // aller-retour ; « pause » > 0 = arrêts aux extrémités (ascenseurs)

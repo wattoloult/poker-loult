@@ -156,3 +156,8 @@ test('mode test solo : un seul grimpeur, aucune chaîne, il franchit le vide et 
   const W2 = createWorld(); W2.alone = true; run(W2, 5); const A2 = W2.pl[0], c = W2.level.checkpoints[1]; Object.assign(A2, { x: c.x, y: c.y + 0.1, z: c.z, vx: 0, vy: 0, vz: 0, st: ST.AIR });
   run(W2, 60); assert.equal(W2.cp, 1, 'point de passage atteint en solo');
 });
+
+test('plateau tournant : vitesse angulaire constante (ne s\'emballe pas avec le temps)', () => {
+  const W = createWorld({ course: 'iles' }), b = W.bodies.find((x) => x.move?.k === 'rot'), w = b.move.w, at = (n) => { for (let i = 0; i < n; i++) stepWorld(W, [IDLE, IDLE]); const y = b.yaw; stepWorld(W, [IDLE, IDLE]); return (b.yaw - y) / DT; };
+  assert.ok(Math.abs(at(10) - w) < 1e-6 && Math.abs(at(3000) - w) < 1e-6, 'w mesuré = w prévu après 25 s');
+});
