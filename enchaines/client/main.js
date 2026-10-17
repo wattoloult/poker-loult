@@ -8,6 +8,7 @@ import * as Snd from './audio.js';
 import * as Sfx from './sfx.js';
 import * as Voice from './voice.js';
 import { createNet } from './net.js';
+import { t as tr, LANG, setLang, applyDom } from './i18n.js';
 
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 const qs = new URLSearchParams(location.search);
@@ -78,7 +79,7 @@ function camKeys(dt) { const r = (keys.has('KeyE') ? 1 : 0) - (keys.has('KeyQ') 
 
 /* ------------------------------ écrans ------------------------------ */
 function show(id) { for (const s of $$('.screen')) s.classList.toggle('on', s.id === id); document.body.dataset.screen = id || 'game'; }
-function toast(t, ms = 2600) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), ms); }
+function toast(msg, ms = 2600) { const el = $('#toast'); el.textContent = tr(msg); el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), ms); }
 function fmt(t) { const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s.toFixed(1).padStart(4, '0')}`; }
 
 /* ------------------------------ partie ------------------------------ */
@@ -92,7 +93,7 @@ async function ensureScene(quiet) {
   }
   Scene.S.debugCam = null;
 }
-const setLoad = (k, msg) => { $('#loadbar i').style.width = Math.round(k * 100) + '%'; if (msg) $('#load-msg').textContent = msg; };
+const setLoad = (k, msg) => { $('#loadbar i').style.width = Math.round(k * 100) + '%'; if (msg) $('#load-msg').textContent = tr(msg); };
 // tout charger AVANT le départ : décor (déjà construit), textures + géométries de TOUTE la montagne envoyées au GPU, sons communs et du monde, musique du monde.
 // Rien ne doit arriver en cours de partie (à-coups, sons absents les premières secondes). La simulation attend (G.prep) ; l'écran de chargement reste affiché.
 async function prepare(W) {
@@ -113,7 +114,7 @@ async function backdrop() {
 function demoFrame(dt) {
   const t = (G.demoT = (G.demoT || 0) + dt), u = (Math.sin(t * 0.045 - 1.4) + 1) / 2, y = 4 + u * 82;
   Scene.S.debugCam = { pos: [Math.sin(t * 0.07) * 14 + 4, y + 6, 30 + Math.cos(t * 0.05) * 4], look: [Math.sin(t * 0.07) * 6 - 2, y + 2, -6] };
-  Scene.frame(G.demo, dt, {});
+  Scene.frame(G.demo, dt, {}); Scene.homeChain(t, true); document.body.classList.add('chain3d');
   $('#m-alt').textContent = Math.round(y * 14.3).toLocaleString('fr-FR'); // la caméra grimpe : l'altitude défile
 }
 async function startLocal() {
@@ -217,7 +218,7 @@ function stepOnline() {
   stepWorld(W, ins); handleEvents(W, W.ev, false);
 }
 function loop(now) {
-  G.raf = now;
+  G.raf = now; if (!(!G.mode && G.demo)) Scene.homeChain(0, false);
   const dt = Math.min(0.1, (now - G.last) / 1000) * (G.pt?.speed || 1); G.last = now;
   if (!G.mode && G.demo && Scene.S.ready) demoFrame(dt);
   if (G.mode && G.W && !Scene.S.building) {
@@ -250,8 +251,8 @@ function hud(W, dt) {
   const [a, b] = W.pl;
   const top = Math.max(a.y, b.y), C = LV().checkpoints, cur = C[W.cp] || C[0], nx = C[W.cp + 1], low = Math.min(a.y, b.y) + 0.5;
   const z = nx && nx.y > cur.y + 3 && low >= nx.y - 0.5 ? nx.zone : cur.zone; // zone du dernier point de passage (ou la suivante, déjà atteinte en hauteur)
-  $('#h-zone').textContent = `${z}. ${LV().zones[z]}`;
-  $('#h-alt').textContent = `sommet à ${Math.round(LV().top)} m`; $('#h-altbig').textContent = Math.max(0, Math.round(top));
+  $('#h-zone').textContent = `${z}. ${tr(LV().zones[z])}`;
+  $('#h-alt').textContent = tr('sommet à {0} m', Math.round(LV().top)); $('#h-altbig').textContent = Math.max(0, Math.round(top));
   $('#h-time').textContent = fmt(W.time);
   $('#h-falls').textContent = W.falls; $('#h-saves').textContent = W.saves; $('#h-cp').textContent = `${W.cp + 1}/${LV().checkpoints.length}`;
   // jauge de hauteur : un point par grimpeur
@@ -269,16 +270,16 @@ function hud(W, dt) {
   }
   // astuce du coin
   let hint = '';
-  for (const h of LV().hints) for (const p of W.pl) if (Math.hypot(p.x - h.x, p.y - h.y, p.z - h.z) < 4.5) hint = h.txt;
+  for (const h of LV().hints) for (const p of W.pl) if (Math.hypot(p.x - h.x, p.y - h.y, p.z - h.z) < 4.5) hint = tr(h.txt);
   const resetting = Math.max(...W.resetHold);
-  if (resetting > 0.05) hint = `Retour au point de passage… ${Math.ceil((1 - resetting) * 10) / 10}`;
-  else if (Math.max(a.y, b.y) < LV().checkpoints[W.cp].y - 10 && a.st === ST.GROUND && b.st === ST.GROUND) hint = 'Tombés bien bas ? Maintenez R pour revenir au point de passage';
+  if (resetting > 0.05) hint = tr('Retour au point de passage… {0}', Math.ceil((1 - resetting) * 10) / 10);
+  else if (Math.max(a.y, b.y) < LV().checkpoints[W.cp].y - 10 && a.st === ST.GROUND && b.st === ST.GROUND) hint = tr('Tombés bien bas ? Maintenez R pour revenir au point de passage');
   $('#h-hint').textContent = hint; $('#h-hint').classList.toggle('on', !!hint);
   // débogage : états, tension, longueur
   if (G.debug) $('#dbg').textContent = W.pl.map((p, k) => `J${k + 1} ${['sol', 'air', 'rebord', 'paroi', 'hisse'][p.st]} y=${p.y.toFixed(2)} v=${Math.hypot(p.vx, p.vz).toFixed(1)}/${p.vy.toFixed(1)} end=${p.sta.toFixed(2)} ${p.brace ? 'ARC' : ''} ${p.dangling ? 'PEND' : ''}`).join('\n') + `\nchaîne ${W.Lc.toFixed(2)}/${W.L} tension ${W.ten.toFixed(2)}  tick ${W.tick}  ${G.mode === 'online' ? 'rtt ' + Math.round(net.rtt) + ' ms, en attente ' + G.pend.length : ''}`;
   $('#dbg').style.display = G.debug ? 'block' : 'none';
 }
-function flashZone(cp) { const el = $('#zonecard'); const c = LV().checkpoints[cp]; el.innerHTML = `<small>Zone ${c.zone}</small><b>${c.name}</b>`; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); }
+function flashZone(cp) { const el = $('#zonecard'); const c = LV().checkpoints[cp]; el.innerHTML = `<small>${tr("Zone {0}", c.zone)}</small><b>${esc(tr(c.name))}</b>`; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); }
 /* ------------------------------ records et médailles (par parcours, sur cet appareil) ------------------------------ */
 const BEST = safe(() => JSON.parse(localStorage.getItem('ch-best')), null) || {};
 function medalOf(c, time) { const m = c.medals || {}; return time <= m.gold ? 'gold' : time <= m.silver ? 'silver' : time <= m.bronze ? 'bronze' : null; }
@@ -293,19 +294,19 @@ function record(W) {
 }
 function showEnd(W) {
   const r = record(W);
-  $('#e-medal').innerHTML = (r.medal ? `<i class="${r.medal}">Médaille ${MEDAL[r.medal]}</i>` : '') + (r.clean ? '<i class="clean">Sans chute</i>' : '') + (r.rec ? '<i class="rec">Record personnel</i>' : '');
+  $('#e-medal').innerHTML = (r.medal ? `<i class="${r.medal}">${tr('Médaille {0}', tr(MEDAL[r.medal]))}</i>` : '') + (r.clean ? `<i class="clean">${tr('Sans chute')}</i>` : '') + (r.rec ? `<i class="rec">${tr('Record personnel')}</i>` : '');
   $('#e-time').textContent = fmt(W.time); $('#e-falls').textContent = W.falls; $('#e-saves').textContent = W.saves; $('#e-resets').textContent = W.resets;
   $('#e-names').textContent = G.names.join(' & ');
   $('#end').classList.add('on');
   const lead = G.mode === 'local' || (G.room && G.room.host === G.room.you), nx = nextCourse(G.course, !!G.pt);
   $('#e-again').style.display = lead ? '' : 'none';
-  $('#e-next').style.display = lead && nx ? '' : 'none'; if (nx) $('#e-next').textContent = 'Franchir le portail › ' + nx.name;
+  $('#e-next').style.display = lead && nx ? '' : 'none'; if (nx) $('#e-next').textContent = tr('Franchir le portail › ') + tr(nx.name);
   if (G.mode === 'local') renderBoard(null);
 }
 function renderBoard(list, mine) {
   const el = $('#e-board');
-  if (!list) { el.innerHTML = '<li class="muted">Le classement est réservé aux parties en ligne.</li>'; return; }
-  el.innerHTML = list.length ? list.map((r, i) => `<li class="${mine === i ? 'me' : ''}"><span>${i + 1}</span><b>${esc(r.names.join(' & '))}</b><em>${fmt(r.time)}</em><small>${r.falls} chutes</small></li>`).join('') : '<li class="muted">Personne n\'a encore atteint le sommet.</li>';
+  if (!list) { el.innerHTML = `<li class="muted">${tr('Le classement est réservé aux parties en ligne.')}</li>`; return; }
+  el.innerHTML = list.length ? list.map((r, i) => `<li class="${mine === i ? 'me' : ''}"><span>${i + 1}</span><b>${esc(r.names.join(' & '))}</b><em>${fmt(r.time)}</em><small>${tr('{0} chutes', r.falls)}</small></li>`).join('') : `<li class="muted">${tr('Personne n\'a encore atteint le sommet.')}</li>`;
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -316,7 +317,7 @@ const decIn = (a) => (a ? { mx: a[1], mz: a[2], jump: !!(a[3] & 1), brace: !!(a[
 function getNet() {
   if (net) return net;
   net = createNet(() => CFG.name || 'Grimpeur');
-  net.onState = (up) => { $('#netstate').textContent = up ? '' : 'Connexion au serveur…'; };
+  net.onState = (up) => { $('#netstate').textContent = up ? '' : tr('Connexion au serveur…'); };
   net.on('room', (m) => { G.room = m; net.setRoom(m.code); renderRoom(m); if (m.phase === 'lobby' && !G.mode) show('room'); chatShow(true);
     if (m.you != null && m.players.length === 2) Voice.start(net, m.you); else Voice.stop(); }); // chat vocal : liaison directe dès que le salon a ses deux grimpeurs
   net.on('chat', (m) => chatAdd(m));
@@ -351,14 +352,14 @@ function getNet() {
     if (m.e?.length) handleEvents(W, m.e, true);
   });
   net.on('end', (m) => { renderBoard(m.board, m.rank); });
-  net.on('board', (m) => { $('#b-list').innerHTML = m.list.length ? m.list.map((r, i) => `<li><span>${i + 1}</span><b>${esc(r.names.join(' & '))}</b><em>${fmt(r.time)}</em><small>${r.falls} chutes</small></li>`).join('') : '<li class="muted">Personne n\'a encore atteint le sommet.</li>'; });
+  net.on('board', (m) => { $('#b-list').innerHTML = m.list.length ? m.list.map((r, i) => `<li><span>${i + 1}</span><b>${esc(r.names.join(' & '))}</b><em>${fmt(r.time)}</em><small>${tr("{0} chutes", r.falls)}</small></li>`).join('') : `<li class="muted">${tr('Personne n\'a encore atteint le sommet.')}</li>`; });
   return net;
 }
 /* ------------------------------ chat texte et vocal du salon ------------------------------ */
 function chatShow(on) { $('#chat').classList.toggle('on', on); }
 function chatAdd(m) {
   const li = document.createElement('li'); li.className = 'c' + (m.seat ?? 's');
-  const b = document.createElement('b'); b.textContent = m.name + (m.seat == null ? ' (spectateur)' : '') + ' : '; li.append(b, document.createTextNode(m.m)); // textContent : aucun HTML injecté
+  const b = document.createElement('b'); b.textContent = m.name + (m.seat == null ? ' ' + tr('(spectateur)') : '') + ' : '; li.append(b, document.createTextNode(m.m)); // textContent : aucun HTML injecté
   const log = $('#chat-log'); log.append(li); while (log.children.length > 30) log.firstChild.remove();
   log.scrollTop = log.scrollHeight; li.dataset.t = Date.now(); Snd.play('ui');
 }
@@ -368,21 +369,21 @@ $('#chat-in').addEventListener('keydown', (e) => {
   e.stopPropagation();
 });
 async function micToggle() {
-  const r = await Voice.toggleMic(G.fakeMic); if (!r.ok) toast('Micro indisponible : ' + r.why + ' (autorise le micro dans le navigateur)', 3500);
+  const r = await Voice.toggleMic(G.fakeMic); if (!r.ok) toast(tr('Micro indisponible : ') + tr(r.why) + tr(' (autorise le micro dans le navigateur)'), 3500);
   else toast(r.on ? "Micro ouvert : ton partenaire t'entend" : 'Micro coupé', 1500);
   micLabel();
 }
-function micLabel() { const s = Voice.status(); $('#mic').textContent = !s.mic ? 'Activer le micro (M)' : s.on ? 'Micro ouvert (M)' : 'Micro coupé (M)'; $('#mic').classList.toggle('live', s.mic && s.on); $('#mic-link').textContent = s.link === 'connected' ? 'vocal relié' : s.link === 'off' ? '' : 'vocal : connexion…'; }
+function micLabel() { const s = Voice.status(); $('#mic').textContent = !s.mic ? tr('Activer le micro (M)') : s.on ? tr('Micro ouvert (M)') : tr('Micro coupé (M)'); $('#mic').classList.toggle('live', s.mic && s.on); $('#mic-link').textContent = s.link === 'connected' ? 'vocal relié' : s.link === 'off' ? '' : 'vocal : connexion…'; }
 Voice.onChange(micLabel);
 function renderRoom(m) {
   $('#r-code').textContent = m.code;
   $('#r-link').value = location.origin + location.pathname + '?r=' + m.code;
   const host = m.host === m.you;
-  $('#r-players').innerHTML = [0, 1].map((i) => { const p = m.players[i]; return `<li class="${p ? '' : 'empty'}"><i style="background:${['#ff9a3c', '#46b8ff'][i]}"></i>${p ? esc(p.name) + (p.id === m.host ? ' <small>hôte</small>' : '') + (p.id === m.you ? ' <small>toi</small>' : '') + (p.offline ? ' <small>déconnecté</small>' : '') : 'En attente d\'un partenaire…'}</li>`; }).join('');
+  $('#r-players').innerHTML = [0, 1].map((i) => { const p = m.players[i]; return `<li class="${p ? '' : 'empty'}"><i style="background:${['#ff9a3c', '#46b8ff'][i]}"></i>${p ? esc(p.name) + (p.id === m.host ? ` <small>${tr('hôte')}</small>` : '') + (p.id === m.you ? ` <small>${tr('toi')}</small>` : '') + (p.offline ? ` <small>${tr('déconnecté')}</small>` : '') : tr('En attente d\'un partenaire…')}</li>`; }).join('');
   $$('#r-len button').forEach((b) => { b.classList.toggle('on', +b.dataset.l === m.cfg.L); b.disabled = !host; });
   fillCourseSelects(); $('#r-course').value = m.cfg.course; $('#r-course').disabled = !host;
   $('#r-start').disabled = !host || m.players.length < 2;
-  $('#r-start').textContent = host ? (m.players.length < 2 ? 'En attente du 2e grimpeur' : 'Lancer l\'ascension') : 'L\'hôte lance la partie';
+  $('#r-start').textContent = host ? (m.players.length < 2 ? tr('En attente du 2e grimpeur') : tr('Lancer l\'ascension')) : tr('L\'hôte lance la partie');
 }
 function renderRooms(list) {
   $('#o-list').innerHTML = list.length ? list.map((r) => `<li><b>${esc(r.host)}</b><span>${r.n}/2</span><button data-code="${r.code}">Rejoindre</button></li>`).join('') : '<li class="muted">Aucun salon ouvert pour l\'instant.</li>';
@@ -392,27 +393,27 @@ function renderRooms(list) {
 const WCOL = { medieval: '#b0743c', jungle: '#3f8f4a', japan: '#c4486a', deep: '#3a4a7a', sky: '#3d8fe0', mech: '#8a6a3a', ice: '#5aa0d0', summit: '#6a5ab0' };
 const visible = () => courseList(!!G.pt); // en playtest : tous les parcours, sinon seulement ceux publiés
 function showCourses(mode) {
-  G.pick = mode; $('#c-mode').textContent = mode === 'local' ? '· à deux sur ce clavier' : '· pour ton salon';
+  G.pick = mode; $('#c-mode').textContent = tr(mode === 'local' ? '· à deux sur ce clavier' : '· pour ton salon');
   const list = visible();
   // la tour des mondes : un étage par monde, le sommet en haut (column-reverse), une plaque par parcours
   let n = 0; // numéro de la plaque = rang du parcours (un monde peut en avoir plusieurs : Tour de Loult et Remparts sont tous deux à l'étage 1)
   $('#c-list').innerHTML = WORLDS.map((w, i) => {
     const cs = list.filter((c) => c.world === w.id);
-    if (!cs.length) return `<div class="floor none" style="--wc:${WCOL[w.id]}"><span class="lvl">${++n}</span><span class="w"><small>Étage ${i + 1} · ${esc(w.name)}</small><b>Bientôt…</b><i>${esc(w.blurb)}</i></span></div>`;
+    if (!cs.length) return `<div class="floor none" style="--wc:${WCOL[w.id]}"><span class="lvl">${++n}</span><span class="w"><small>${tr('Étage {0} · {1}', i + 1, esc(tr(w.name)))}</small><b>${tr('Bientôt…')}</b><i>${esc(tr(w.blurb))}</i></span></div>`;
     return cs.map((c) => { const b = BEST[c.id], d = c.diff || 1;
       return `<button class="floor${c.id === G.course ? ' sel' : ''}" data-course="${c.id}" style="--wc:${WCOL[w.id]}"><span class="lvl">${++n}</span>
-        <span class="w"><small>Étage ${i + 1} · ${esc(w.name)}</small><b>${esc(c.name)}${c.published ? '' : '<span class="tag-pt">test</span>'}</b><i>${esc(c.short || w.blurb)}</i></span>
+        <span class="w"><small>${tr('Étage {0} · {1}', i + 1, esc(tr(w.name)))}</small><b>${esc(tr(c.name))}${c.published ? '' : '<span class="tag-pt">test</span>'}</b><i>${esc(tr(c.short || w.blurb))}</i></span>
         <span class="side"><span class="notch">${[1, 2, 3, 4, 5].map((k) => `<u class="${k <= d ? 'on' : ''}"></u>`).join('')}</span>
-        <span class="rec">${b ? (b.medal ? `<span class="coin ${b.medal}">${MEDAL[b.medal][0]}</span> ` : '') + fmt(b.time) : 'pas encore gravi'}</span></span></button>`; }).join('');
+        <span class="rec">${b ? (b.medal ? `<span class="coin ${b.medal}">${tr(MEDAL[b.medal])[0]}</span> ` : '') + fmt(b.time) : tr('pas encore gravi')}</span></span></button>`; }).join('');
   }).join('');
   show('courses'); ($('.floor.sel') || $('.floor:not(.none)'))?.scrollIntoView({ block: 'center' });
 }
 function fillCourseSelects() {
-  const opts = visible().map((c) => `<option value="${c.id}">${esc(c.name)}${c.published ? '' : ' (test)'}</option>`).join('');
-  $('#r-course').innerHTML = opts; $('#b-course').innerHTML = courseList(true).filter((c) => c.published || G.pt).map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  const opts = visible().map((c) => `<option value="${c.id}">${esc(tr(c.name))}${c.published ? '' : ' (test)'}</option>`).join('');
+  $('#r-course').innerHTML = opts; $('#b-course').innerHTML = courseList(true).filter((c) => c.published || G.pt).map((c) => `<option value="${c.id}">${esc(tr(c.name))}</option>`).join('');
 }
 $('#r-course').addEventListener('change', (e) => net?.send({ t: 'cfg', course: e.target.value }));
-$('#b-course').addEventListener('change', (e) => { $('#b-list').innerHTML = '<li class="muted">Chargement…</li>'; getNet().send({ t: 'board', course: e.target.value }); });
+$('#b-course').addEventListener('change', (e) => { $('#b-list').innerHTML = `<li class="muted">${tr('Chargement…')}</li>`; getNet().send({ t: 'board', course: e.target.value }); });
 
 /* ------------------------------ boutons ------------------------------ */
 document.addEventListener('click', (e) => {
@@ -421,6 +422,7 @@ document.addEventListener('click', (e) => {
   if (id === 'm-local') showCourses('local');
   else if (b.dataset.course) { G.course = b.dataset.course; safe(() => localStorage.setItem('ch-course', G.course)); if (G.pick === 'local') startLocal(); }
   else if (id === 'm-online') { show('online'); $('#o-name').value = CFG.name; getNet().send({ t: 'list' }); }
+  else if (id === 'm-lang') setLang(LANG === 'en' ? 'fr' : 'en');
   else if (id === 'm-help' || id === 'p-help') $('#help').classList.add('show');
   else if (id === 'help-close') $('#help').classList.remove('show');
   else if (id === 'm-board') { fillCourseSelects(); show('board'); $('#b-course').value = G.course; $('#b-list').innerHTML = '<li class="muted">Chargement…</li>'; getNet().send({ t: 'board', course: $('#b-course').value }); }
@@ -466,6 +468,7 @@ if (qs.get('pt')) {
 }
 
 show('home');
+{ const lb = $('#m-lang'); if (lb) lb.textContent = LANG === 'en' ? 'Français' : 'English'; }
 backdrop();
 // lien d'invitation : ?r=CODE ouvre directement le salon
 // (avec un pseudo déjà choisi, on rejoint dès que la connexion est ouverte ; sinon on attend le bouton « Rejoindre »)

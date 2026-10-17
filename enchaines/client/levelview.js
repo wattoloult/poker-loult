@@ -216,18 +216,10 @@ function summitDecor(b, o, world) {
   }
   const light = new THREE.PointLight(0xffa860, 18, 14, 1.6); light.position.set(0, top + 2.5, b.hd - 1); o.add(light);
 }
-// île flottante : la boîte physique est réduite à sa dalle d'herbe (la surface praticable) et la roche pend DIRECTEMENT dessous, de la largeur de la dalle
-// (avant : un cube plein posé sur une petite île décalée en dessous, illisible : on ne savait pas où l'on pouvait marcher)
-function dressIsland(b, o, src) {
-  const th = Math.min(0.5, b.hh), box = o.children[0], W = Math.max(b.w, b.d);
-  if (box) { box.scale.y = th / (2 * b.hh); box.position.y = b.hh - th / 2; }
-  const s = place(src, o, Math.max(2.2, W * 0.8)); if (!s) return;
-  s.updateWorldMatrix(true, true); o.updateWorldMatrix(true, false);
-  const bb = new THREE.Box3().setFromObject(s), wd = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) || 1;
-  s.scale.multiplyScalar((W + 0.5) / wd); s.updateWorldMatrix(true, true);
-  const bb2 = new THREE.Box3().setFromObject(s), oy = o.getWorldPosition(new THREE.Vector3()).y;
-  s.position.y += (b.hh - th + 0.08) - (bb2.max.y - oy); // le dessus de la roche affleure sous la dalle
-  s.traverse((m) => { if (m.isMesh && m.material?.color?.getHex() === 0x00c738) m.visible = false; }); // gazon vert vif du modèle (un petit bloc décalé sous la dalle, pris pour une 2e plateforme) : la dalle EST l'herbe, on ne garde que la roche
+// île flottante : la boîte physique est réduite à une dalle d'herbe fine (avant : un cube plein + une mini-île décalée dessous, illisible)
+function dressIsland(b, o) {
+  const th = Math.min(0.5, b.hh), box = o.children[0];
+  if (box) { box.scale.y = th / (2 * b.hh); box.position.y = b.hh - th / 2; } // dalle fine suspendue dans le vide (rien dessous : la roche du modèle rendait mal)
 }
 // décor des autres mondes, à partir de leur pack de modèles
 function decorWorld(world, th, b, o) {
@@ -257,7 +249,7 @@ function decorWorld(world, th, b, o) {
     if (b.scaffold) { const s = place(P.support, o, 6); if (s) s.position.set(0, -b.hh - 6, 0); }
     if (b.cart) { const c = place(P.minecart, o, 1.0); if (c) c.position.set(0, top, 0); o.children[0].visible = false; }
   } else if (world === 'sky') {
-    if (b.island) dressIsland(b, o, P.island);
+    if (b.island) dressIsland(b, o);
     if (big && !b.summit) { const [x, z] = edgeSpot(1); at(rnd(i, 2) > 0.5 ? P.column : P.columnRound, 2.6 + rnd(i, 3) * 1.4, x, z); }
   } else if (world === 'mech') {
     if (b.deco === 'hub') { const g = place(P.gear, o, 7); if (g) { g.position.set(0, b.hh + 0.1, 0); g.scale.y *= 0.15; S.gearHubs.push({ g, b }); } }

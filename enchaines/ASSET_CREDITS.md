@@ -93,7 +93,7 @@ Choisies sur titre et durée (non écoutées par Claude) : à valider à l'oreil
 | amb/medieval.mp3 | Rocky Mountain Outdoors: wind and birds | https://freesound.org/s/288899 |
 | music/jungle.mp3 | panflute_loop | https://freesound.org/s/196381 |
 | amb/jungle.mp3 | jungle forest 02 | https://freesound.org/s/583930 |
-| music/japan.mp3 | Solemn Asian String Melody Loop (Wind, Water, Wood) | https://freesound.org/s/840945 |
+| music/japan.mp3 | « Jaoan » + « Hyoshi Tiny Sparrow Short 1 » par Tozan (koto), CC0, enchaînés, normalisés | https://opengameart.org/content/jaoan , https://opengameart.org/node/155584 |
 | amb/japan.mp3 | shakuhachi flute and Cicada | https://freesound.org/s/361508 |
 | music/deep.mp3 | archi_soundscape_cavern3 | https://freesound.org/s/38963 |
 | amb/deep.mp3 | Water Dripping in Cave | https://freesound.org/s/177958 |

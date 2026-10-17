@@ -32,6 +32,46 @@ function tatamiMaterial(A) {
 }
 const box = (A, w, h, d, mat, x, y, z, parent) => { const m = new A.THREE.Mesh(new A.THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
 
+// ---- décor du village : bosquets, bambous, lanternes de pierre, torii en fond, guirlandes de lanternes entre les plateformes ----
+const hash = (i, k) => { const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
+function scenery(W, grp, A, P) {
+  const { THREE, sprite } = A, lacquer = A.matFor('lacquer');
+  const put = (src, h, x, y, z, ry = 0) => { const g = src && A.place(src, grp, h); if (g) { g.position.set(x, y, z); g.rotation.y = ry; } return g; };
+  const trees = [P.mapleA, P.mapleB, P.mapleC, P.autumn].filter(Boolean), tw = [P.mapleA, P.mapleB].filter(Boolean);
+  const statics = W.bodies.filter((b) => !b.move && !b.crumble && !b.climb && !b.ghost && !b.tatami && !b.bar && !b.plank && !b.beam && !b.post && !b.sink && b.hh >= 0.2 && b.w >= 3 && b.d >= 2.4);
+  for (const b of statics) {
+    const i = b.i, top = b.py + b.hh, hw = b.hw, hd = b.hd, zone = b.zone || 0, big = b.w * b.d >= 10;
+    const dense = zone <= 3 || zone === 5 || zone === 11;                       // village, maison de thé, pont, pagode, sanctuaire : décor dense
+    if (b.name === 'salle' || b.name === 'galerie' || b.name === 'vestibule') continue; // les salles ont déjà leurs shoji
+    // rangée du fond : arbres et bambous en alternance, à l'intérieur de la plateforme
+    const n = big ? Math.floor((b.w - 3) / 3.2) + (dense ? 1 : 0) : (dense && b.w >= 4 ? 1 : 0);
+    for (let k = 0; k < n; k++) {
+      const x = b.px + (n === 1 ? (hash(i, 1) - 0.5) * (b.w - 3) : -hw + 1.8 + (k + hash(i, k + 2) * 0.5) * ((b.w - 3.6) / Math.max(1, n - 1))), z = b.pz - hd + 0.9 + hash(i, k + 5) * 0.8;
+      const r = hash(i, k + 9);
+      if (r < 0.45 && trees.length) put(trees[(i + k) % trees.length], 3.6 + hash(i, k + 3) * 2.6, x, top, z, hash(i, k + 4) * 6);
+      else if (r < 0.8 && P.bamboo) for (let q = 0; q < 3; q++) put(q === 1 ? (P.bambooM || P.bamboo) : P.bamboo, 3.2 + hash(i, q + k * 3) * 1.8, x + (q - 1) * 0.35, top, z + (hash(i, q + 7) - 0.5) * 0.5);
+      else if (P.lantern) put(P.lantern, 1.5, x, top, z + 0.4);
+    }
+    // lanternes aux coins avant des grandes plateformes
+    if (big && dense && P.postLantern) for (const sx of [-1, 1]) put(P.postLantern, 1.7, b.px + sx * (hw - 0.6), top, b.pz + hd - 0.55, sx > 0 ? 0 : 3);
+    // le portail torii au fond, cadrant la scène (une plateforme sur deux parmi les larges, zones 1-2)
+    if (b.w >= 10 && zone <= 2 && P.torii) put(P.torii, 5.4, b.px + (hash(i, 20) - 0.5) * (b.w - 6), top, b.pz - hd + 0.2);
+    // petite chapelle sur la plus grande place du village
+    if (zone === 1 && b.w * b.d >= 80) load('shrine').then((src) => { if (!src || ST?.grp !== grp) return; const sh = fit(A, src, 3.2, 3.2, 3.2); sh.position.set(b.px + hw - 3, top, b.pz - hd + 1.8); sh.rotation.y = -0.25; grp.add(sh); });
+  }
+  // guirlandes de lanternes : un fil entre deux poteaux, plateformes voisines de même zone
+  const sorted = statics.filter((b) => b.w >= 4 && (b.zone <= 3 || b.zone === 5 || b.zone === 10)).sort((a, c) => a.px - c.px);
+  for (let q = 0; q + 1 < sorted.length; q++) {
+    const a = sorted[q], c = sorted[q + 1], ax = a.px + a.hw - 0.4, cx = c.px - c.hw + 0.4, gap = cx - ax, dy = (c.py + c.hh) - (a.py + a.hh);
+    if (gap < 1.5 || gap > 9 || Math.abs(dy) > 5 || (a.zone !== c.zone)) continue;
+    const ya = a.py + a.hh + 3.3, yc = c.py + c.hh + 3.3, za = a.pz - a.hd + 0.4, zc = c.pz - c.hd + 0.4;
+    for (const [x, y0, z, top] of [[ax, a.py + a.hh, za, ya], [cx, c.py + c.hh, zc, yc]]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, top - y0, 0.16), lacquer); m.position.set(x, (top + y0) / 2, z); m.castShadow = true; grp.add(m); }
+    const pts = [], N = 12; for (let k = 0; k <= N; k++) { const u = k / N; pts.push(new THREE.Vector3(ax + (cx - ax) * u, ya + (yc - ya) * u - Math.sin(u * Math.PI) * 0.7, za + (zc - za) * u)); }
+    grp.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x3a2a20 })));
+    const m = Math.max(2, Math.floor(gap / 1.6)); for (let k = 1; k <= m; k++) { const p = pts[Math.round((k / (m + 1)) * N)]; const l = put(P.hangLantern, 0.8, p.x, p.y - 0.8, p.z); if (l) { const g = sprite(0xffa860, 1.8); g.position.set(p.x, p.y - 0.4, p.z); grp.add(g); } }
+  }
+}
+
 export default {
   build(W, grp, A) {
     const { THREE, PACK, sprite } = A, P = PACK || {}, lacquer = A.matFor('lacquer');
@@ -86,6 +126,7 @@ export default {
         load('shrine').then((src) => { if (!src || ST?.grp !== grp) return; const s = fit(A, src, 3.6, 3.6, 3.6); s.position.set(b.x + 3.4, b.y + b.h / 2, b.z - b.d / 2 + 1.7); grp.add(s); });
       }
     }
+    scenery(W, grp, A, P);
   },
   update(W, dt, t, A) {
     if (!ST) return;

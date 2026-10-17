@@ -289,6 +289,32 @@ export async function warm(report) {
   try { r.compile(S.scene, S.cam); r.render(S.scene, S.cam); } catch { }
   for (const [o, f] of meshes) o.frustumCulled = f;
 }
+// chaîne de l'écran d'accueil : de VRAIS maillons 3D en métal (tores allongés, un sur deux tourné d'un quart de tour), suspendus devant la caméra,
+// qui ondulent doucement. Elle suit la caméra (le fond défile) ; hors de l'accueil elle est masquée.
+let HC = null;
+export function homeChain(t, on) {
+  if (!HC) {
+    if (!on || !S.cam || !S.scene) return;
+    const geo = new THREE.TorusGeometry(0.21, 0.058, 16, 40); geo.scale(1.45, 1, 1);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x9d968c, metalness: 0.95, roughness: 0.36, envMapIntensity: 1.8 });
+    const im = new THREE.InstancedMesh(geo, mat, 160); im.frustumCulled = false; im.castShadow = false;
+    const g = new THREE.Group(); g.add(im);
+    const L1 = new THREE.PointLight(0xffd7a0, 22, 24, 1.3); L1.position.set(-3, 2.5, 5); g.add(L1);
+    const L2 = new THREE.PointLight(0x8fb0ff, 9, 24, 1.3); L2.position.set(4, -2, 4); g.add(L2);
+    S.scene.add(g); HC = { g, im, f: new THREE.Vector3(), m: new THREE.Matrix4(), q: new THREE.Quaternion(), q2: new THREE.Quaternion(), p: new THREE.Vector3(), one: new THREE.Vector3(1, 1, 1), ax: new THREE.Vector3(1, 0, 0), az: new THREE.Vector3(0, 0, 1) };
+  }
+  HC.g.visible = !!on; if (!on) return;
+  const cam = S.cam, d = 2.6, k = d / 9, halfH = Math.tan((cam.fov * Math.PI) / 360) * 9, halfW = halfH * cam.aspect, L = halfW + 1.4;
+  HC.g.position.copy(cam.position).add(HC.f.set(0, 0, -1).applyQuaternion(cam.quaternion).multiplyScalar(d)); HC.g.quaternion.copy(cam.quaternion); HC.g.scale.setScalar(k);
+  const y0 = 0.24 * halfH, yAt = (x) => y0 - 0.55 * (1 - (x / L) ** 2) + Math.sin(t * 0.5) * 0.03 * x + Math.sin(t * 0.9) * 0.05 + 0.045 * Math.sin(x * 1.3 - t * 1.6);
+  let x = -L, n = 0;
+  while (x < L && n < 160) {
+    const y = yAt(x), a = Math.atan2(yAt(x + 0.05) - yAt(x - 0.05), 0.1);
+    HC.q.setFromAxisAngle(HC.az, a); if (n % 2) { HC.q2.setFromAxisAngle(HC.ax, Math.PI / 2); HC.q.multiply(HC.q2); }
+    HC.m.compose(HC.p.set(x, y, 0), HC.q, HC.one); HC.im.setMatrixAt(n++, HC.m); x += 0.47 * Math.cos(a);
+  }
+  HC.im.count = n; HC.im.instanceMatrix.needsUpdate = true;
+}
 export function sprite(color, size) {
   if (!S.glowTex) { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); S.glowTex = new THREE.CanvasTexture(c); }
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: S.glowTex, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
