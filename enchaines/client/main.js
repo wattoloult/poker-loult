@@ -220,10 +220,15 @@ function loop(now) {
     if (G.W.done && !G.done) { G.done = true; setTimeout(() => showEnd(G.W), 4500); }
   }
 }
-function rafLoop(now) { loop(now); requestAnimationFrame(rafLoop); }
+// une exception dans une image ne doit JAMAIS figer le jeu : on replanifie d'abord, on signale l'erreur (une fois par message) au serveur
+const SEEN = new Set();
+function oops(e) { const m = String(e?.message || e); console.error(e); if (SEEN.size < 20 && !SEEN.has(m)) { SEEN.add(m); try { net?.send({ t: 'err', m, at: String(e?.stack || '').split('
+').slice(0, 3).join(' / ') }); } catch { } } }
+addEventListener('error', (e) => oops(e.error || e.message)); addEventListener('unhandledrejection', (e) => oops(e.reason));
+function rafLoop(now) { requestAnimationFrame(rafLoop); try { loop(now); } catch (e) { oops(e); } }
 requestAnimationFrame(rafLoop);
 // repli si requestAnimationFrame est gelé (onglet en arrière-plan / aperçu) : la partie en ligne continue d'envoyer ses entrées
-setInterval(() => { const n = performance.now(); if (n - (G.raf || 0) > 120) loop(n); }, 16);
+setInterval(() => { const n = performance.now(); if (n - (G.raf || 0) > 120) try { loop(n); } catch (e) { oops(e); } }, 16);
 
 /* ------------------------------ interface en jeu ------------------------------ */
 function hud(W, dt) {

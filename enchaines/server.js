@@ -63,7 +63,7 @@ function join(ws, m) {
   const back = r.people.find((p) => p.token && p.token === ws.token && !p.gone); // reprise après coupure : même jeton = même place
   if (back) {
     if (back.ws && back.ws !== ws) back.ws.room = null;
-    Object.assign(back, { ws, sid: ws.id, offline: false, q: [], fresh: true }); ws.room = r;
+    Object.assign(back, { ws, sid: ws.id, offline: false, q: [], fresh: true, ack: 0 }); ws.room = r; // ack à 0 : le client repart de 0 sur le 'start' (sinon le serveur ignorerait ses entrées jusqu'à rattraper l'ancien compteur = grimpeur figé)
     if (r.host === back.oldSid) r.host = ws.id;
     pushRoom(r); if (r.W) send(ws, startMsg(r, back.seat));
     return;
@@ -153,6 +153,7 @@ wss.on('connection', (ws) => {
     switch (m.t) {
       case 'hello': ws.name = clean(m.name, 16) || 'Grimpeur'; ws.token = clean(m.token, 40); if (p) { p.name = ws.name; pushRoom(r); } break;
       case 'ping': send(ws, { t: 'pong', n: m.n }); break;
+      case 'err': console.error('[client]', String(m.m).slice(0, 300), '|', String(m.at || '').slice(0, 200)); break; // erreur JS signalée par un client (diagnostic)
       case 'chat': { // chat texte du salon (joueurs et spectateurs), 140 caractères, au plus un message toutes les 0,6 s
         const txt = clean(m.m, 140), now = Date.now(); if (!r || !txt || now - (ws.chatT || 0) < 600) break; ws.chatT = now;
         cast(r, { t: 'chat', name: ws.name || 'Grimpeur', seat: p ? p.seat : null, m: txt }); break;

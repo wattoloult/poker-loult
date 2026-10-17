@@ -46,9 +46,13 @@ test('salon à deux, départ, entrées, instantanés identiques', async () => {
   a.send({ t: 'chat', m: 'salut <b>toi</b>' }); a.send({ t: 'chat', m: 'flood' }); await wait(150);
   assert.equal(b.last.chat?.m, 'salut btoi/b', 'message relayé et nettoyé'); assert.ok(!b.msgs.some((x) => x.t === 'chat' && x.m === 'flood'), 'anti-flood');
   a.send({ t: 'rtc', d: { s: { type: 'offer', sdp: 'x' } } }); await wait(120); assert.equal(b.last.rtc?.d.s.type, 'offer', 'signal vocal relayé');
-  // reprise après coupure : même jeton = même place
+  // reprise après coupure : même jeton = même place ; le client repart de ct=1, le serveur doit l'écouter malgré l'ancien compteur
+  for (let ct = 1; ct <= 60; ct++) b.send({ t: 'i', a: [[ct, 0, 0, 0, 0, 0]] }); await wait(250);
+  const pb = () => rooms.get(code).people.find((x) => x.seat === 1); assert.ok(pb().ack >= 50, 'Bravo avait des entrées acquittées');
   b.ws.close(); await wait(150);
   const b2 = client('Bravo'); await b2.ready; b2.send({ t: 'join', code }); await wait(250);
   assert.equal(b2.last.start?.seat, 1, 'Bravo retrouve sa place');
+  b2.send({ t: 'i', a: [[1, 1, 0, 0, 0, 0], [2, 1, 0, 0, 0, 0]] }); await wait(300);
+  assert.ok(pb().ack >= 1 && pb().ack < 50, 'après reprise, ses entrées (ct repart de 1) sont acceptées, ack=' + pb().ack);
   a.ws.close(); b2.ws.close(); stop();
 });
