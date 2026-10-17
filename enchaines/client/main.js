@@ -6,6 +6,7 @@ import * as Scene from './scene.js';
 import * as Music from './music.js';
 import * as Snd from './audio.js';
 import * as Sfx from './sfx.js';
+import * as Voice from './voice.js';
 import { createNet } from './net.js';
 
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
@@ -25,6 +26,9 @@ const saveCfg = () => safe(() => localStorage.setItem('ch-cfg', JSON.stringify(C
 const keys = new Set(), pressed = new Set();
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
+  // chat du salon : Entrée pour écrire (en ligne), M pour couper / ouvrir le micro
+  if (G.room && (e.code === 'Enter' || e.code === 'NumpadEnter') && G.mode !== 'local') { e.preventDefault(); keys.clear(); $('#chat-in').focus(); return; }
+  if (G.room && e.code === 'KeyM' && G.mode !== 'local') { micToggle(); return; }
   if (!keys.has(e.code)) pressed.add(e.code);
   keys.add(e.code); Snd.unlock(); Music.unlock(); Sfx.load();
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
@@ -143,7 +147,7 @@ function handleEvents(W, list, fromServer) {
     Scene.onEvent(W, e);
     const p = e.p != null ? W.pl[e.p] : null, pan = p ? panOf(p) : 0;
     switch (e.k) {
-      case 'jump': Snd.play('jump', { pan }); break;
+      case 'jump': if (!p || !Sfx.jump(p.x, p.y + 1.5, p.z, { key: e.p, rate: 0.97 + Math.random() * 0.06 })) Snd.play('jump', { pan }); break; // la voix du propriétaire
       case 'land': if (e.v > 3) Snd.play('land', { pan, v: e.v }); break;
       case 'grab': Snd.play('grab', { pan }); break;
       case 'mantle': Snd.play('mantle', { pan }); break;
@@ -223,6 +227,7 @@ setInterval(() => { const n = performance.now(); if (n - (G.raf || 0) > 120) loo
 
 /* ------------------------------ interface en jeu ------------------------------ */
 function hud(W, dt) {
+  if (G.mode === 'online') { const lv = Voice.levels(); for (let k = 0; k < 2; k++) $('#tag' + k).classList.toggle('talk', (k === G.me ? lv.me : lv.partner) > 0.12); } // qui parle
   const [a, b] = W.pl;
   const top = Math.max(a.y, b.y), C = LV().checkpoints, cur = C[W.cp] || C[0], nx = C[W.cp + 1], low = Math.min(a.y, b.y) + 0.5;
   const z = nx && nx.y > cur.y + 3 && low >= nx.y - 0.5 ? nx.zone : cur.zone; // zone du dernier point de passage (ou la suivante, déjà atteinte en hauteur)
@@ -293,11 +298,14 @@ function getNet() {
   if (net) return net;
   net = createNet(() => CFG.name || 'Grimpeur');
   net.onState = (up) => { $('#netstate').textContent = up ? '' : 'Connexion au serveur…'; };
-  net.on('room', (m) => { G.room = m; net.setRoom(m.code); renderRoom(m); if (m.phase === 'lobby' && !G.mode) show('room'); });
+  net.on('room', (m) => { G.room = m; net.setRoom(m.code); renderRoom(m); if (m.phase === 'lobby' && !G.mode) show('room'); chatShow(true);
+    if (m.you != null && m.players.length === 2) Voice.start(net, m.you); else Voice.stop(); }); // chat vocal : liaison directe dès que le salon a ses deux grimpeurs
+  net.on('chat', (m) => chatAdd(m));
+  net.on('rtc', (m) => Voice.onSignal(m.d));
   net.on('rooms', (m) => renderRooms(m.list));
   net.on('hi', () => { if (G.pt?.key) net.send({ t: 'pt', key: G.pt.key }); if (document.body.dataset.screen === 'board') net.send({ t: 'board', course: $('#b-course').value }); if (document.body.dataset.screen === 'online') net.send({ t: 'list' }); });
   net.on('err', (m) => toast(m.m));
-  net.on('left', () => { net.setRoom(null); G.room = null; stopGame(); show('online'); });
+  net.on('left', () => { net.setRoom(null); G.room = null; Voice.stop(); chatShow(false); stopGame(); show('online'); });
   net.on('start', async (m) => {
     await ensureScene();
     G.mode = 'online'; G.demo = null; G.me = m.seat; G.names = m.names; G.L = m.L;
@@ -325,6 +333,26 @@ function getNet() {
   net.on('board', (m) => { $('#b-list').innerHTML = m.list.length ? m.list.map((r, i) => `<li><span>${i + 1}</span><b>${esc(r.names.join(' & '))}</b><em>${fmt(r.time)}</em><small>${r.falls} chutes</small></li>`).join('') : '<li class="muted">Personne n\'a encore atteint le sommet.</li>'; });
   return net;
 }
+/* ------------------------------ chat texte et vocal du salon ------------------------------ */
+function chatShow(on) { $('#chat').classList.toggle('on', on); }
+function chatAdd(m) {
+  const li = document.createElement('li'); li.className = 'c' + (m.seat ?? 's');
+  const b = document.createElement('b'); b.textContent = m.name + (m.seat == null ? ' (spectateur)' : '') + ' : '; li.append(b, document.createTextNode(m.m)); // textContent : aucun HTML injecté
+  const log = $('#chat-log'); log.append(li); while (log.children.length > 30) log.firstChild.remove();
+  log.scrollTop = log.scrollHeight; li.dataset.t = Date.now(); Snd.play('ui');
+}
+$('#chat-in').addEventListener('keydown', (e) => {
+  if (e.code === 'Enter' || e.code === 'NumpadEnter') { const v = e.target.value.trim(); if (v) net?.send({ t: 'chat', m: v }); e.target.value = ''; e.target.blur(); e.preventDefault(); }
+  else if (e.code === 'Escape') { e.target.value = ''; e.target.blur(); }
+  e.stopPropagation();
+});
+async function micToggle() {
+  const r = await Voice.toggleMic(G.fakeMic); if (!r.ok) toast('Micro indisponible : ' + r.why + ' (autorise le micro dans le navigateur)', 3500);
+  else toast(r.on ? "Micro ouvert : ton partenaire t'entend" : 'Micro coupé', 1500);
+  micLabel();
+}
+function micLabel() { const s = Voice.status(); $('#mic').textContent = !s.mic ? 'Activer le micro (M)' : s.on ? 'Micro ouvert (M)' : 'Micro coupé (M)'; $('#mic').classList.toggle('live', s.mic && s.on); $('#mic-link').textContent = s.link === 'connected' ? 'vocal relié' : s.link === 'off' ? '' : 'vocal : connexion…'; }
+Voice.onChange(micLabel);
 function renderRoom(m) {
   $('#r-code').textContent = m.code;
   $('#r-link').value = location.origin + location.pathname + '?r=' + m.code;
@@ -382,14 +410,15 @@ document.addEventListener('click', (e) => {
   else if (b.closest('#r-len')) net?.send({ t: 'cfg', L: +b.dataset.l });
   else if (b.closest('#l-len')) { G.L = +b.dataset.l; $$('#l-len button').forEach((x) => x.classList.toggle('on', x === b)); }
   else if (id === 'r-start') net?.send({ t: 'start' });
-  else if (id === 'r-leave') { net?.send({ t: 'leave' }); net?.setRoom(null); G.room = null; show('online'); }
+  else if (id === 'mic') micToggle();
+  else if (id === 'r-leave') { net?.send({ t: 'leave' }); net?.setRoom(null); G.room = null; Voice.stop(); chatShow(false); show('online'); }
   else if (id === 'r-copy') { safe(() => navigator.clipboard.writeText($('#r-link').value)); toast('Lien copié : envoie-le à ton partenaire'); }
   else if (id === 'p-resume') togglePause(false);
   else if (id === 'p-cp') toCheckpoint();
   else if (id === 'e-next') toNext();
   else if (id === 'p-restart' || id === 'e-again') { $('#end').classList.remove('on'); restartFromStart(); }
   else if (id === 'p-debug') G.debug = !G.debug;
-  else if (id === 'p-quit' || id === 'e-menu') { if (G.mode === 'online') { net?.send({ t: 'leave' }); net?.setRoom(null); } stopGame(); $('#end').classList.remove('on'); show('home'); }
+  else if (id === 'p-quit' || id === 'e-menu') { if (G.mode === 'online') { net?.send({ t: 'leave' }); net?.setRoom(null); G.room = null; Voice.stop(); chatShow(false); } stopGame(); $('#end').classList.remove('on'); show('home'); }
 });
 function nameOk() {
   const n = $('#o-name').value.replace(/[<>]/g, '').trim().slice(0, 16);

@@ -198,3 +198,18 @@ kbd { font: 700 14px 'Grenze'; color: var(--bone); background: linear-gradient(1
 #fade { position: fixed; inset: 0; z-index: 30; pointer-events: none; opacity: 0; transition: opacity 0.8s ease; background: radial-gradient(circle at 50% 55%, #fff7e0, #ffc46a 45%, #3a1a08 100%); }
 #fade.on { opacity: 1; }
 .credits { font-size: 13px; opacity: 0.8; }
+/* chat du salon : sangle de cuir en bas à gauche, messages qui s'effacent seuls, saisie à l'Entrée */
+#chat { position: fixed; left: 50px; bottom: 96px; width: min(360px, 70vw); z-index: 9; display: none; flex-direction: column; gap: 4px; pointer-events: none; }
+#chat.on { display: flex; }
+#chat-log { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
+#chat-log li { font: 600 15px 'Grenze'; color: var(--bone); text-shadow: 0 1px 0 #000, 0 0 6px #000; animation: chatfade 12s forwards; }
+#chat-log li b { font-weight: 800; } #chat-log li.c0 b { color: var(--p1); } #chat-log li.c1 b { color: var(--p2); } #chat-log li.cs b { color: var(--bone2); }
+@keyframes chatfade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+#chat:focus-within #chat-log li { animation: none; opacity: 1; }
+#chat-in { pointer-events: auto; font: 600 15px 'Grenze'; padding: 6px 10px; opacity: 0.55; }
+#chat-in:focus { opacity: 1; }
+.chat-row { display: flex; align-items: center; gap: 8px; pointer-events: auto; }
+.chat-row small { font: 600 13px 'Grenze'; color: var(--bone2); text-shadow: 0 1px 0 #000; }
+#mic.live { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 0 1px var(--ember), 0 0 12px rgba(232, 121, 44, 0.5); color: #fff; }
+.tag.talk { box-shadow: 0 0 0 2px #fff, 0 0 14px #fff; }
+body[data-screen="room"] #chat { left: 50%; transform: translateX(-50%); bottom: 16px; }

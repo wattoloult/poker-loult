@@ -42,6 +42,10 @@ test('salon à deux, départ, entrées, instantanés identiques', async () => {
   b.send({ t: 'next', course: 'remparts' }); await wait(150); a.last.start = null; a.send({ t: 'next', course: 'remparts' }); await wait(250);
   assert.equal(a.last.start?.course, 'remparts', "l'hôte enchaîne sur le parcours suivant");
   a.last.start = null; a.send({ t: 'next', course: 'inconnu' }); await wait(250); assert.equal(a.last.start?.course, 'tour', 'parcours inconnu : parcours par défaut');
+  // chat : relayé aux deux, nettoyé (pas de HTML), anti-flood ; vocal : la négociation WebRTC passe à l'autre grimpeur
+  a.send({ t: 'chat', m: 'salut <b>toi</b>' }); a.send({ t: 'chat', m: 'flood' }); await wait(150);
+  assert.equal(b.last.chat?.m, 'salut btoi/b', 'message relayé et nettoyé'); assert.ok(!b.msgs.some((x) => x.t === 'chat' && x.m === 'flood'), 'anti-flood');
+  a.send({ t: 'rtc', d: { s: { type: 'offer', sdp: 'x' } } }); await wait(120); assert.equal(b.last.rtc?.d.s.type, 'offer', 'signal vocal relayé');
   // reprise après coupure : même jeton = même place
   b.ws.close(); await wait(150);
   const b2 = client('Bravo'); await b2.ready; b2.send({ t: 'join', code }); await wait(250);

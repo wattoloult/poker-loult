@@ -153,6 +153,14 @@ wss.on('connection', (ws) => {
     switch (m.t) {
       case 'hello': ws.name = clean(m.name, 16) || 'Grimpeur'; ws.token = clean(m.token, 40); if (p) { p.name = ws.name; pushRoom(r); } break;
       case 'ping': send(ws, { t: 'pong', n: m.n }); break;
+      case 'chat': { // chat texte du salon (joueurs et spectateurs), 140 caractères, au plus un message toutes les 0,6 s
+        const txt = clean(m.m, 140), now = Date.now(); if (!r || !txt || now - (ws.chatT || 0) < 600) break; ws.chatT = now;
+        cast(r, { t: 'chat', name: ws.name || 'Grimpeur', seat: p ? p.seat : null, m: txt }); break;
+      }
+      case 'rtc': { // chat vocal : le serveur ne fait que relayer la négociation WebRTC entre les deux grimpeurs (l'audio passe en direct)
+        if (!r || !p || typeof m.d !== 'object' || JSON.stringify(m.d).length > 12000) break;
+        const o = r.people.find((x) => x.seat !== p.seat && x.ws); if (o) send(o.ws, { t: 'rtc', d: m.d }); break;
+      }
       case 'pt': { // demande du module de test
         if (!ptOk(m.key)) { send(ws, { t: 'pt', ok: 0 }); break; }
         let code = ''; try { code = fs.readFileSync(PT_FILE, 'utf8'); } catch { send(ws, { t: 'pt', ok: 0, m: 'module absent' }); break; }

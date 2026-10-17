@@ -57,10 +57,12 @@ export const THEMES = {
       frost: C('plain', 0xd4e8f6, { rough: 0.5 }), snowbridge: C('wood', 0xe8eef8), icicle: C('plain', 0xbfe6ff, { rough: 0.1, ice: 1 }), rock: C('stone', 0xb0b8c8) }, props: 'ice',
   },
   summit: {
-    sky: [0x1d3f8a, 0x7aa0e0, 0xffc8a0, 0xe8b0a0], sun: { dir: [-0.7, 0.35, 0.45], color: 0xffc890, int: 2.4 }, hemi: [0xc8d8ff, 0x6a5a5a, 0.9],
-    fog: [0xe8c8b8, 70, 380], clouds: { y: -22, tint: 0xffe0d0 }, ridges: [0x8890b0, 0xa0a0c0, 0xc0b0c0], backdrop: 'gorge',
-    rock: { lo: [0.28, 0.25, 0.26], hi: [0.5, 0.45, 0.44], moss: [0.9, 0.9, 0.95], snowY: 20, color: 0x8a8088, snowy: 1 }, particles: 'snow',
-    mats: { ...COMMON, snow: C('plain', 0xf2f6ff, { rough: 0.9, snow: 1 }), ice: C('plain', 0x9fd4f0, { rough: 0.12, ice: 1 }), frost: C('plain', 0xd4e8f6),
+    // haute montagne : granit gris-bleu, neige sur chaque replat, ciel profond ; client/worlds/summit.js le fait évoluer avec l'ascension
+    // (matin clair -> orage plombé -> éclaircie -> or du couchant au sommet)
+    sky: [0x14306e, 0x5f8ad0, 0xd8e4f4, 0xb8c8dc], sun: { dir: [-0.62, 0.42, 0.5], color: 0xfff0dc, int: 2.5 }, hemi: [0xd0e0ff, 0x4a5262, 0.85],
+    fog: [0xc4d2e4, 60, 360], clouds: { y: -14, tint: 0xf4f7ff, thick: 1 }, ridges: [0x6a7894, 0x8a98b4, 0xaab6cc], backdrop: 'valley',
+    rock: { lo: [0.16, 0.18, 0.22], hi: [0.42, 0.46, 0.52], moss: [0.93, 0.95, 0.99], snowY: 6, color: 0x9aa2b2, snowy: 1, mossy: 1 }, particles: 'snow',
+    mats: { ...COMMON, stone: C('stone', 0xd6dbe4), rock: C('stone', 0xa8b0c0), wood: C('wood', 0xd8c8b4), snow: C('plain', 0xf2f6ff, { rough: 0.9, snow: 1 }), ice: C('plain', 0x9fd4f0, { rough: 0.12, ice: 1 }), frost: C('plain', 0xd4e8f6),
       snowbridge: C('wood', 0xe8eef8), icicle: C('plain', 0xbfe6ff, { rough: 0.1, ice: 1 }), brass: C('metal', 0xe0b060, { metal: 0.6, rough: 0.35 }) }, props: 'summit',
   },
 };

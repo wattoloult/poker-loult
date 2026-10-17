@@ -14,7 +14,7 @@ const safe = (f) => { try { return f(); } catch { return null; } };
 export function load() {
   const C = ctx(); if (!C || loading) return loading;
   const base = new URL('../assets/sfx/', import.meta.url);
-  add('chain', CHAIN_NAMES);
+  add('chain', CHAIN_NAMES); add('voice', ['jump_1', 'jump_2', 'jump_3']);
   loading = Promise.all(NAMES.map(async (n) => { try { const r = await fetch(new URL(n + '.mp3', base)); BUF[n] = await C.decodeAudioData(await r.arrayBuffer()); } catch { /* son absent : ignoré */ } }));
   return loading;
 }
@@ -23,6 +23,9 @@ export const ready = () => Object.keys(BUF).length;
 export const CHAIN = { jerk: 7, pull: 8, clink: 14, rattle: 8, drop: 2 };
 const CHAIN_NAMES = Object.entries(CHAIN).flatMap(([k, n]) => Array.from({ length: n }, (_, i) => k + '_' + (i + 1)));
 export const chainReady = () => !!BUF['chain/clink_1'];
+// saut : une des trois voix enregistrées par le propriétaire, au hasard, jamais la même deux fois de suite
+let lastJump = 0;
+export function jump(x, y, z, o = {}) { if (!BUF['voice/jump_1']) return false; let k; do k = 1 + Math.floor(Math.random() * 3); while (k === lastJump); lastJump = k; one('voice/jump_' + k, x, y, z, { gap: 0.08, v: 0.9, ...o, key: 'j' + (o.key ?? '') }); return true; }
 export function chain(kind, x, y, z, o = {}) { if (!chainReady()) return false; one('chain/' + kind + '_' + (1 + Math.floor(Math.random() * CHAIN[kind])), x, y, z, { gap: 0.06, ...o, key: 'ch' + kind + (o.key || '') }); return true; }
 // sons propres à un monde : assets/sfx/<dir>/<nom>.mp3, joués sous la clé '<dir>/<nom>'
 const ADDED = {};

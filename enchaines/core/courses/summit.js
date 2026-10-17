@@ -5,7 +5,7 @@
 import { course } from '../kit.js';
 
 const K = course({ id: 'toit', world: 'summit', name: 'Le Toit du monde', short: 'L\'ascension finale : tempête, avalanche et arche', diff: 5, published: true,
-  medals: { gold: 840, silver: 1200, bronze: 1700 }, backdrop: 'peak' });
+  medals: { gold: 840, silver: 1200, bronze: 1700 }, backdrop: 'valley' });
 const { plat, block, cp, hint, rope, wind, cam, bridge, bars, herse } = K;
 const Z = -0.5;
 // décor / porteurs de données : jamais une étape du parcours (deco), jamais saisis
