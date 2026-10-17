@@ -324,6 +324,8 @@ function renderBoard(list, mine) {
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* ------------------------------ en ligne ------------------------------ */
+// la liste des salons ouverts se met à jour toute seule tant qu'on est sur l'écran « Jouer en ligne » (avant : une seule demande à l'ouverture, un salon créé ensuite n'apparaissait qu'après avoir cliqué sur ↻)
+setInterval(() => { if (document.body.dataset.screen === 'online' && net?.up) net.send({ t: 'list' }); }, 2500);
 let net = null;
 const encIn = (ct, I) => [ct, Math.round(I.mx * 100) / 100, Math.round(I.mz * 100) / 100, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0), I.jc, I.dc, I.uc || 0];
 const decIn = (a) => (a ? { mx: a[1], mz: a[2], jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), jc: a[4], dc: a[5], uc: a[6] || 0 } : IDLE);
