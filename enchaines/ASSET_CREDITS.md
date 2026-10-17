@@ -133,3 +133,8 @@ téléchargeables sans compte ; les WAV originaux (48 kHz) exigent une connexion
 | `gate_thud.mp3` (0,32 s), `gate_latch.mp3` (1,6 s), `gate_slam.mp3` (2,42 s), `gate_rattle.mp3` (4-7,7 s) | mechanic_old_cog_chain_medieval_gate_metal_wood_impact_m10 | johanwestling | https://freesound.org/people/johanwestling/sounds/460181/ | **CC BY 4.0** (idem) |
 | `chain_loop.mp3` (10-18 s) | Big Metal Chain | qubodup | https://freesound.org/people/qubodup/sounds/199282/ | CC0 1.0 |
 | `winch_a.mp3`, `winch_b.mp3`, `winch_c.mp3` | Chain winch sounds (Region #1, Marker #8, Marker 2) | bart | https://opengameart.org/content/chain-winch-sounds | CC0 (« credit appreciated ») |
+
+## Décor des plateformes (assets/decor/nature.glb, props.glb) — CC0, Quaternius
+- Stylized Nature MegaKit (version Standard, gratuite) : arbres, sapins, buissons, fleurs, herbes, champignons, roches, cailloux — https://quaternius.com
+- Fantasy Props MegaKit (version Standard) : bannières, tonneaux, caisses, outils, établi, enclume, marmite, torche, chaînes, cordes… — https://quaternius.com
+- Convertis en .glb, textures réduites à 512 px (webp), sans cartes de normales ; assemblés par client/scatter.js.

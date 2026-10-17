@@ -277,7 +277,7 @@ export function linkRow(mesh, i0, a, b, phase = 0) {
 }
 
 /* ------------------------------ niveau (voir levelview.js) ------------------------------ */
-export async function buildLevel(W) { S.building = true; try { await LV.loadPack(W.level.world || 'medieval'); if (Mechs.needs(W.level)) await Mechs.load(); await (await import('./totems.js')).load(W.level.world || 'medieval'); LV.build(W); } finally { S.building = false; } }
+export async function buildLevel(W) { S.building = true; try { await LV.loadPack(W.level.world || 'medieval'); if (Mechs.needs(W.level)) await Mechs.load(); await (await import('./totems.js')).load(W.level.world || 'medieval'); await (await import('./scatter.js')).load(W.level.world || 'medieval'); LV.build(W); } finally { S.building = false; } }
 // préchauffage : envoie TOUT le niveau au GPU avant le départ (textures + géométries de toute la montagne, même hors champ), compile les shaders
 export async function warm(report) {
   const r = S.renderer; if (!r || !S.scene) return;

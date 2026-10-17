@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { S, LIB, sprite } from './scene.js';
 import * as Mechs from './mechs.js';
+import * as Scatter from './scatter.js';
 
 const W_ = {}; // modèles chargés : W_['monde/fichier']
 // recette par monde : corps (modèle + hauteur), feu (couleur, hauteur), décor d'appoint ; spin = pièce qui tourne une fois allumé
@@ -13,7 +14,7 @@ const SPEC = {
   jungle: { file: 'jungle/statue_obelisk', h: 2.8, fire: 0x9dff6a, fy: 3.0, light: 0x9dff80, base: 'jungle/statue_head', bh: 0.9 },
   japan: { pack: 'postLantern', h: 2.2, fire: 0xffc070, fy: 1.55, light: 0xffb060, inner: 1 },
   deep: { pack: 'bigCrystal', h: 1.9, fire: 0x6fe0ff, fy: 1.1, light: 0x60d0ff, base: 'deep/lantern', bh: 0.6, glowBody: 0x2a8ac8 },
-  sky: { pack: 'column', h: 2.6, fire: 0xdff4ff, fy: 2.9, light: 0xbfe8ff, float: 1 },
+  sky: { decor: 'Banner_1', h: 3.0, fire: 0xdff4ff, fy: 3.35, light: 0xbfe8ff }, // mât à fanion (l'ancienne colonne grecque flottante n'avait aucun sens sur une île)
   mech: { file: 'mech/piston-square', h: 1.6, fire: 0xffa448, fy: 2.1, light: 0xff9a40, spin: 'mech/cog-a', sh: 1.2 },
   ice: { file: 'ice/rock_tallA', h: 2.4, fire: 0xffb060, fy: 0.55, light: 0xffa050, base: 'ice/campfire-pit', bh: 0.5, baseX: 0.9 },
   summit: { file: 'summit/statue_ring', h: 2.8, fire: 0xfff1c8, fy: 1.7, light: 0xffe6b0, glowBody: 0x8a6a30 },
@@ -35,7 +36,7 @@ export function make(world, c, i, grp, PACK) {
   const sp = SPEC[world] || SPEC.medieval, g = new THREE.Group(); g.position.set(c.x + (c.flagX ?? -1.8), c.y, c.z - 1.2); grp.add(g);
   let body = null, ban = null;
   if (sp.body === 'castle') { body = Mechs.sized('wall-pillar', 0.75, sp.h, 0.75, S.mat.stone); if (body) g.add(body); }
-  else body = fit(sp.file ? W_[sp.file] : PACK?.[sp.pack], g, sp.h);
+  else body = fit(sp.decor ? Scatter.get(sp.decor) : sp.file ? W_[sp.file] : PACK?.[sp.pack], g, sp.h);
   if (!body) body = fit(LIB.Torch_Metal, g, 1.6); // repli : le monde n'a pas encore son modèle
   if (sp.banner) { ban = fit(LIB.Banner_1_Cloth, g, 1.7); if (ban) { ban.position.set(0, 0.35, 0.42); ban.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.userData.ban = true; } }); } const t = fit(LIB.Torch_Metal, g, 0.7); if (t) t.position.y = sp.h; }
   if (sp.base) { const b = fit(W_[sp.base], g, sp.bh); if (b) b.position.set(sp.baseX ?? 0, 0, sp.baseX ? 0.3 : 0.6); }

@@ -6,6 +6,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { S, LIB, TEX, NOISE, sprite, boxGeo, linkRow } from './scene.js';
 import { themeOf } from './themes.js';
 import { windOn } from '../core/sim.js';
+import * as Scatter from './scatter.js';
 import * as Mechs from './mechs.js';
 import * as Portal from './portal.js';
 import * as Totems from './totems.js';
@@ -229,8 +230,8 @@ function decorWorld(world, th, b, o) {
   if (b.climb) climbDecor(b, o, world === 'ice' || world === 'summit' ? [] : [P.pothosL, P.pothosM, P.vines, LIB.Prop_Vine2].filter(Boolean), world === 'deep' ? [P.crystalA, P.crystalB, P.rocks].filter(Boolean) : world === 'ice' || world === 'summit' ? [P.crystal, P.rockSnow].filter(Boolean) : ['Prop_Brick1', 'Prop_Brick2', 'Prop_Brick3'].map((k) => LIB[k]));
   if (b.hang || b.hammer) S.hangs.push(b.i);
   if (b.summit) summitDecor(b, o, world);
+  Scatter.dress(world, b, o); // décor varié par recette (client/scatter.js)
   if (world === 'jungle') {
-    if (big && !b.summit) { const [x, z] = edgeSpot(1); const tr = at(rnd(i, 2) > 0.35 ? P.palm : P.tree, 4.5 + rnd(i, 3) * 2.5, x, z, rnd(i, 4) * 6); tintLeaves(tr, 0x3f8a2a); at(P.fern, 0.8, -x * 0.7, z + 0.6); at(P.leaf, 1.1, x * 0.4, -z); }
     if (b.tree) { const v = place(P.pothosL, o, 2.4); if (v) { v.position.set(b.hw * 0.5, -b.hh - 2.3, b.hd - 0.2); } }
     if (b.mat === 'rock' && rnd(i, 5) > 0.4) at(P.fern, 0.6, 0, 0);
   } else if (world === 'japan') {
@@ -250,14 +251,11 @@ function decorWorld(world, th, b, o) {
     if (b.cart) { const c = place(P.minecart, o, 1.0); if (c) c.position.set(0, top, 0); o.children[0].visible = false; }
   } else if (world === 'sky') {
     if (b.island) dressIsland(b, o);
-    if (big && !b.summit) { const [x, z] = edgeSpot(1); at(rnd(i, 2) > 0.5 ? P.column : P.columnRound, 2.6 + rnd(i, 3) * 1.4, x, z); }
   } else if (world === 'mech') {
     if (b.deco === 'hub') { const g = place(P.gear, o, 7); if (g) { g.position.set(0, b.hh + 0.1, 0); g.scale.y *= 0.15; S.gearHubs.push({ g, b }); } }
-    if (big && !b.summit && rnd(i, 1) > 0.4) { const [x, z] = edgeSpot(1); at([P.tank, P.panel, P.connector][i % 3], 1.4, x, z); }
     if (b.wheel && !b.alt) S.wheels.push({ c: b.wheel, ids: [] });
     if (b.wheel) S.wheels[S.wheels.length - 1].ids.push(b.i);
   } else if (world === 'ice' || world === 'summit') {
-    if (big && (b.mat === 'snow' || b.mat === 'stone') && !b.summit) { const [x, z] = edgeSpot(1); at([P.pine, P.deadTree, P.birch][i % 3], 3 + rnd(i, 3) * 2.5, x, z, rnd(i, 4) * 6); at(P.rockSnow, 0.9, -x * 0.7, z + 0.4); }
     if (b.mat === 'ice' && rnd(i, 1) > 0.5) at(P.iceBlock, 0.6, b.hw - 0.5, -b.hd + 0.4);
   }
 }
