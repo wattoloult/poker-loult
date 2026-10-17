@@ -378,11 +378,12 @@ function showCourses(mode) {
   G.pick = mode; $('#c-mode').textContent = mode === 'local' ? '· à deux sur ce clavier' : '· pour ton salon';
   const list = visible();
   // la tour des mondes : un étage par monde, le sommet en haut (column-reverse), une plaque par parcours
+  let n = 0; // numéro de la plaque = rang du parcours (un monde peut en avoir plusieurs : Tour de Loult et Remparts sont tous deux à l'étage 1)
   $('#c-list').innerHTML = WORLDS.map((w, i) => {
     const cs = list.filter((c) => c.world === w.id);
-    if (!cs.length) return `<div class="floor none" style="--wc:${WCOL[w.id]}"><span class="lvl">${i + 1}</span><span class="w"><small>Étage ${i + 1} · ${esc(w.name)}</small><b>Bientôt…</b><i>${esc(w.blurb)}</i></span></div>`;
+    if (!cs.length) return `<div class="floor none" style="--wc:${WCOL[w.id]}"><span class="lvl">${++n}</span><span class="w"><small>Étage ${i + 1} · ${esc(w.name)}</small><b>Bientôt…</b><i>${esc(w.blurb)}</i></span></div>`;
     return cs.map((c) => { const b = BEST[c.id], d = c.diff || 1;
-      return `<button class="floor${c.id === G.course ? ' sel' : ''}" data-course="${c.id}" style="--wc:${WCOL[w.id]}"><span class="lvl">${i + 1}</span>
+      return `<button class="floor${c.id === G.course ? ' sel' : ''}" data-course="${c.id}" style="--wc:${WCOL[w.id]}"><span class="lvl">${++n}</span>
         <span class="w"><small>Étage ${i + 1} · ${esc(w.name)}</small><b>${esc(c.name)}${c.published ? '' : '<span class="tag-pt">test</span>'}</b><i>${esc(c.short || w.blurb)}</i></span>
         <span class="side"><span class="notch">${[1, 2, 3, 4, 5].map((k) => `<u class="${k <= d ? 'on' : ''}"></u>`).join('')}</span>
         <span class="rec">${b ? (b.medal ? `<span class="coin ${b.medal}">${MEDAL[b.medal][0]}</span> ` : '') + fmt(b.time) : 'pas encore gravi'}</span></span></button>`; }).join('');
