@@ -47,7 +47,9 @@ export const EN = {
   "· à deux sur ce clavier": "· two players, one keyboard", "· pour ton salon": "· for your room", "Étage {0} · {1}": "Floor {0} · {1}", "Bientôt…": "Coming soon…",
   "pas encore gravi": "not climbed yet", "Lien copié : envoie-le à ton partenaire": "Link copied: send it to your partner", "Choisis d'abord un pseudo": "Pick a nickname first",
   "Mode test refusé": "Test mode refused", "Mode test actif : F9 pour le panneau": "Test mode on: F9 for the panel", "Grimpeur": "Climber", "Grimpeur 1": "Climber 1", "Grimpeur 2": "Climber 2",
-  "Zone {0}": "Zone {0}", "L'Envol": "The Take-off", "L'Atelier": "The Workshop", "L'Avalanche": "The Avalanche", "L'Orage": "The Thunderstorm", "L'Arche": "The Arch", "Salon introuvable.": "Room not found.", "Salon complet.": "Room full.", "English": "English", "Français": "Français",
+  "Zone {0}": "Zone {0}", "Réglages": "Settings", "Volume général": "Master volume", "Musique et ambiance": "Music and ambience", "Effets (saut, pas, mécanismes)": "Effects (jump, footsteps, mechanisms)",
+  "Voix du partenaire": "Partner's voice", "Volume du micro": "Microphone level", "Entrée audio (micro)": "Audio input (microphone)", "Sortie audio": "Audio output", "Fermer": "Close",
+  "Par défaut": "Default", "Microphone": "Microphone", "Haut-parleurs": "Speakers", "L'Envol": "The Take-off", "L'Atelier": "The Workshop", "L'Avalanche": "The Avalanche", "L'Orage": "The Thunderstorm", "L'Arche": "The Arch", "Salon introuvable.": "Room not found.", "Salon complet.": "Room full.", "English": "English", "Français": "Français",
   // ---- mondes ----
   "Le Royaume médiéval": "The Medieval Kingdom", "Remparts, tours, ponts de pierre et villages suspendus": "Ramparts, towers, stone bridges and hanging villages",
   "La Jungle oubliée": "The Forgotten Jungle", "Lianes, canopée, cascades et temples envahis": "Vines, canopy, waterfalls and overgrown temples",

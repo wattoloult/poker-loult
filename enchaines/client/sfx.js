@@ -47,10 +47,10 @@ export function listen(cam) {
   });
 }
 const TMP = new Vector3();
-function panner(C, x, y, z, ref = 6) {
+function panner(C, x, y, z, ref = 6, kind) {
   const p = C.createPanner(); p.panningModel = 'equalpower'; p.distanceModel = 'inverse'; p.refDistance = ref; p.maxDistance = 120; p.rolloffFactor = 1.1;
   if (p.positionX) { p.positionX.value = x; p.positionY.value = y; p.positionZ.value = z; } else p.setPosition(x, y, z);
-  p.connect(bus()); return p;
+  p.connect(bus(kind)); return p;
 }
 // son ponctuel ; gap = intervalle minimal entre deux déclenchements de la même clé (corrections réseau, rebonds)
 export function one(name, x, y, z, o = {}) {
@@ -59,7 +59,7 @@ export function one(name, x, y, z, o = {}) {
     const key = (o.key || '') + name, now = C.currentTime; if (LAST[key] && now - LAST[key] < (o.gap ?? 0.2)) return; LAST[key] = now;
     const s = C.createBufferSource(); s.buffer = b; s.playbackRate.value = (o.rate || 1) * (0.96 + Math.random() * 0.08);
     const g = C.createGain(); g.gain.value = o.v ?? 1;
-    s.connect(g).connect(panner(C, x, y, z, o.ref)); s.start(now, o.off || 0, o.dur);
+    s.connect(g).connect(panner(C, x, y, z, o.ref, name.startsWith('chain/') ? 'chain' : 'sfx')); s.start(now, o.off || 0, o.dur);
   });
 }
 // boucle attachée à un mécanisme : v.set(volume, débit) chaque image ; volume 0 = fondu puis arrêt
@@ -71,7 +71,7 @@ export function voice(name, o = {}) {
       safe(() => {
         const C = ctx(), b = BUF[name]; if (!C || !b) return; const t = C.currentTime;
         if (vol > 0.001 && !on) {
-          src = C.createBufferSource(); src.buffer = b; src.loop = true; g = C.createGain(); g.gain.value = 0; pn = panner(C, V.x || 0, V.y || 0, V.z || 0, o.ref);
+          src = C.createBufferSource(); src.buffer = b; src.loop = true; g = C.createGain(); g.gain.value = 0; pn = panner(C, V.x || 0, V.y || 0, V.z || 0, o.ref, name.startsWith('chain/') ? 'chain' : 'sfx');
           src.connect(g).connect(pn); src.start(t, Math.random() * Math.max(0, b.duration - 1)); on = true; ACTIVE++;
         }
         if (!on) return;

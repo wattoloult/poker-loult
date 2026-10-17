@@ -1,7 +1,7 @@
 // Sons du jeu, synthétisés en Web Audio (maquettes en attendant de vrais enregistrements CC0) :
 // pas, saut, réception, maillons qui cliquettent, chaîne qui se tend / claque, prise, effondrement, point de passage, sommet.
 // Aucun bruit continu : le souffle de chute n'existe que pendant une chute rapide. Un son ne peut jamais casser le jeu (try/catch).
-let C = null, OUT = null, VOL = 0.8, NB = null;
+let C = null, OUT = null, VOL = 0.8, NB = null, SFXB = null, CHB = null, MIX = { sfx: 1, chain: 1 }, SINK = '';
 const safe = (f) => { try { f(); } catch { /* son ignoré */ } };
 export function unlock() {
   safe(() => {
@@ -9,6 +9,9 @@ export function unlock() {
       C = new (window.AudioContext || window.webkitAudioContext)();
       OUT = C.createGain(); OUT.gain.value = VOL;
       const comp = C.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; OUT.connect(comp).connect(C.destination);
+      // deux sous-bus : effets (saut, pas, mécanismes…) et chaîne des grimpeurs, chacun avec son curseur
+      SFXB = C.createGain(); SFXB.gain.value = MIX.sfx; SFXB.connect(OUT); CHB = C.createGain(); CHB.gain.value = MIX.chain; CHB.connect(OUT);
+      if (SINK) safe(() => C.setSinkId?.(SINK));
       const len = C.sampleRate * 1.5; NB = C.createBuffer(1, len, C.sampleRate); const d = NB.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
       wind();
     }
@@ -16,9 +19,15 @@ export function unlock() {
   });
 }
 export function setVolume(v) { VOL = v; if (OUT) OUT.gain.value = v; }
+// niveaux séparés (0..1) : effets et chaîne ; périphérique de sortie (setSinkId, Chrome / Edge)
+export function setMix(sfx, chain) { MIX = { sfx, chain }; if (SFXB) SFXB.gain.value = sfx; if (CHB) CHB.gain.value = chain; }
+export function setSink(id) { SINK = id || ''; if (C) safe(() => C.setSinkId?.(SINK)); }
+export const canSink = () => typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype;
 export const ctxState = () => C?.state || 'none';
-export const ctx = () => (C && C.state === "running" ? C : null), bus = () => OUT; // pour les sons enregistrés spatialisés (sfx.js)
-const pan = (x) => { const p = C.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, x || 0)); p.connect(OUT); return p; };
+export const ctx = () => (C && C.state === "running" ? C : null), bus = (kind) => (kind === 'chain' ? CHB : SFXB) || OUT; // pour les sons enregistrés spatialisés (sfx.js)
+let NOW = null; // bus de destination du son synthétisé en cours (play() : chaîne ou effets)
+const CHAINY = new Set(['rattle', 'jerk', 'creak']);
+const pan = (x) => { const p = C.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, x || 0)); p.connect(NOW || SFXB || OUT); return p; };
 function noise(t0, dur, f, q, gain, type = 'bandpass', p = 0, f2) {
   const s = C.createBufferSource(); s.buffer = NB; s.playbackRate.value = 0.8 + Math.random() * 0.4;
   const bq = C.createBiquadFilter(); bq.type = type; bq.frequency.setValueAtTime(f, t0); if (f2) bq.frequency.exponentialRampToValueAtTime(f2, t0 + dur); bq.Q.value = q;
@@ -38,6 +47,7 @@ export function play(name, o = {}) {
   safe(() => {
     if (!C || C.state !== 'running') return;
     const t = C.currentTime, p = o.pan || 0, v = o.v ?? 1;
+    NOW = CHAINY.has(name) ? CHB : SFXB;
     switch (name) {
       case 'step': if (gap('step' + (o.k || 0), 0.11)) { noise(t, 0.07, o.wood ? 900 : 1500, 1.4, 0.12 * v, 'bandpass', p); noise(t, 0.05, 260, 0.9, 0.09 * v, 'lowpass', p); } break;
       case 'jump': noise(t, 0.16, 700, 0.8, 0.12, 'bandpass', p, 2200); noise(t, 0.05, 300, 1, 0.1, 'lowpass', p); break;
@@ -61,5 +71,5 @@ export function play(name, o = {}) {
 }
 // souffle de chute : un seul nœud, muet sauf pendant une chute rapide (pas de fond sonore permanent)
 let WG = null, WF = null;
-function wind() { const s = C.createBufferSource(); s.buffer = NB; s.loop = true; WF = C.createBiquadFilter(); WF.type = 'bandpass'; WF.Q.value = 0.6; WF.frequency.value = 500; WG = C.createGain(); WG.gain.value = 0; s.connect(WF).connect(WG).connect(OUT); s.start(); }
+function wind() { const s = C.createBufferSource(); s.buffer = NB; s.loop = true; WF = C.createBiquadFilter(); WF.type = 'bandpass'; WF.Q.value = 0.6; WF.frequency.value = 500; WG = C.createGain(); WG.gain.value = 0; s.connect(WF).connect(WG).connect(SFXB || OUT); s.start(); }
 export function fall(speed) { safe(() => { if (!WG) return; const k = Math.max(0, Math.min(1, (speed - 13) / 14)); WG.gain.setTargetAtTime(k * 0.22, C.currentTime, 0.12); WF.frequency.setTargetAtTime(400 + k * 900, C.currentTime, 0.2); }); }

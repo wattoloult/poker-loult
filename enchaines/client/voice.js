@@ -5,6 +5,7 @@ const ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:1
 const V = { pc: null, net: null, polite: false, making: false, ignore: false, mic: null, on: false, audio: null, level: 0, meLevel: 0, an: null, anMe: null, state: 'off', onChange: null };
 const safe = async (f) => { try { return await f(); } catch (e) { console.info('[vocal]', e?.message || e); } };
 const sig = (d) => V.net?.send({ t: 'rtc', d });
+const SET = { gain: 1, vol: 1, inId: '', outId: '' }; // réglages : gain du micro, volume du partenaire, périphériques
 
 // ouvre la liaison avec le partenaire (appelé quand le salon a deux grimpeurs) ; seat = notre place
 export function start(net, seat) {
@@ -15,7 +16,7 @@ export function start(net, seat) {
   pc.onnegotiationneeded = () => safe(async () => { V.making = true; await pc.setLocalDescription(); sig({ s: pc.localDescription }); V.making = false; });
   pc.ontrack = (e) => {
     const st = e.streams[0] || new MediaStream([e.track]);
-    if (!V.audio) { V.audio = new Audio(); V.audio.autoplay = true; }
+    if (!V.audio) { V.audio = new Audio(); V.audio.autoplay = true; V.audio.volume = SET.vol; if (SET.outId && V.audio.setSinkId) V.audio.setSinkId(SET.outId).catch(() => {}); }
     V.audio.srcObject = st; V.audio.play().catch(() => {});
     V.an = meter(st);
   };
@@ -35,16 +36,34 @@ export async function onSignal(d) {
 }
 export function stop() { safe(() => V.pc?.close()); V.pc = null; V.state = 'off'; V.an = null; if (V.audio) V.audio.srcObject = null; V.onChange?.(); }
 // micro : premier clic = autorisation du navigateur ; ensuite on coupe / rouvre (la piste reste, elle est simplement désactivée)
+async function openMic(fake) {
+  const raw = fake ? fakeStream() : await navigator.mediaDevices.getUserMedia({ audio: { deviceId: SET.inId ? { exact: SET.inId } : undefined, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  AC ||= new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume();
+  const src = AC.createMediaStreamSource(raw), dest = AC.createMediaStreamDestination(), g = AC.createGain(); g.gain.value = SET.gain; src.connect(g).connect(dest);
+  V.raw?.getTracks().forEach((t) => t.stop()); V.raw = raw; V.gain = g; V.mic = dest.stream; V.fake = !!fake;
+}
 export async function toggleMic(fake) {
   if (!V.mic) {
-    const st = await safe(() => (fake ? fakeStream() : navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })));
-    if (!st) return { ok: false, why: 'micro refusé ou absent' };
-    V.mic = st; V.anMe = meter(st); V.on = true; setMicTrack();
+    const ok = await safe(async () => { await openMic(fake); return true; });
+    if (!ok) return { ok: false, why: 'micro refusé ou absent' };
+    V.anMe = meter(V.mic); V.on = true; setMicTrack();
   } else { V.on = !V.on; for (const t of V.mic.getAudioTracks()) t.enabled = V.on; }
   V.onChange?.(); return { ok: true, on: V.on };
 }
+// réglages audio du vocal
+export function setMicGain(g) { SET.gain = g; if (V.gain) V.gain.gain.value = g; }
+export async function setInput(id) {
+  SET.inId = id || ''; if (!V.mic) return;
+  const on = V.on; await safe(async () => { await openMic(V.fake); V.anMe = meter(V.mic); for (const t of V.mic.getAudioTracks()) t.enabled = on; setMicTrack(); });
+}
+export function setOutput(id) { SET.outId = id || ''; if (V.audio?.setSinkId) V.audio.setSinkId(SET.outId).catch(() => {}); }
+export async function devices() {
+  const l = (await safe(() => navigator.mediaDevices.enumerateDevices())) || [];
+  const pick = (k) => l.filter((d) => d.kind === k).map((d, i) => ({ id: d.deviceId, label: d.label || (k === 'audioinput' ? 'Microphone ' : 'Haut-parleurs ') + (i + 1) }));
+  return { inputs: pick('audioinput'), outputs: pick('audiooutput') };
+}
 function setMicTrack() { const tr = V.pc?.getTransceivers().find((t) => t.receiver.track.kind === 'audio'); if (tr && V.mic) safe(() => tr.sender.replaceTrack(V.mic.getAudioTracks()[0])); }
-export function setVolume(v) { if (V.audio) V.audio.volume = Math.max(0, Math.min(1, v)); }
+export function setVolume(v) { SET.vol = Math.max(0, Math.min(1, v)); if (V.audio) V.audio.volume = SET.vol; }
 // niveau sonore (0..1) : qui parle (pastille sur l'étiquette du grimpeur)
 let AC = null;
 function meter(st) { try { AC ||= new (window.AudioContext || window.webkitAudioContext)(); const a = AC.createAnalyser(); a.fftSize = 256; AC.createMediaStreamSource(st).connect(a); return a; } catch { return null; } }

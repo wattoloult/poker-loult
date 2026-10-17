@@ -20,7 +20,7 @@ G.play = (id) => { G.course = id; return startLocal(); }; // tests / mode test
 G.tp = (i) => { if (G.mode !== 'local') return; G.W.cp = i; G.W.cpMax = Math.max(G.W.cpMax, i); spawnAt(G.W, i); Scene.onEvent(G.W, { k: 'respawn' }); };
 
 /* ------------------------------ réglages persistants ------------------------------ */
-const CFG = Object.assign({ name: '', vol: 0.8, sens: 1, invert: false }, safe(() => JSON.parse(localStorage.getItem('ch-cfg')), {}));
+const CFG = Object.assign({ name: '', vol: 0.8, sens: 1, invert: false, vMusic: 1, vSfx: 1, vChain: 1, vVoice: 1, vMic: 1, devIn: '', devOut: '' }, safe(() => JSON.parse(localStorage.getItem('ch-cfg')), {}));
 const saveCfg = () => safe(() => localStorage.setItem('ch-cfg', JSON.stringify(CFG)));
 
 /* ------------------------------ entrées ------------------------------ */
@@ -33,6 +33,7 @@ addEventListener('keydown', (e) => {
   if (!keys.has(e.code)) pressed.add(e.code);
   keys.add(e.code); Snd.unlock(); Music.unlock(); Sfx.load();
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
+  if (e.code === 'Escape' && $('#settings').classList.contains('on')) { $('#settings').classList.remove('on'); return; }
   if (e.code === 'Escape' && G.mode) togglePause();
   if (e.code === 'F3' || (e.code === 'KeyB' && e.ctrlKey)) { e.preventDefault(); G.debug = !G.debug; }
   if (e.code === 'KeyH' && G.mode) $('#help').classList.toggle('show');
@@ -438,6 +439,8 @@ document.addEventListener('click', (e) => {
   else if (id === 'r-leave') { net?.send({ t: 'leave' }); net?.setRoom(null); G.room = null; Voice.stop(); chatShow(false); show('online'); }
   else if (id === 'r-copy') { safe(() => navigator.clipboard.writeText($('#r-link').value)); toast('Lien copié : envoie-le à ton partenaire'); }
   else if (id === 'p-resume') togglePause(false);
+  else if (id === 'm-settings' || id === 'p-settings') openSettings();
+  else if (id === 'set-close') $('#settings').classList.remove('on');
   else if (id === 'p-cp') toCheckpoint();
   else if (id === 'e-next') toNext();
   else if (id === 'p-restart' || id === 'e-again') { $('#end').classList.remove('on'); restartFromStart(); }
@@ -450,8 +453,21 @@ function nameOk() {
   if (n !== CFG.name) { CFG.name = n; saveCfg(); net?.send({ t: 'hello', name: n, token: safe(() => sessionStorage.getItem('ch-token'), '') }); }
   return true;
 }
-$('#p-vol').value = CFG.vol; Snd.setVolume(CFG.vol); Music.setMaster(CFG.vol);
-$('#p-vol').addEventListener('input', (e) => { CFG.vol = +e.target.value; Snd.setVolume(CFG.vol); Music.setMaster(CFG.vol); saveCfg(); });
+// ---- réglages audio : général, musique, effets (saut, pas, mécanismes), chaîne, voix du partenaire, micro, périphériques ----
+const applyMix = () => { Snd.setVolume(CFG.vol); Music.setMaster(CFG.vol, CFG.vMusic); Snd.setMix(CFG.vSfx, CFG.vChain); Voice.setVolume(CFG.vVoice); Voice.setMicGain(CFG.vMic); };
+for (const [id, key] of [['#p-vol', 'vol'], ['#s-music', 'vMusic'], ['#s-sfx', 'vSfx'], ['#s-chain', 'vChain'], ['#s-voice', 'vVoice'], ['#s-mic', 'vMic']]) {
+  $(id).value = CFG[key]; $(id).addEventListener('input', (e) => { CFG[key] = +e.target.value; applyMix(); saveCfg(); });
+}
+applyMix(); Snd.setSink(CFG.devOut); Music.setSink(CFG.devOut); Voice.setOutput(CFG.devOut); Voice.setInput(CFG.devIn);
+async function fillDevices() {
+  const d = await Voice.devices(), fill = (sel, list, cur, first) => { $(sel).innerHTML = `<option value="">${esc(tr(first))}</option>` + list.map((x) => `<option value="${esc(x.id)}"${x.id === cur ? ' selected' : ''}>${esc(x.label)}</option>`).join(''); };
+  fill('#s-in', d.inputs, CFG.devIn, 'Par défaut'); fill('#s-out', d.outputs, CFG.devOut, 'Par défaut');
+  $('#s-out-row').style.display = Snd.canSink() ? '' : 'none';
+}
+$('#s-in').addEventListener('change', (e) => { CFG.devIn = e.target.value; Voice.setInput(CFG.devIn); saveCfg(); });
+$('#s-out').addEventListener('change', (e) => { CFG.devOut = e.target.value; Snd.setSink(CFG.devOut); Music.setSink(CFG.devOut); Voice.setOutput(CFG.devOut); saveCfg(); });
+safe(() => navigator.mediaDevices.addEventListener('devicechange', () => { if ($('#settings').classList.contains('on')) fillDevices(); }));
+const openSettings = () => { fillDevices(); $('#settings').classList.add('on'); };
 $('#p-sens').value = CFG.sens; $('#p-sens').addEventListener('input', (e) => { CFG.sens = +e.target.value; saveCfg(); });
 
 /* ------------------------------ mode playtest privé (?pt=CLÉ) ------------------------------ */

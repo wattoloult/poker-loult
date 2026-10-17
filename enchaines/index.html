@@ -27,6 +27,7 @@
     <button id="m-local" class="big alt">À deux sur ce clavier</button>
     <div id="l-len" class="seg links" title="Longueur de la chaîne"><span>Chaîne</span><button data-l="4.5"><i class="lk s"></i>Courte</button><button data-l="6.5" class="on"><i class="lk m"></i>Normale</button><button data-l="9"><i class="lk l"></i>Longue</button></div>
     <div class="row"><button id="m-help">Commandes</button><button id="m-board">Records</button></div>
+    <button id="m-settings">Réglages</button>
     <a class="hub" href="/">‹ Loult Party</a>
     <button id="m-lang" class="lang" aria-label="Language">English</button>
     <div class="mload"><i id="m-load"></i></div>
@@ -119,10 +120,26 @@
     <button id="p-cp">Revenir au point de passage</button>
     <button id="p-restart">Recommencer depuis le pied</button>
     <button id="p-help">Commandes</button>
-    <label>Volume <input id="p-vol" type="range" min="0" max="1" step="0.05"></label>
-    <label>Sensibilité caméra <input id="p-sens" type="range" min="0.3" max="2" step="0.1"></label>
+    <button id="p-settings">Réglages</button>
     <button id="p-debug" class="mini">Débogage (F3)</button>
     <button id="p-quit">Quitter</button>
+  </div>
+</div>
+
+<!-- réglages : audio (niveaux séparés, périphériques) et caméra -->
+<div id="settings" class="overlay">
+  <div class="card">
+    <h2>Réglages</h2>
+    <label>Volume général <input id="p-vol" type="range" min="0" max="1" step="0.05"></label>
+    <label>Musique et ambiance <input id="s-music" type="range" min="0" max="1" step="0.05"></label>
+    <label>Effets (saut, pas, mécanismes) <input id="s-sfx" type="range" min="0" max="1" step="0.05"></label>
+    <label>Chaîne <input id="s-chain" type="range" min="0" max="1" step="0.05"></label>
+    <label>Voix du partenaire <input id="s-voice" type="range" min="0" max="1" step="0.05"></label>
+    <label>Volume du micro <input id="s-mic" type="range" min="0" max="2" step="0.05"></label>
+    <label>Entrée audio (micro) <select id="s-in"></select></label>
+    <label id="s-out-row">Sortie audio <select id="s-out"></select></label>
+    <label>Sensibilité caméra <input id="p-sens" type="range" min="0.3" max="2" step="0.1"></label>
+    <button id="set-close" class="big">Fermer</button>
   </div>
 </div>
 

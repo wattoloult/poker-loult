@@ -217,3 +217,9 @@ body[data-screen="room"] #chat { left: 50%; transform: translateX(-50%); bottom:
 
 .lang { align-self: center; margin-top: 2px; padding: 4px 16px; font: 700 13px Grenze, serif; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.18); color: var(--bone2); border-radius: 3px; cursor: pointer; }
 .lang:hover { background: rgba(0,0,0,0.55); }
+
+#settings { z-index: 9; }
+#settings .card { width: min(440px, 100%); max-height: 92vh; overflow-y: auto; }
+#settings .card label { display: flex; flex-direction: row !important; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; font: 600 16px 'Grenze', serif; color: var(--bone2); }
+#settings .card input[type=range] { width: 52%; }
+#settings .card select { width: 52%; background: #1a1411; color: var(--bone2); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 3px; padding: 4px; font: 600 14px 'Grenze', serif; }
