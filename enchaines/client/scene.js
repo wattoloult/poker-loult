@@ -195,7 +195,7 @@ function headOnly(mesh) {
   const out = []; for (let t = 0; t < idx.count; t += 3) { const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2); if (ok[a] && ok[b] && ok[c]) out.push(a, b, c); }
   const ng = g.clone(); ng.setIndex(out); ng.clearGroups(); mesh.geometry = ng;
 }
-const ANIMS = ['Idle_Loop', 'Walk_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Jump_Start', 'Jump_Loop', 'Jump_Land', 'Crouch_Idle_Loop', 'NinjaJump_Idle_Loop', 'Hit_Knockback', 'Dance_Loop', 'Yes', 'Roll'];
+const ANIMS = ['Idle_Loop', 'Walk_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Jump_Start', 'Jump_Loop', 'Jump_Land', 'Crouch_Idle_Loop', 'NinjaJump_Idle_Loop', 'Hit_Knockback', 'Dance_Loop', 'Yes', 'Roll', 'Death01', 'LayToIdle'];
 function makeClimber(k) {
   const root = cloneSkinned(S.tpl[k ? 'f' : 'm']);
   const tint = new THREE.Color(k ? 0xc4dcff : 0xffe2c4), glow = new THREE.Color(k ? 0x06213f : 0x3a1800);
@@ -207,7 +207,7 @@ function makeClimber(k) {
   const g = new THREE.Group(); g.add(root);
   const mixer = new THREE.AnimationMixer(root), acts = {};
   for (const n of ANIMS) if (CLIPS[n]) { const a = mixer.clipAction(CLIPS[n]); a.enabled = true; a.setEffectiveWeight(0); a.play(); acts[n] = a; }
-  for (const n of ['Jump_Start', 'Jump_Land', 'Hit_Knockback', 'Yes', 'Roll']) if (acts[n]) { acts[n].setLoop(THREE.LoopOnce, 1); acts[n].clampWhenFinished = true; }
+  for (const n of ['Jump_Start', 'Jump_Land', 'Hit_Knockback', 'Yes', 'Roll', 'Death01', 'LayToIdle']) if (acts[n]) { acts[n].setLoop(THREE.LoopOnce, 1); acts[n].clampWhenFinished = true; }
   const bones = {}; root.traverse((o) => { if (o.isBone) bones[o.name] = o; });
   // repère de couleur au sol + marqueur de réception
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.55, 40), new THREE.MeshBasicMaterial({ color: COL[k], transparent: true, opacity: 0.85, depthWrite: false }));
@@ -332,17 +332,35 @@ function poseClimber(c, p, mate, W, dt, rp) {
   let a = ST_ANIM(p, spd);
   if (p.st === ST.AIR && p.dangling) a = 'NinjaJump_Idle_Loop';
   if (W.done) a = c.k ? 'Dance_Loop' : 'Yes';
-  if (p.land > 0.15 && c.lastSt === ST.AIR && p.st === ST.GROUND && c.lastVy < -11) setAnim(c, 'Jump_Land', 0.06, true);
+  if (p.downT > 0) {
+    const want = p.downT > 0.95 ? 'Death01' : 'LayToIdle';
+    if (c.cur !== want) { setAnim(c, want, 0.1, true); const ac = c.acts[want]; if (ac) { if (want === 'Death01') { ac.time = 1.45; ac.timeScale = 1.5; } else ac.timeScale = 1.53 / 0.95; } }
+  } else if (p.land > 0.15 && c.lastSt === ST.AIR && p.st === ST.GROUND && c.lastVy < -11) setAnim(c, 'Jump_Land', 0.06, true);
   else if (c.cur !== 'Jump_Land' || c.acts.Jump_Land.time > 0.35) setAnim(c, a, a === 'Jump_Start' ? 0.05 : 0.16);
   if (c.cur === 'Jog_Fwd_Loop') c.acts.Jog_Fwd_Loop.timeScale = Math.max(0.7, spd / 5.4);
   if (c.cur === 'Walk_Loop') c.acts.Walk_Loop.timeScale = Math.max(0.6, spd / 1.8);
   c.lastSt = p.st; c.lastVy = p.vy;
-  c.mixer.update(dt);
+  c.mixer.update(S.hitstop > 0 ? dt * 0.08 : dt); // arrêt sur image de l'impact
   // position et orientation (lissées : le rendu ne doit jamais trembler même si la physique corrige)
   c.g.position.set(rp.x, rp.y, rp.z);
-  let dy = p.yaw - c.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); c.yaw += dy * Math.min(1, dt * 16);
-  c.g.rotation.y = c.yaw;
-  if (p.st !== ST.ROPE && c.root.rotation.x) c.root.rotation.x *= Math.max(0, 1 - dt * 10); // fin du balancement de liane
+  const koFly = p.ko && p.st === ST.AIR && Math.hypot(p.vx, p.vz) > 1;
+  const wantYaw = koFly ? Math.atan2(-p.vx, -p.vz) : p.downT > 0 ? c.yaw : p.yaw;
+  let dy = wantYaw - c.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); c.yaw += dy * Math.min(1, dt * (koFly ? 30 : 16));
+  // COUP DE POING : armé (bras ramené en arrière, buste qui pivote à l'opposé), frappe (bras tendu vers le visage, buste qui tourne
+  // dans le coup, pas en avant), tenue, retour. sd = +1 main droite, -1 main gauche (tirée au hasard par la simulation)
+  let twist = 0, lunge = 0; const pt = p.pT;
+  if (pt != null) {
+    const sd = p.pSide ? 1 : -1, sm = (x) => x * x * (3 - 2 * x);
+    if (pt < 0.09) { const k = sm(pt / 0.09); twist = -sd * 0.42 * k; lunge = -0.06 * k; }
+    else if (pt < 0.16) { const k = sm((pt - 0.09) / 0.07); twist = sd * (-0.42 + 0.8 * k); lunge = -0.06 + 0.32 * k; }
+    else if (pt < 0.26) { twist = sd * 0.38; lunge = 0.26; }
+    else { const k = sm(Math.min(1, (pt - 0.26) / 0.24)); twist = sd * 0.38 * (1 - k); lunge = 0.26 * (1 - k); }
+  }
+  c.g.rotation.y = c.yaw + twist;
+  c.g.position.x += Math.sin(c.yaw) * lunge; c.g.position.z += Math.cos(c.yaw) * lunge;
+  if (koFly) c.root.rotation.x = Math.max(-1.5, c.root.rotation.x - dt * 7.5 * (S.hitstop > 0 ? 0.1 : 1)); // vrille vers l'arrière, jusqu'à l'horizontale
+  else if (p.st !== ST.ROPE && c.root.rotation.x) c.root.rotation.x *= Math.max(0, 1 - dt * 10); // fin du balancement de liane / de la vrille
+  { const a = c.root.rotation.x, h = 0.95; if (p.st !== ST.ROPE && a) c.root.position.set(0, h - h * Math.cos(a), -h * Math.sin(a)); else c.root.position.set(0, 0, 0); }
   // poses procédurales : bras vers le bord, le mur ou la chaîne
   c.root.updateMatrixWorld(true);
   // droite DU GRIMPEUR (face à fwd) : sans ce bon sens, la main gauche visait la droite (bras et jambes croisés à l'escalade)
@@ -377,6 +395,12 @@ function poseClimber(c, p, mate, W, dt, rp) {
   } else if (p.st === ST.GROUND && (p.brace || p.haul) && W.taut > 0.4) {
     const n = W.ch[p.id ? W.ch.length - 2 : 1]; const tgt = new THREE.Vector3(n.x, n.y, n.z);
     armTo(c, 'l', tgt, 0.8); armTo(c, 'r', tgt, 0.8);
+  }
+  if (pt != null && pt < 0.5 && (p.st === ST.GROUND || p.st === ST.AIR)) {
+    const sd = p.pSide ? 1 : -1, s = sd > 0 ? 'r' : 'l', o = sd > 0 ? 'l' : 'r';
+    const fist = pt < 0.09 ? at(sd * 0.34, 1.2, -0.32) : pt < 0.26 ? at(sd * 0.05, 1.5, 1.0) : at(sd * 0.3, 1.25 - (pt - 0.26), 0.25);
+    const k = pt < 0.26 ? 1 : Math.max(0, 1 - (pt - 0.26) / 0.24);
+    armTo(c, s, fist, k); armTo(c, o, at(-sd * 0.14, 1.45, 0.32), 0.8 * k); // l'autre poing en garde devant le menton
   }
   // repère au sol et marqueur de réception (là où l'on va retomber)
   const gr = groundBelow(W, p.x, p.y + 0.05, p.z, 60);
@@ -415,9 +439,28 @@ export function onEvent(W, e) {
   else if (e.k === 'jerk') { sparks(e.x, e.y, e.z, Math.min(18, 4 + e.v * 1.5)); shake(Math.min(0.35, e.v * 0.03)); }
   else if (e.k === 'grab' && p) sparks(p.x, p.y + 2, p.z, 3);
   else if (e.k === 'hit' && p) { sparks(e.x, e.y, e.z, 14); shake(0.3); }
+  else if (e.k === 'punch') { S.hitstop = 0.085; shake(0.55); impact(e.x, e.y, e.z, e.ux, e.uz); sparks(e.x, e.y, e.z, 10); }
+  else if (e.k === 'down' && p) { puff(e.x, e.y, e.z, 12, 0xd8c3a5, 0.55, 0.6); shake(0.18); stars(e.p); }
   else if (e.k === 'collapse') { const m = S.bodyMesh[e.b]; if (m) dropDebris(m); puff(e.x, e.y, e.z, 10, 0xb08a66, 0.6, -0.5); }
   else if (e.k === 'checkpoint') { const c = S.cps[e.cp]; if (c) { c.on = true; c.flash = 1.2; } puff(e.x, e.y, e.z, 16, 0xffd27a, 0.6, 2); }
   else if (e.k === 'respawn') { S.camSnap = true; for (const c of S.cl || []) c.err.set(0, 0, 0); }
+}
+// éclat blanc + onde de choc dans le sens du coup (sprites additifs, très courts)
+function impact(x, y, z, ux = 0, uz = 0) {
+  const f = sprite(0xffffff, 1.6); f.position.set(x, y, z); S.scene.add(f); S.fx.push({ o: f, t: 0, life: 0.14, v: new THREE.Vector3(), grow: 6 });
+  const r = sprite(0xffe0a0, 0.8); r.position.set(x, y, z); S.scene.add(r); S.fx.push({ o: r, t: 0, life: 0.32, v: new THREE.Vector3(ux * 6, 0.5, uz * 6), grow: 9 });
+  for (let i = 0; i < 6; i++) { const s = sprite(0xfff4d0, 0.18); s.position.set(x, y, z); S.scene.add(s); const a = (i / 6) * Math.PI * 2; S.fx.push({ o: s, t: 0, life: 0.28, v: new THREE.Vector3(ux * 7 + Math.cos(a) * 3, Math.sin(a) * 3 + 1, uz * 7 + Math.sin(a) * 3), g: 6, grow: 0 }); }
+}
+// étoiles qui tournent au-dessus de la tête du grimpeur sonné, le temps qu'il se relève
+function stars(k) { S.stars ||= []; for (let i = 0; i < 3; i++) { const s = sprite(0xffe066, 0.32); S.scene.add(s); S.stars.push({ o: s, k, a: (i / 3) * Math.PI * 2, t: 0 }); } }
+function stepStars(W, dt) {
+  if (!S.stars?.length) return;
+  for (let i = S.stars.length - 1; i >= 0; i--) {
+    const s = S.stars[i], p = W.pl[s.k], c = S.cl[s.k]; s.t += dt; s.a += dt * 6;
+    if (!p || !(p.downT > 0) || s.t > 2) { S.scene.remove(s.o); S.stars.splice(i, 1); continue; }
+    const hd = c.bones.Head; if (hd) hd.getWorldPosition(V); else V.set(p.x, p.y + 1.7, p.z);
+    s.o.position.set(V.x + Math.cos(s.a) * 0.35, V.y + 0.3 + Math.sin(s.a * 2) * 0.05, V.z + Math.sin(s.a) * 0.35);
+  }
 }
 function dropDebris(m) { const d = m.clone(true); S.scene.add(d); d.position.copy(m.position); S.debris.push({ o: d, t: 0, v: 0, r: (Math.random() - 0.5) * 2 }); }
 export function shake(a) { S.shake = Math.max(S.shake || 0, a); }
@@ -543,7 +586,9 @@ export function frame(W, dt, view = {}) {
   LV.update(W, dt, t); Sfx.listen(S.cam);
   // grimpeurs (positions de rendu lissées)
   const rp = W.pl.map((p, k) => { const c = S.cl[k]; c.err.multiplyScalar(Math.max(0, 1 - dt * 12)); return { x: p.x + c.err.x, y: p.y + c.err.y, z: p.z + c.err.z }; });
+  S.hitstop = Math.max(0, (S.hitstop || 0) - dt);
   for (let k = 0; k < 2; k++) poseClimber(S.cl[k], W.pl[k], W.pl[1 - k], W, dt, rp[k]);
+  stepStars(W, dt);
   // chaîne : courbe passant par les maillons de la simulation, attachée aux ceintures
   // maillons de rendu lissés : en ligne, l'instantané du serveur recale la chaîne 30 fois par seconde ; on la rejoint en douceur au lieu de sauter
   const C = W.ch, pts = S.curve.points, kc = S.chainInit ? Math.min(1, dt * 22) : 1; S.chainInit = true;

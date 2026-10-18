@@ -7,6 +7,7 @@ import * as Music from './music.js';
 import * as Snd from './audio.js';
 import * as Sfx from './sfx.js';
 import * as Voice from './voice.js';
+import * as Pings from './pings.js';
 import { createNet } from './net.js';
 import { t as tr, LANG, setLang, applyDom } from './i18n.js';
 
@@ -43,21 +44,21 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
 // touches du grimpeur 1 (réglables : clavier ou boutons de souris « Mouse0..4 ») ; défauts : E = tirer la chaîne, Z / X = tourner la caméra
-const KEYDEF = { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space'], brace: ['ShiftLeft'], pull: ['KeyE'], cup: ['KeyG'], drop: ['KeyC'], use: ['KeyF'], reset: ['KeyR'], camL: ['KeyZ'], camR: ['KeyX'] };
+const KEYDEF = { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space'], brace: ['ShiftLeft'], pull: ['KeyE'], cup: ['KeyG'], punch: ['KeyV'], drop: ['KeyC'], use: ['KeyF'], reset: ['KeyR'], camL: ['KeyZ'], camR: ['KeyX'] };
 const BIND = {}; const rebuildBind = () => { for (const a in KEYDEF) BIND[a] = CFG.keys?.[a] ?? KEYDEF[a]; };
 rebuildBind();
 const SCHEMES = {
   k1: BIND,
-  k2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], jump: ['Numpad0', 'ControlRight', 'Enter'], brace: ['ShiftRight', 'Numpad1'], pull: ['Numpad4', 'Slash'], cup: ['Numpad6', 'Quote'], drop: ['Numpad2', 'End'], use: ['Numpad5', 'Period'], reset: ['Numpad3', 'Backspace'] },
+  k2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], jump: ['Numpad0', 'ControlRight', 'Enter'], brace: ['ShiftRight', 'Numpad1'], pull: ['Numpad4', 'Slash'], cup: ['Numpad6', 'Quote'], punch: ['Numpad7', 'Semicolon'], drop: ['Numpad2', 'End'], use: ['Numpad5', 'Period'], reset: ['Numpad3', 'Backspace'] },
 };
 const anyKey = (l) => l.some((k) => keys.has(k)), anyPress = (l) => l.some((k) => pressed.has(k));
 const slot = [{ jc: 0, dc: 0, uc: 0 }, { jc: 0, dc: 0, uc: 0 }];
 function readInput(k, schemes, pads) {
-  let ax = 0, ay = 0, jump = false, brace = false, pull = false, cup = false, reset = false, jp = false, dp = false, up = false;
+  let ax = 0, ay = 0, jump = false, brace = false, pull = false, cup = false, punch = false, reset = false, jp = false, dp = false, up = false;
   for (const s of schemes) {
     const S = SCHEMES[s];
     ax += (anyKey(S.right) ? 1 : 0) - (anyKey(S.left) ? 1 : 0); ay += (anyKey(S.up) ? 1 : 0) - (anyKey(S.down) ? 1 : 0);
-    jump ||= anyKey(S.jump); brace ||= anyKey(S.brace); pull ||= anyKey(S.pull); cup ||= anyKey(S.cup || []); reset ||= anyKey(S.reset); jp ||= anyPress(S.jump); dp ||= anyPress(S.drop); up ||= anyPress(S.use);
+    jump ||= anyKey(S.jump); brace ||= anyKey(S.brace); pull ||= anyKey(S.pull); cup ||= anyKey(S.cup || []); punch ||= anyKey(S.punch || []); reset ||= anyKey(S.reset); jp ||= anyPress(S.jump); dp ||= anyPress(S.drop); up ||= anyPress(S.use);
   }
   for (const i of pads) {
     const gp = safe(() => navigator.getGamepads()[i], null); if (!gp) continue;
@@ -66,30 +67,57 @@ function readInput(k, schemes, pads) {
     const b = (n) => !!gp.buttons[n]?.pressed;
     const st = (G.padPrev ||= {})[i] ||= {};
     if (b(0) && !st.a) jp = true; if (b(1) && !st.b) dp = true; if (b(2) && !st.x) up = true; st.a = b(0); st.b = b(1); st.x = b(2);
-    jump ||= b(0); brace ||= b(5) || b(7) || b(4); pull ||= b(6); reset ||= b(3); cup ||= b(12); // gâchette gauche = tirer, croix haut = courte échelle
+    jump ||= b(0); brace ||= b(5) || b(7) || b(4); pull ||= b(6); reset ||= b(3); cup ||= b(12); punch ||= b(14); // gâchette gauche = tirer, croix haut = courte échelle, croix gauche = coup de poing
     const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0; if (Math.abs(rx) > 0.2 || Math.abs(ry) > 0.2) Scene.camInput(-rx * 0.04 * CFG.sens, ry * 0.025, 0);
   }
   if (jp) slot[k].jc++; if (dp) slot[k].dc++; if (up) slot[k].uc++;
   const l = Math.hypot(ax, ay); if (l > 1) { ax /= l; ay /= l; }
   // déplacement relatif à la caméra
   const yaw = Scene.controlYaw(k, G.W?.pl[G.mode === 'online' ? G.me ?? 0 : k], l > 0.2), c = Math.cos(yaw), s = Math.sin(yaw);
-  return { mx: ax * c - ay * s, mz: -ax * s - ay * c, jump, brace, pull, cup, reset, jc: slot[k].jc, dc: slot[k].dc, uc: slot[k].uc };
+  return { mx: ax * c - ay * s, mz: -ax * s - ay * c, jump, brace, pull, cup, punch, reset, jc: slot[k].jc, dc: slot[k].dc, uc: slot[k].uc };
 }
 // souris : glisser = tourner la caméra, molette = recul
 let drag = null;
 addEventListener('pointerdown', (e) => {
   Music.unlock(); Snd.unlock(); Sfx.load();
   if (G.capturing && G.capturing.armed) { e.preventDefault(); endCapture('Mouse' + e.button); return; }
+  if (e.button === 1 && e.target.id === 'gl' && G.mode && G.W && !Object.values(BIND).some((l) => l.includes('Mouse1'))) { e.preventDefault(); pingDown(e); return; } // molette : pings (sauf si une action y est réglée)
   if (e.target.id === 'gl') { drag = { x: e.clientX, y: e.clientY }; const k = 'Mouse' + e.button; if (!keys.has(k)) pressed.add(k); keys.add(k); }
 });
 addEventListener('mousedown', (e) => { if (e.button > 0 && (e.target.id === 'gl' || G.capturing)) e.preventDefault(); }); // clic molette / boutons latéraux : pas de défilement ni de navigation
-addEventListener('pointerup', (e) => { keys.delete('Mouse' + e.button); });
+addEventListener('pointerup', (e) => { keys.delete('Mouse' + e.button); if (e.button === 1 && PW.down) pingUp(e); });
 addEventListener('pointercancel', () => { for (let b = 0; b < 5; b++) keys.delete('Mouse' + b); });
-addEventListener('pointermove', (e) => { if (!drag) return; Scene.camInput(-(e.clientX - drag.x) * 0.006 * CFG.sens, (e.clientY - drag.y) * 0.004 * (CFG.invert ? -1 : 1), 0); drag = { x: e.clientX, y: e.clientY }; });
+addEventListener('pointermove', (e) => { if (PW.open) wheelHover(e); if (!drag) return; Scene.camInput(-(e.clientX - drag.x) * 0.006 * CFG.sens, (e.clientY - drag.y) * 0.004 * (CFG.invert ? -1 : 1), 0); drag = { x: e.clientX, y: e.clientY }; });
 addEventListener('pointerup', () => { drag = null; });
 addEventListener('contextmenu', (e) => { if (e.target.tagName !== 'INPUT') e.preventDefault(); }); // pas de menu du clic droit dans le jeu
 addEventListener('wheel', (e) => { if (G.mode) Scene.camInput(0, 0, Math.sign(e.deltaY) * 1.2); }, { passive: true });
 function camKeys(dt) { const r = (anyKey(BIND.camR) ? 1 : 0) - (anyKey(BIND.camL) ? 1 : 0); if (r) Scene.camInput(-r * 1.8 * dt * CFG.sens, 0, 0); }
+
+/* ------------------------------ pings (client/pings.js) : clic molette = « Ici ! » ; molette maintenue = roue ------------------------------ */
+const PW = { down: false, open: false, x: 0, y: 0, t: null, pt: null, sel: null };
+const WHEEL = ['here', 'go', 'stop', 'come']; // haut, droite, bas, gauche
+const mySeat = () => (G.mode === 'online' ? G.me : 0);
+function pingDown(e) {
+  if (mySeat() == null) return; // spectateur
+  PW.down = true; PW.x = e.clientX; PW.y = e.clientY; PW.pt = Pings.pickPoint(e.clientX, e.clientY, G.W, mySeat());
+  clearTimeout(PW.t); PW.t = setTimeout(() => { if (!PW.down) return; PW.open = true; PW.sel = null; const w = $('#wheel'); w.style.left = PW.x + 'px'; w.style.top = PW.y + 'px'; w.classList.add('on'); w.querySelectorAll('[data-k]').forEach((x) => x.classList.remove('sel')); }, 220);
+}
+function wheelHover(e) {
+  const dx = e.clientX - PW.x, dy = e.clientY - PW.y;
+  PW.sel = Math.hypot(dx, dy) < 26 ? null : WHEEL[(Math.round(Math.atan2(dx, -dy) / (Math.PI / 2)) + 4) % 4];
+  $('#wheel').querySelectorAll('[data-k]').forEach((x) => x.classList.toggle('sel', x.dataset.k === PW.sel));
+}
+function pingUp(e) {
+  clearTimeout(PW.t); PW.down = false;
+  const k = PW.open ? PW.sel : 'here'; PW.open = false; $('#wheel').classList.remove('on');
+  if (k && PW.pt) sendPing(k, PW.pt);
+}
+function sendPing(k, p) {
+  const seat = mySeat(); if (seat == null || !G.W) return;
+  const at = k === 'stop' || k === 'come' ? G.W.pl[seat] : p;
+  Pings.show(k, seat, at.x, at.y, at.z);
+  if (G.mode === 'online') net?.send({ t: 'mark', k, x: Math.round(at.x * 100) / 100, y: Math.round(at.y * 100) / 100, z: Math.round(at.z * 100) / 100 });
+}
 
 /* ------------------------------ écrans ------------------------------ */
 function show(id) { for (const s of $$('.screen')) s.classList.toggle('on', s.id === id); document.body.dataset.screen = id || 'game'; }
@@ -147,7 +175,7 @@ async function startLocal() {
 function freshWorld() { const W = createWorld({ L: G.L, course: G.course }); if (G.solo) { W.alone = true; G.run = []; G.splits = []; G.forceReset = 0; } return W; }
 const quant = (I) => decIn(encIn(0, I)); // entrées arrondies comme celles envoyées au serveur : le rejeu est identique au pas près
 function recStep(I) { const e = encIn(0, I), l = G.run[G.run.length - 1]; if (l && l.every((v, k) => k === 0 || v === e[k])) l[0]++; else { e[0] = 1; G.run.push(e); } }
-function stopGame() { if (G.mode) setTimeout(backdrop, 0); G.mode = null; G.solo = false; G.W = null; $('#hud').classList.remove('on'); G.paused = false; $('#pause').classList.remove('on'); }
+function stopGame() { Pings.clear(); if (G.mode) setTimeout(backdrop, 0); G.mode = null; G.solo = false; G.W = null; $('#hud').classList.remove('on'); G.paused = false; $('#pause').classList.remove('on'); }
 function togglePause(v) {
   G.paused = v ?? !G.paused; $('#pause').classList.toggle('on', G.paused);
   $('#p-restart').style.display = G.mode === 'online' && G.room && G.room.host !== G.room.you ? 'none' : '';
@@ -175,7 +203,7 @@ function toCheckpoint() {
 }
 
 /* ------------------------------ événements -> sons et effets ------------------------------ */
-const GLOBAL = new Set(['checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
+const GLOBAL = new Set(['punch', 'down', 'checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
 function handleEvents(W, list, fromServer) {
   for (const e of list) {
     if (G.mode === 'online' && GLOBAL.has(e.k) !== !!fromServer) continue; // en ligne : le serveur annonce les événements communs, la prédiction les gestes
@@ -189,6 +217,9 @@ function handleEvents(W, list, fromServer) {
       case 'jerk': { const n = W.ch[6], v = Math.min(1, 0.35 + e.v / 9); if (Sfx.chain('jerk', n.x, n.y, n.z, { v, rate: 0.92 + Math.random() * 0.16 })) Sfx.chain('clink', n.x, n.y, n.z, { v: v * 0.6, key: 'j' }); else Snd.play('jerk', { v: e.v }); break; }
       case 'slack': { const n = W.ch[6]; Sfx.chain('drop', n.x, n.y, n.z, { v: 0.35, gap: 0.5 }); break; } // la chaîne retombe, détendue
       case 'hit': Snd.play('hit', { pan }); break;
+      case 'swing': Snd.play('swing', { pan }); break;
+      case 'punch': Snd.play('punch', { pan: e.v != null ? panOf(W.pl[e.v]) : 0 }); break;
+      case 'down': Snd.play('thud', { pan }); break;
       case 'crack': Snd.play('crack'); break;
       case 'collapse': Snd.play('collapse'); break;
       case 'checkpoint': Snd.play('checkpoint'); { const t = Scene.S.cps?.[e.cp]?.g.position; if (t) Sfx.one('totem_ignite', t.x, t.y + 2, t.z, { v: 0.9 }); } // le totem s'embrase
@@ -259,7 +290,7 @@ function loop(now) {
     footsteps(G.W, dt);
     Scene.frame(G.W, dt, { me: G.me });
     Scene.debugDraw(G.W, G.debug);
-    hud(G.W, dt);
+    hud(G.W, dt); Pings.update(G.W, dt, G.mode === 'online' ? G.me : 0);
     if (G.W.done && !G.done) { G.done = true; setTimeout(() => showEnd(G.W), 4500); }
   }
 }
@@ -365,8 +396,8 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 // la liste des salons ouverts se met à jour toute seule tant qu'on est sur l'écran « Jouer en ligne » (avant : une seule demande à l'ouverture, un salon créé ensuite n'apparaissait qu'après avoir cliqué sur ↻)
 setInterval(() => { if (document.body.dataset.screen === 'online' && net?.up) net.send({ t: 'list' }); }, 2500);
 let net = null;
-const encIn = (ct, I) => [ct, Math.round(I.mx * 100) / 100, Math.round(I.mz * 100) / 100, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0) | (I.cup ? 16 : 0), I.jc, I.dc, I.uc || 0];
-const decIn = (a) => (a ? { mx: a[1], mz: a[2], jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), jc: a[4], dc: a[5], uc: a[6] || 0 } : IDLE);
+const encIn = (ct, I) => [ct, Math.round(I.mx * 100) / 100, Math.round(I.mz * 100) / 100, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0) | (I.cup ? 16 : 0) | (I.punch ? 32 : 0), I.jc, I.dc, I.uc || 0];
+const decIn = (a) => (a ? { mx: a[1], mz: a[2], jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), punch: !!(a[3] & 32), jc: a[4], dc: a[5], uc: a[6] || 0 } : IDLE);
 function getNet() {
   if (net) return net;
   net = createNet(() => CFG.name || 'Grimpeur');
@@ -374,6 +405,7 @@ function getNet() {
   net.on('room', (m) => { G.room = m; net.setRoom(m.code); renderRoom(m); if (m.phase === 'lobby' && !G.mode) show('room'); chatShow(true);
     if (m.you != null && m.players.length === 2) Voice.start(net, m.you); else Voice.stop(); }); // chat vocal : liaison directe dès que le salon a ses deux grimpeurs
   net.on('chat', (m) => chatAdd(m));
+  net.on('mark', (m) => { if (G.mode === 'online' && m.seat !== G.me) Pings.show(m.k, m.seat, m.x, m.y, m.z); }); // ping du partenaire
   net.on('rtc', (m) => Voice.onSignal(m.d));
   net.on('rooms', (m) => renderRooms(m.list));
   net.on('hi', (m) => { Voice.setIce(m.ice); if (G.pt?.key) net.send({ t: 'pt', key: G.pt.key }); if (document.body.dataset.screen === 'board') askBoard(); if (document.body.dataset.screen === 'online') net.send({ t: 'list' }); });
@@ -535,7 +567,7 @@ safe(() => navigator.mediaDevices.addEventListener('devicechange', () => { if ($
 let LAYOUT = null; safe(() => navigator.keyboard?.getLayoutMap?.().then((l) => { LAYOUT = l; refreshKeys(); }));
 const SPECIAL = { Space: 'Espace', ShiftLeft: 'Maj gauche', ShiftRight: 'Maj droit', ControlLeft: 'Ctrl gauche', ControlRight: 'Ctrl droit', Enter: 'Entrée', Escape: 'Échap', Mouse0: 'Clic gauche', Mouse1: 'Clic molette', Mouse2: 'Clic droit', Mouse3: 'Souris 4', Mouse4: 'Souris 5', Tab: 'Tab', Backquote: '²' };
 const keyLabel = (code) => !code ? tr('non assignée') : SPECIAL[code] ? tr(SPECIAL[code]) : /^Key[A-Z]$/.test(code) ? (LAYOUT?.get(code) || code.slice(3)).toUpperCase() : /^Digit\d$/.test(code) ? code.slice(5) : LAYOUT?.get(code)?.toUpperCase() || code.replace('Numpad', 'Pavé ').replace('Arrow', 'Flèche ');
-const KEYROWS = [['up', 'Haut'], ['down', 'Bas'], ['left', 'Gauche'], ['right', 'Droite'], ['jump', 'Sauter'], ['brace', "S'arc-bouter"], ['pull', 'Tirer la chaîne'], ['cup', 'Courte échelle'], ['drop', 'Lâcher la prise'], ['use', 'Interagir'], ['reset', 'Retour au point de passage'], ['camL', 'Caméra gauche'], ['camR', 'Caméra droite']];
+const KEYROWS = [['up', 'Haut'], ['down', 'Bas'], ['left', 'Gauche'], ['right', 'Droite'], ['jump', 'Sauter'], ['brace', "S'arc-bouter"], ['pull', 'Tirer la chaîne'], ['cup', 'Courte échelle'], ['punch', 'Coup de poing'], ['drop', 'Lâcher la prise'], ['use', 'Interagir'], ['reset', 'Retour au point de passage'], ['camL', 'Caméra gauche'], ['camR', 'Caméra droite']];
 function refreshKeys() {
   for (const el of $$('[data-bind]')) el.textContent = keyLabel(BIND[el.dataset.bind]?.[0]);
   const box = $('#s-keys'); if (!box) return;

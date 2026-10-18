@@ -65,6 +65,13 @@ export function play(name, o = {}) {
       case 'respawn': noise(t, 0.7, 400, 0.6, 0.12, 'bandpass', 0, 3000); tone(t + 0.1, 392, 0.9, 0.06, 'sine'); break;
       case 'finish': [0, 4, 7, 12, 16, 19, 24].forEach((s, i) => { const f = 392 * 2 ** (s / 12); tone(t + i * 0.11, f, 1.6, 0.08, 'triangle'); tone(t + i * 0.11, f * 1.5, 1.1, 0.03, 'sine'); }); break;
       case 'ui': tone(t, 880, 0.08, 0.05, 'triangle'); break;
+      case 'swing': noise(t, 0.16, 900, 1.6, 0.16, 'bandpass', p, 2600); break; // souffle du poing
+      case 'punch': tone(t, 140, 0.22, 0.55, 'sine', p, 42); noise(t, 0.09, 2400, 0.9, 0.5, 'bandpass', p); noise(t, 0.2, 320, 0.7, 0.45, 'lowpass', p); tone(t + 0.005, 520, 0.05, 0.18, 'square', p, 180); break; // impact sourd + claque
+      case 'thud': noise(t, 0.28, 160, 0.7, 0.5, 'lowpass', p); tone(t, 90, 0.3, 0.35, 'sine', p, 40); noise(t + 0.09, 0.12, 700, 1, 0.12, 'bandpass', p); break; // corps qui tombe
+      case 'ping': tone(t, 1320, 0.18, 0.12, 'sine', p); tone(t + 0.09, 1760, 0.26, 0.11, 'sine', p); break;
+      case 'tick': tone(t, 740, 0.12, 0.16, 'triangle', p); break;
+      case 'go': tone(t, 988, 0.35, 0.14, 'triangle', p); tone(t, 1480, 0.35, 0.1, 'sine', p); tone(t + 0.06, 1976, 0.3, 0.08, 'sine', p); break;
+      case 'stop': tone(t, 330, 0.14, 0.2, 'square', p); tone(t + 0.17, 262, 0.2, 0.2, 'square', p); break;
       case 'portal': noise(t, 1.4, 300, 0.7, 0.25, 'bandpass', 0, 4200); [0, 5, 9, 12, 17].forEach((s, i) => tone(t + 0.1 + i * 0.08, 330 * 2 ** (s / 12), 1.6, 0.06, 'sine')); break;
     }
   });

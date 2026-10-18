@@ -1,7 +1,7 @@
 // LES ENCHAÎNÉS — serveur de salons et de parties (2 grimpeurs + spectateurs). AUTORITÉ TOTALE : la physique des deux grimpeurs
 // et de la chaîne tourne ici (120 pas/s, core/sim.js) ; chaque client n'envoie que ses entrées et prédit en les rejouant.
 // Service : systemd `enchaines-mm`, Caddy route /enchaines-ws* -> PORT (8807). Classement : DATA_DIR/best.json (hors des fichiers servis), lu par le message `board`.
-// client -> serveur : hello {name, token} · list · board · create {L} · join {code} · leave · cfg {L} (hôte) · start (hôte) · restart (hôte) · cp · i {a:[[ct,mx,mz,bits,jc,dc],...]} · ping {n}
+// pings : mark {k, x, y, z} -> relayé {t:'mark', seat, k, x, y, z} ; client -> serveur : hello {name, token} · list · board · create {L} · join {code} · leave · cfg {L} (hôte) · start (hôte) · restart (hôte) · cp · i {a:[[ct,mx,mz,bits,jc,dc],...]} · ping {n}
 // speedrun solo : POST /enchaines-ws/solo {course, name, run} -> le serveur rejoue la partie (core/replay.js, dans un worker) et la classe ; board {course, solo:1}
 // serveur -> client : hi {id} · rooms {list} · board {list} · room {...} · start {seat, names, L, s} · s {w, ack:[a0,a1], in:[i0,i1], e:[...]} (30/s) · end {board, rank} · left · err {m} · pong
 import http from 'node:http';
@@ -48,8 +48,8 @@ const live = (r) => r.people.filter((p) => !p.gone);
 function newCode() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; for (;;) { let c = ''; for (let i = 0; i < 4; i++) c += A[crypto.randomInt(A.length)]; if (!rooms.has(c)) return c; } }
 const num = (v, a, b) => (Number.isFinite(+v) ? Math.max(a, Math.min(b, +v)) : 0);
 const cnt = (v) => (Number.isInteger(v) && v >= 0 && v < 1e9 ? v : 0);
-const decIn = (a) => ({ mx: num(a[1], -1, 1), mz: num(a[2], -1, 1), jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), jc: cnt(a[4]), dc: cnt(a[5]), uc: cnt(a[6]) });
-const encIn = (I) => (I ? [0, I.mx, I.mz, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0) | (I.cup ? 16 : 0), I.jc, I.dc, I.uc || 0] : null);
+const decIn = (a) => ({ mx: num(a[1], -1, 1), mz: num(a[2], -1, 1), jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), punch: !!(a[3] & 32), jc: cnt(a[4]), dc: cnt(a[5]), uc: cnt(a[6]) });
+const encIn = (I) => (I ? [0, I.mx, I.mz, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0) | (I.cup ? 16 : 0) | (I.punch ? 32 : 0), I.jc, I.dc, I.uc || 0] : null);
 
 /* ------------------------------ salons ------------------------------ */
 function roomView(r, you) {
@@ -105,7 +105,7 @@ function startGame(r) {
   for (const ws of r.spect) send(ws, startMsg(r, null));
   pushRoom(r);
 }
-const KEEP = new Set(['checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
+const KEEP = new Set(['punch', 'down', 'checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
 function update(r, dt) {
   if (r.phase !== 'play' || !r.W) return;
   r.acc += dt; let n = 0;
@@ -193,6 +193,11 @@ wss.on('connection', (ws) => {
       case 'chat': { // chat texte du salon (joueurs et spectateurs), 140 caractères, au plus un message toutes les 0,6 s
         const txt = clean(m.m, 140), now = Date.now(); if (!r || !txt || now - (ws.chatT || 0) < 600) break; ws.chatT = now;
         cast(r, { t: 'chat', name: ws.name || 'Grimpeur', seat: p ? p.seat : null, m: txt }); break;
+      }
+      case 'mark': { // ping d'un grimpeur (Ici, 3-2-1, STOP, Viens) : relayé au partenaire et aux spectateurs, au plus ~3 par seconde
+        const now = Date.now(); if (!r || !p || !['here', 'go', 'stop', 'come'].includes(m.k) || now - (ws.markT || 0) < 300) break; ws.markT = now;
+        const c = (v) => (Number.isFinite(+v) ? Math.max(-5000, Math.min(5000, +v)) : 0), o = JSON.stringify({ t: 'mark', seat: p.seat, k: m.k, x: c(m.x), y: c(m.y), z: c(m.z) });
+        for (const q of r.people) if (q.ws && q.ws !== ws) send(q.ws, o); for (const s of r.spect) send(s, o); break;
       }
       case 'rtc': { // chat vocal : le serveur ne fait que relayer la négociation WebRTC entre les deux grimpeurs (l'audio passe en direct)
         if (!r || !p || typeof m.d !== 'object' || JSON.stringify(m.d).length > 12000) break;

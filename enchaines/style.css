@@ -170,6 +170,24 @@ input[type=range] { padding: 0; accent-color: var(--ember); box-shadow: none; ba
 #split { position: absolute; left: 50%; top: 66px; transform: translateX(-50%); display: flex; gap: 12px; align-items: baseline; font: 800 24px 'Grenze'; padding: 4px 16px; border-radius: 4px; background: var(--hide); box-shadow: var(--seam), 0 6px 16px rgba(0, 0, 0, 0.6); font-variant-numeric: tabular-nums; opacity: 0; pointer-events: none; }
 #split i { font-style: normal; font-size: 20px; } #split .ahead { color: #6fe08a; } #split .behind { color: #ff6a5a; }
 #split.show { animation: zone 3.2s ease forwards; }
+/* pings : étiquettes à la couleur du joueur, roue de la molette, compte à rebours */
+#pings { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.ping { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; font: 800 15px 'Grenze'; color: #fff; white-space: nowrap; text-shadow: 0 2px 0 #000; will-change: transform; }
+.ping i { font-style: normal; display: grid; place-items: center; min-width: 40px; height: 40px; padding: 0 8px; border-radius: 20px; background: var(--c); color: #1a0f08; font-size: 22px; text-shadow: none; box-shadow: 0 0 0 3px #120c08, 0 0 18px var(--c); animation: pingpop 0.9s ease-in-out infinite alternate; }
+.ping.k-go i { font-size: 15px; } .ping.k-stop i { font-size: 24px; background: #ff4a3a; box-shadow: 0 0 0 3px #120c08, 0 0 0 6px var(--c), 0 0 22px #ff4a3a; }
+.ping b { padding: 1px 8px; border-radius: 3px; background: rgba(12, 8, 6, 0.75); border-bottom: 2px solid var(--c); }
+.ping small { font: 700 12px 'Grenze'; color: var(--bone2); } .ping small:empty { display: none; }
+.ping.out b, .ping.out small { display: none; } .ping.out::after { content: '▲'; position: absolute; top: 50%; left: 50%; color: var(--c); font-size: 18px; transform: translate(-50%, -50%) rotate(calc(var(--a) + 90deg)) translateY(-34px); }
+@keyframes pingpop { from { transform: scale(1); } to { transform: scale(1.12); } }
+#countdown { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%); font: 900 150px/1 'Grenze Gotisch'; color: var(--c); text-shadow: 0 6px 0 #120c08, 0 0 40px var(--c); opacity: 0; pointer-events: none; }
+#countdown.show { animation: cd 0.8s cubic-bezier(.2, 1.6, .4, 1) forwards; }
+@keyframes cd { 0% { opacity: 0; transform: translate(-50%, -50%) scale(2.2); } 25% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.85); } }
+#wheel { position: fixed; width: 230px; height: 230px; margin: -115px 0 0 -115px; border-radius: 50%; display: none; z-index: 9; pointer-events: none;
+  background: radial-gradient(circle, rgba(10, 7, 5, 0.25) 0 26px, rgba(18, 12, 8, 0.82) 27px 112px, transparent 113px); box-shadow: 0 0 0 2px rgba(214, 170, 110, 0.35) inset; }
+#wheel.on { display: block; animation: wheelin 0.12s ease-out; } @keyframes wheelin { from { transform: scale(0.6); opacity: 0; } }
+#wheel span { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 2px; font: 800 14px 'Grenze'; color: var(--bone2); transition: 0.1s; transform: translate(-50%, -50%); }
+#wheel span i { font-style: normal; font-size: 24px; } #wheel span.sel { color: #fff; transform: translate(-50%, -50%) scale(1.25); text-shadow: 0 0 12px var(--ember2); }
+#wheel .n { left: 50%; top: 22%; } #wheel .e { left: 79%; top: 50%; } #wheel .s { left: 50%; top: 78%; } #wheel .w { left: 21%; top: 50%; }
 label.chk { flex-direction: row; align-items: center; gap: 8px; }
 #e-sub { gap: 8px; } #e-sub input { flex: 1; }
 #dbg { position: absolute; left: 60px; top: 70px; margin: 0; font: 12px/1.4 ui-monospace, monospace; background: rgba(0, 0, 0, 0.7); padding: 8px; border-radius: 4px; text-shadow: none; display: none; }

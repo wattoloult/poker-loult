@@ -227,6 +227,10 @@ export const EN = {
   "Le bélier balaie la poutre : attendez qu'il reparte, puis traversez": "The ram sweeps the beam: wait for it to swing away, then cross",
   "Charybde : les îlots tournent autour du gouffre. Sautez quand le suivant passe près de vous": "Charybdis: the islets circle the whirlpool. Jump when the next one passes close",
   "Les colonnes cannelées s'escaladent ; d'un chapiteau, sautez de barre en barre": "The fluted columns can be climbed; from a capital, jump from bar to bar",
+  // ---- pings et coup de poing ----
+  "Ici !": "Here!", "Top départ": "Countdown", "STOP, attends !": "STOP, wait!", "STOP": "STOP", "Viens !": "Come!", "GO !": "GO!", "Coup de poing": "Punch",
+  "coup de poing (il faut être tout près)": "punch (you have to be right next to them)", "Clic molette": "Middle click",
+  "ping « Ici ! » · maintenu : roue (3-2-1, STOP, Viens)": "\"Here!\" ping · hold: wheel (3-2-1, STOP, Come)",
   // ---- speedrun solo ----
   "Seul : saute, puis appuie encore sur Espace en l'air (second saut) pour attraper le rebord": "Solo: jump, then press Space again in the air (double jump) to grab the ledge",
   "Seul : allume les trois balises d'affilée en courant (F), elles brûlent juste assez longtemps": "Solo: light the three beacons in a row while running (F), they burn just long enough",

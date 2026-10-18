@@ -229,3 +229,24 @@ test("courte échelle : pas de relances infinies en l'air, et bouger annule les 
   const bx = B.x; run(W, 120, () => IDLE, () => ({ ...IDLE, cup: true, mx: 1 }));
   assert.ok(!B.cup && B.x > bx + 2, 'avec G enfoncé, pousser une direction fait marcher : x ' + bx.toFixed(1) + ' -> ' + B.x.toFixed(1));
 });
+
+test("coup de poing : main gauche ou droite au hasard, le partenaire à portée est éjecté, tombe au sol puis se relève ; hors de portée rien", () => {
+  const W = createWorld(); run(W, 30); const [A, B] = W.pl; Object.assign(A, { x: B.x - 1.0, z: B.z }); layChain(W); run(W, 30);
+  const bx = B.x; const ev = [];
+  for (let i = 0; i < 120 * 4; i++) { stepWorld(W, [{ ...IDLE, punch: i < 6 }, IDLE]); for (const e of W.ev) ev.push([i, e.k]); }
+  const k = ev.map((e) => e[1]);
+  assert.ok(k.includes('swing') && k.includes('punch'), 'coup porté : ' + k.join(','));
+  assert.ok(k.includes('down') && k.includes('getup'), 'au sol puis relevé : ' + k.join(','));
+  assert.ok(B.x > bx + 1.2, 'éjecté vers l\'arrière : ' + bx.toFixed(2) + ' -> ' + B.x.toFixed(2));
+  // au sol, il ne peut ni bouger ni sauter
+  const W2 = createWorld(); run(W2, 30); const [A2, B2] = W2.pl; Object.assign(A2, { x: B2.x - 1.0 }); layChain(W2); run(W2, 30);
+  run(W2, 6, () => ({ ...IDLE, punch: true }));
+  let downX = null; for (let i = 0; i < 240; i++) { stepWorld(W2, [IDLE, { ...IDLE, mx: -1, jc: i >> 4 }]); if (B2.downT > 0 && B2.downT < P.DOWN_T - 0.4 && downX == null) downX = B2.x; if (B2.downT > 0.05 && downX != null) assert.ok(Math.abs(B2.x - downX) < 0.05 && B2.st === ST.GROUND, 'immobile au sol'); }
+  assert.ok(downX != null, 'il est bien passé au sol');
+  // hors de portée : rien
+  const W3 = createWorld(); run(W3, 30); const [A3, B3] = W3.pl; Object.assign(A3, { x: B3.x - 2.5 }); layChain(W3); run(W3, 30);
+  run(W3, 120, (i) => ({ ...IDLE, punch: i < 6 })); assert.ok(!B3.ko && !B3.downT && B3.st === ST.GROUND, 'trop loin : rien');
+  // les deux mains sortent
+  const sides = new Set(); for (let t = 0; t < 40; t++) { const W4 = createWorld(); W4.tick = t * 37; stepWorld(W4, [{ ...IDLE, punch: true }, IDLE]); sides.add(W4.pl[0].pSide); }
+  assert.deepEqual([...sides].sort(), [0, 1], 'gauche et droite');
+});

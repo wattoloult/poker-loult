@@ -17,7 +17,8 @@ export const P = {
   WJ_OUT: 5.6, WJ_UP: 8.2,                      // saut depuis un mur ou un rebord
   STA_CLIMB: 1 / 7, STA_HANG: 1 / 16, STA_LOAD: 1 / 5, STA_ROPE: 1 / 6, STA_REGEN: 0.6,
   PULL_V: 2.6, DRAG_V: 0.9, TOW_V: 3.2, HAUL_MOVE: 0.3, HAUL_SLIP: 0.45, STA_HAUL: 1 / 4.5, // tirer la chaîne : petits pas, on glisse vers le partenaire (HAUL_SLIP x charge), ça épuise                     // au sol avec un partenaire suspendu : vitesse en le hissant / glissade si on ne s'arc-boute pas
-  KNOCK: 7, CUP_V: 12.6, CUP_R: 1.25, // courte échelle : élan donné par les mains jointes (apex ~3,4 m, comme debout sur la tête puis sauter), portée
+  KNOCK: 7, PUNCH_R: 1.45, PUNCH_HIT: 0.13, PUNCH_CD: 0.75, PUNCH_V: 8.5, PUNCH_VY: 6.2, DOWN_T: 1.5, // coup de poing : portée, instant de l'impact, recharge, éjection, temps au sol
+  CUP_V: 12.6, CUP_R: 1.25, // courte échelle : élan donné par les mains jointes (apex ~3,4 m, comme debout sur la tête puis sauter), portée
   ROPE_REACH: 0.7, ROPE_PUMP: 22, ROPE_VMAX: 9, ROPE_CLIMB: 1.6, ROPE_JUMP: 6, ROPE_STA: 1 / 22, BAR_FWD: 5.8, BAR_UP: 7.4, USE_R: 1.9,
 };
 export const CH = { N: 12, L: 6.5, MIN: 1.6, ITER: 16, NODE_G: 0.6, DAMP: 0.996, CLIMB: 1.5, HAUL: 1.9, GROW: 2.2, MAXDV: 18 };
@@ -334,7 +335,7 @@ const CD = { x: 0, y: 0, z: 0, yaw: 0 };
 function stepPlayer(W, p, I, mate) {
   const dt = DT;
   p.stT += dt; p.grabCd = Math.max(0, p.grabCd - dt); p.thruT = Math.max(0, (p.thruT || 0) - dt); p.knock = Math.max(0, p.knock - dt); p.land = Math.max(0, p.land - dt);
-  let wx = I.mx || 0, wz = I.mz || 0; const wl = Math.hypot(wx, wz); if (wl > 1) { wx /= wl; wz /= wl; }
+  let wx = I.mx || 0, wz = I.mz || 0, wl = Math.hypot(wx, wz); if (wl > 1) { wx /= wl; wz /= wl; }
   const jPress = I.jc !== p.jc; p.jc = I.jc;
   const dPress = I.dc !== p.dc; p.dc = I.dc;
   if (jPress) p.buf = P.BUFFER; else p.buf = Math.max(0, p.buf - dt);
@@ -346,8 +347,20 @@ function stepPlayer(W, p, I, mate) {
   // COURTE ÉCHELLE (action dédiée, maintenue) : debout au sol, on joint les mains devant soi et on ne bouge plus, tourné vers le partenaire ;
   // le partenaire qui saute tout près (au sol ou en retombant à hauteur des mains) pose le pied dedans et part bien plus haut (P.CUP_V)
   p.cup = !!I.cup && wl < 0.2 && p.st === ST.GROUND && !p.onMate && !p.haul && !W.alone && !W.solo;
-  if (p.cup) { p.brace = false; p.cupT = (p.cupT || 0) + dt; wx = wz = 0; const d = Math.atan2(mate.x - p.x, mate.z - p.z) - p.yaw; p.yaw += clamp(Math.atan2(Math.sin(d), Math.cos(d)), -P.TURN * dt, P.TURN * dt); } else p.cupT = 0;
+  if (p.cup) { p.brace = false; p.cupT = (p.cupT || 0) + dt; wx = wz = wl = 0; const d = Math.atan2(mate.x - p.x, mate.z - p.z) - p.yaw; p.yaw += clamp(Math.atan2(Math.sin(d), Math.cos(d)), -P.TURN * dt, P.TURN * dt); } else p.cupT = 0;
   p.pushT = Math.max(0, (p.pushT || 0) - dt);
+  // ÉJECTÉ par un coup de poing : on vole sans contrôle (knock) ; à la réception, on reste au sol DOWN_T s, puis on se relève
+  if (p.ko && p.st !== ST.AIR) { p.ko = false; if (p.st === ST.GROUND) { p.downT = P.DOWN_T; p.knock = 0; ev(W, 'down', { p: p.id, x: p.x, y: p.y, z: p.z }); } }
+  if (p.downT > 0) { p.downT = Math.max(0, p.downT - dt); wx = wz = wl = 0; p.buf = 0; p.cup = false; p.brace = false; if (!p.downT) ev(W, 'getup', { p: p.id }); }
+  // COUP DE POING (action dédiée, bit 32 des entrées) : main gauche ou droite au hasard (tirage déterministe : même résultat chez tous), on se
+  // tourne vers le partenaire proche ; à PUNCH_HIT s, s'il est à portée devant soi, il est éjecté (vitesse + vrille + chute au sol)
+  const pPress = !!I.punch && !p.pHeld; p.pHeld = !!I.punch; p.pCd = Math.max(0, (p.pCd || 0) - dt);
+  if (p.pT != null) { const t0 = p.pT; p.pT += dt; if (t0 < P.PUNCH_HIT && p.pT >= P.PUNCH_HIT) punchHit(W, p, mate); if (p.pT > 0.5) p.pT = null; }
+  if (pPress && p.pCd <= 0 && !p.downT && !p.ko && (p.st === ST.GROUND || p.st === ST.AIR) && !p.cup && !p.haul) {
+    p.pT = 0; p.pCd = P.PUNCH_CD; p.pSide = (Math.imul(W.tick + 7 * p.id + 13, 2654435761) >>> 16) & 1; // 0 = gauche, 1 = droite
+    if (mate && !W.alone && !W.solo && Math.hypot(mate.x - p.x, mate.z - p.z) < 2.6) p.yaw = Math.atan2(mate.x - p.x, mate.z - p.z);
+    ev(W, 'swing', { p: p.id, side: p.pSide, x: p.x, y: p.y + 1.4, z: p.z });
+  }
   p.ropeUp = false;
   if (p.st !== ST.AIR) { p.dj = false; p.cupUsed = false; } // second saut (mode solo) rendu dès qu'on touche quelque chose
   p.ropeCd = Math.max(0, (p.ropeCd || 0) - dt);
@@ -534,6 +547,16 @@ function turnCorner(W, p, b, fi, lat) {
 function uStep(b, f, fi, d) { const ax = FACE[f][0] ? b.s : b.c, az = FACE[f][0] ? b.c : -b.s; return d * (fi.nz * ax - fi.nx * az); }
 // place pour se hisser au-dessus du bord ?
 function roomAbove(W, b, f, u) { facePoint(b, f, u, -0.4, b.py + b.hh + 1.0, FP); return !inside(W, FP.x, FP.y, FP.z); }
+function punchHit(W, p, m) {
+  if (!m || W.alone || W.solo || m.ko || m.downT > 0) return;
+  if (m.st !== ST.GROUND && m.st !== ST.AIR) return; // accroché, en paroi, en liane : on ne le décroche pas d'un coup
+  const dx = m.x - p.x, dz = m.z - p.z, h = Math.hypot(dx, dz), fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
+  if (h > P.PUNCH_R || Math.abs(m.y - p.y) > 1.3 || (h > 0.2 && (dx * fx + dz * fz) / h < 0.35)) return;
+  const ux = h > 0.2 ? dx / h : fx, uz = h > 0.2 ? dz / h : fz;
+  m.vx = ux * P.PUNCH_V + p.vx * 0.3; m.vz = uz * P.PUNCH_V + p.vz * 0.3; m.vy = P.PUNCH_VY; toAir(m); m.coy = 0; m.noCut = true;
+  m.knock = 0.9; m.ko = true; m.grabCd = 0.6; m.hang = m.climb = m.mantle = null; m.cup = false; m.pT = null;
+  ev(W, 'punch', { p: p.id, v: m.id, side: p.pSide, x: m.x, y: m.y + 1.55, z: m.z, ux, uz });
+}
 // le grimpeur p saute dans les mains jointes de son partenaire (mains depuis au moins 0,15 s, à portée, pieds à hauteur du sol ou des mains)
 function cupBoost(W, p, m) {
   if (!m || !m.cup || m.cupT < 0.15 || p.cup || (p.st === ST.AIR && p.cupUsed)) return false; // en l'air : une seule relance avant de retoucher le sol
