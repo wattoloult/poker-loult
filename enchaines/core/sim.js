@@ -609,7 +609,7 @@ function setGround(W, p, b) {
     const drop = p.peakY - p.y;
     p.land = 0.25; ev(W, 'land', { p: p.id, x: p.x, y: p.y, z: p.z, v: -p.vy, h: drop });
     if (drop > 9) { W.falls++; ev(W, 'fall', { p: p.id, h: drop }); }
-    if (drop > 8 && p.y < W.level.checkpoints[W.cp].y - 6) p.fell = true; // retombé bien plus bas que son point de passage (retour auto si les deux le sont)
+    if (drop > 8 && p.y < (W.level.checkpoints[W.cp]?.y ?? -Infinity) - 6) p.fell = true; // retombé bien plus bas que son point de passage (retour auto si les deux le sont)
     p.peakY = p.y;
   }
   const vy = p.vy; p.noCut = false; p.lgx = p.x; p.lgy = p.y; p.lgz = p.z; // dernier appui (anti-chute du mode test)
@@ -937,7 +937,7 @@ export function stepWorld(W, inputs) {
   for (let k = 0; k < 2; k++) { const I = inputs[k] || IDLE; if (!I.reset) W.rLock[k] = false; W.resetHold[k] = I.reset && !W.rLock[k] ? W.resetHold[k] + DT : 0; }
   if (W.noAbyss) for (const p of W.pl) if (p.y < W.level.abyss && p.lgx != null) { Object.assign(p, { x: p.lgx, y: p.lgy + 0.05, z: p.lgz, vx: 0, vy: 0, vz: 0, st: ST.AIR, hang: null, climb: null, rope: null }); layChain(W); ev(W, 'respawn', {}); }
   // TOMBÉS BIEN BAS (pas dans le vide, sur un rebord en contrebas) : quand les deux le sont et posés depuis 1,5 s, retour au point de passage
-  const cpY = W.level.checkpoints[W.cp].y; for (const p of W.pl) if (p.fell && p.y > cpY - 3) p.fell = false; // il est remonté
+  const cpY = W.level.checkpoints[W.cp]?.y ?? -Infinity; for (const p of W.pl) if (p.fell && p.y > cpY - 3) p.fell = false; // il est remonté
   const lost = W.solo ? false : W.alone ? A.fell && A.st === ST.GROUND : A.fell && B.fell && A.st === ST.GROUND && B.st === ST.GROUND;
   W.lostT = lost ? (W.lostT || 0) + DT : 0;
   const abyss = A.y < W.level.abyss || B.y < W.level.abyss;
