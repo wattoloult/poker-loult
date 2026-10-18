@@ -8,7 +8,8 @@ import { getCourse } from '../core/worlds.js';
 
 const LEVEL = getCourse(process.env.COURSE || 'tour');
 // étapes = plateformes où l'on se pose (pas le décor, les obstacles, les barres, les leviers, les herses)
-const route = LEVEL.bodies.map((b, i) => ({ ...b, i })).filter((b) => !b.hit && !b.cliff && !b.deco && !b.bar && !b.lever && !b.door && !b.herse && !b.plate && !b.ghost && !b.alt && !(b.dbseg && b.dbseg.k));
+// ROUTE=12,40,41,15 : chaîne de corps à tester dans cet ordre (voies alternatives : départ, étapes alt, arrivée)
+const route = process.env.ROUTE ? process.env.ROUTE.split(',').map((i) => ({ ...LEVEL.bodies[+i], i: +i })) : LEVEL.bodies.map((b, i) => ({ ...b, i })).filter((b) => !b.hit && !b.cliff && !b.deco && !b.bar && !b.lever && !b.door && !b.herse && !b.plate && !b.ghost && !b.alt && !(b.dbseg && b.dbseg.k));
 // barres entre deux étapes : celles du tableau des corps situées entre A et B
 const barsBetween = (A, B) => LEVEL.bodies.map((b, i) => ({ ...b, i })).filter((b) => b.bar && b.i > A.i && b.i < B.i).map((b) => b.i);
 const ALONE = !!process.env.ALONE; // ALONE=1 : vrai mode solo (speedrun) : un seul grimpeur, second saut, étapes coop comprises

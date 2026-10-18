@@ -19,7 +19,7 @@ export const THEMES = {
     sky: [0x3f8fc0, 0x9fd3c8, 0xfff0b0, 0xc8e0a0], sun: { dir: [0.4, 0.75, 0.5], color: 0xfff2c0, int: 2.1 }, hemi: [0xcfe9ff, 0x3e5a2a, 0.95],
     fog: [0xbfdcb0, 40, 260], clouds: { y: -26, tint: 0xe8f4e8 }, ridges: [0x6f9a78, 0x86ad7e, 0x9fbf86], backdrop: 'gorge',
     rock: { lo: [0.2, 0.19, 0.15], hi: [0.42, 0.4, 0.3], moss: [0.22, 0.4, 0.14], snowY: 999, color: 0x7f8a6a }, particles: 'leaves',
-    mats: { ...COMMON, moss: C('stone', 0x9fbf7a), log: C('darkwood', 0xa98a5c), rock: C('stone', 0x9aa588), bark: C('darkwood', 0x8c7a52, { climbTint: 1 }),
+    mats: { ...COMMON, moss: C('stone', 0x9fbf7a, { mossTop: 1 }), log: C('darkwood', 0xa98a5c), rock: C('stone', 0x9aa588), bark: C('darkwood', 0x8c7a52, { climbTint: 1 }),
       leaf: C('plain', 0x6fb24a, { rough: 0.7 }), temple: C('stone', 0xd8d0a0), wood: C('wood', 0xe8d8b0) }, props: 'jungle',
   },
   japan: {

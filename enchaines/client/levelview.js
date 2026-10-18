@@ -7,6 +7,7 @@ import { S, LIB, TEX, NOISE, sprite, boxGeo, linkRow } from './scene.js';
 import { themeOf } from './themes.js';
 import { windOn } from '../core/sim.js';
 import * as Scatter from './scatter.js';
+import { platGeo, platMat } from './platgeo.js';
 import * as Mechs from './mechs.js';
 import * as Portal from './portal.js';
 import * as Totems from './totems.js';
@@ -143,6 +144,8 @@ function backdrop(L, th, grp, world) {
 }
 
 /* ------------------------------ construction ------------------------------ */
+// teinte du dessus / des flancs selon le matériau du monde : herbe (îles), mousse (jungle, ruines), sinon aucune
+function platTint(th, name) { const d = th.mats[name] || {}; if (d.grassTop) return { top: [0.68, 1.08, 0.5], side: [1.0, 0.9, 0.76] }; if (d.mossTop) return { top: [0.8, 1.05, 0.7], side: [0.95, 1.0, 0.9] }; return null; }
 export function build(W) {
   const L = W.level, world = L.world || 'medieval', th = themeOf(world);
   if (S.level) S.scene.remove(S.level);
@@ -154,7 +157,8 @@ export function build(W) {
     const o = new THREE.Group(); grp.add(o); S.bodyMesh.push(o);
     if (b.lever) { lever(b, o); continue; }
     const mat = matFor(th, b.mat, world);
-    const m = new THREE.Mesh(boxGeo(b.w, b.h, b.d, mat.userData.tile), mat); m.castShadow = !b.deco || b.deco !== 'pagoda'; m.receiveShadow = true; o.add(m);
+    const fancy = !b.roller && b.h >= 0.25 && b.w >= 0.6 && b.d >= 0.6 && !b.hit; // chanfrein + ombre d'ambiance + texture décalée (client/platgeo.js) ; obstacles et fines pièces : boîte simple
+    const m = new THREE.Mesh(fancy ? platGeo(b.w, b.h, b.d, mat.userData.tile, b.i, platTint(th, b.mat)) : boxGeo(b.w, b.h, b.d, mat.userData.tile), fancy ? platMat(mat) : mat); m.castShadow = !b.deco || b.deco !== 'pagoda'; m.receiveShadow = true; o.add(m);
     if (b.roller) rollerMesh(b, o); else if (world === 'medieval') decorMedieval(b, o); else decorWorld(world, th, b, o);
     mechVisual(world, th, b, o);
   }
