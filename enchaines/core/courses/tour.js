@@ -111,6 +111,15 @@ block(22, 78, 90, 11.5, 4, 2, { mat: 'rock', climb: 1, climbFaces: [3] });
 block(14, 84, 91.2, 9, 8, 8, { mat: 'brick', summit: 1 });
 cp(14, 91.2, 9, { name: 'Le Sommet', finish: true, r: 4 });
 
+/* ------------------------- voie alternative (zone 5 -> 6) : ajoutée APRÈS les autres corps pour ne pas décaler leurs numéros ------------------------- */
+// RACCOURCI (speedrun) : un mur à prises sur le bord ouest du départ de la zone, 11,6 m d'escalade (la moitié de l'endurance), puis des pierres jusqu'à La Chaîne.
+// Saute les mécanismes mais demande de l'endurance et un saut serré ; la dernière pierre-planche cède. `alt` : le robot de route.mjs ne les compte pas dans la route normale.
+block(5.4, 45.6, 57.2, -1.5, 1.2, 3.8, { mat: 'rock', climb: 1, climbFaces: [0], alt: 1, zone: 5 });
+plat(2.4, 57.2, -2.0, 2.6, 2.2, { mat: 'stone', alt: 1, zone: 5 });
+plat(-2.0, 57.5, -2.8, 2.2, 2.2, { mat: 'wood', crumble: { t: 0.9, back: 4.5 }, alt: 1, zone: 5 });
+plat(-6.2, 57.9, -1.5, 2.4, 2.4, { mat: 'stone', alt: 1, zone: 5 });
+hint(8, 45.6, -1.5, 'Raccourci : le mur à ta gauche monte directement vers La Chaîne (de l\'endurance, puis des sauts serrés)');
+
 /* ------------------------- décor composé (sans collision) ------------------------- */
 // LA TOUR : elle monte derrière toute l'ascension, à moitié prise dans la falaise ; on la longe d'étage en étage jusqu'à son toit
 K.deco('tower', 4, -12, -9.8, { size: 6.2, y1: 92 });
