@@ -1,7 +1,7 @@
 # LES ENCHAÎNÉS — Loult Party
 
 Parcours d'obstacles 3D (three.js vendorisé dans `lib/`, zéro install). Servi par le serveur du poker :
-`node server/server.js` puis http://localhost:8770/enchaines/ (ajouter `?debug` : touches 1-5 = téléport aux checkpoints).
+`node server/server.js` puis http://localhost:8770/enchaines/index.html (ajouter `?debug` : touches 1-5 = téléport aux checkpoints).
 
 | Fichier | Rôle |
 |---|---|

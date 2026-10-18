@@ -10,7 +10,7 @@ VPS_USER="${VPS_USER:-root}"
 VPS_PORT="${VPS_PORT:-22}"
 REMOTE_DIR="${REMOTE_DIR:-}"                 # dossier racine du site sur le VPS (celui qui contient play.html), OBLIGATOIRE
 RESTART_CMD="${RESTART_CMD:-}"               # ex: "pm2 restart poker-loult" ou "systemctl restart poker-loult" (vide = pas de redémarrage)
-CHECK_URL="${CHECK_URL:-https://loultparty.fr/enchaines/}"
+CHECK_URL="${CHECK_URL:-https://loultparty.fr/enchaines/index.html}"
 
 cd "$(dirname "$0")"
 [ -d enchaines ] || { echo "Lance ce script depuis la racine du dépôt (dossier enchaines/ introuvable)."; exit 1; }
