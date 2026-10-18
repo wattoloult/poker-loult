@@ -516,6 +516,11 @@ export function controlYaw(k, p, held) {
   if ((!p || p.st === 0) && (!held || user)) { let y = CAM.nomYaw ?? CAM.yaw; const b = CAM.baseYaw ?? 0; if (Math.abs(Math.atan2(Math.sin(y - b), Math.cos(y - b))) < 0.3) y = b; CAM.ctrl[k] = y; }
   return CAM.ctrl[k];
 }
+// blocs qui peuvent masquer la vue : volumineux (plus de 0,9 m dans les trois sens), pas les obstacles qui frappent, barres, lianes, planches, herses, plateaux tournants
+function camObstacles(W) {
+  if (CAM.obstFor !== W) { CAM.obstFor = W; CAM.obst = W.bodies.filter((b) => !(b.hit || b.bar || b.ghost || b.grid || b.dbseg || b.lever || b.plank || b.deco || b.herse || b.door || b.roller || b.alt || (b.move && b.move.k === 'rot')) && Math.min(b.hw * 2, b.hh * 2, b.hd * 2) >= 0.9); }
+  return CAM.obst;
+}
 function camera(W, rp, me, dt) {
   const [a, b] = rp, wMe = me == null ? 0.5 : me === 0 ? 0.68 : 0.32;
   const sep = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -541,13 +546,22 @@ function camera(W, rp, me, dt) {
   CAM.zyaw += ((zc?.yaw ?? md.yaw) - CAM.zyaw) * k; CAM.zpitch += ((zc?.pitch ?? md.pitch) - CAM.zpitch) * k; CAM.zdist += ((md.dist + (zc?.dist || 0) * (zc?.mode === 'far' ? 1 : 0)) - CAM.zdist) * k;
   if (S.camAuto && performance.now() - (CAM.lastUser || 0) > 4000) { CAM.uyaw *= 1 - dt * 0.4; CAM.upitch *= 1 - dt * 0.4; } // (cadrage automatique seulement) il revient au réglage de la zone
   CAM.yaw = CAM.zyaw + CAM.uyaw; CAM.pitch = Math.max(-0.15, Math.min(0.85, CAM.zpitch + CAM.upitch));
-  const dist = Math.max(7, Math.min(30, 13 + sep * 0.8 + (CAM.zoom || 0) + CAM.zdist));
-  CAM.dist += (dist - CAM.dist) * Math.min(1, dt * 2.5);
-  const yaw = CAM.yaw, pitch = CAM.pitch;
-  const cx = CAM.tgt.x + Math.sin(yaw) * Math.cos(pitch) * CAM.dist, cy = CAM.tgt.y + Math.sin(pitch) * CAM.dist, cz = CAM.tgt.z + Math.cos(yaw) * Math.cos(pitch) * CAM.dist;
-  let px = cx, py = cy, pz = cz;
-  // la caméra ne passe jamais derrière la falaise
-  if (pz < -5) pz = -5;
+  // zoom : l'écart des deux grimpeurs est LISSÉ (un grimpeur qui tombe ou se balance ne fait plus reculer la caméra d'un coup) et la vitesse de zoom est plafonnée
+  CAM.sep = CAM.sep === undefined || S.camSnap ? sep : CAM.sep + (sep - CAM.sep) * Math.min(1, dt * 1.6);
+  const dist = Math.max(7, Math.min(30, 13 + Math.min(CAM.sep, 24) * 0.8 + (CAM.zoom || 0) + CAM.zdist));
+  CAM.dist += Math.max(-7 * dt, Math.min(7 * dt, (dist - CAM.dist) * Math.min(1, dt * 2.5)));
+  const yaw = CAM.yaw, pitch = CAM.pitch, dirx = Math.sin(yaw) * Math.cos(pitch), diry = Math.sin(pitch), dirz = Math.cos(yaw) * Math.cos(pitch);
+  // collision : la caméra ne traverse pas les gros blocs (falaise, murs, tours). On la rapproche vite (pour ne jamais voir l'intérieur) et on la rend lentement.
+  let dcol = 60;
+  { const obst = camObstacles(W), T = CAM.tgt, M = 0.35;
+    const inside = (b, x, y, z) => x > b.px - b.ex - M && x < b.px + b.ex + M && y > b.py - b.hh - M && y < b.py + b.hh + M && z > b.pz - b.ez - M && z < b.pz + b.ez + M;
+    const live = obst.filter((b) => !inside(b, T.x, T.y, T.z)); // un bloc qui contient déjà le point suivi (grimpeur collé à la paroi) ne compte pas
+    for (let t = 0.6; t <= CAM.dist && live.length; t += 0.35) { const x = T.x + dirx * t, y = T.y + diry * t, z = T.z + dirz * t; if (live.some((b) => inside(b, x, y, z))) { dcol = Math.max(2.6, t - 0.7); break; } } }
+  if (CAM.col === undefined || S.camSnap) CAM.col = dcol; else CAM.col += (dcol - CAM.col) * Math.min(1, dt * (dcol < CAM.col ? 14 : 2));
+  let d = Math.min(CAM.dist, CAM.col);
+  // repli de sécurité (avant : la POSITION était écrasée à z = -5, ce qui faisait basculer le regard) : on raccourcit le long du rayon, la direction ne change pas
+  if (CAM.tgt.z > -5 && CAM.tgt.z + dirz * d < -5) d = Math.max(3, d * (CAM.tgt.z + 5) / (-dirz * d));
+  const px = CAM.tgt.x + dirx * d, py = CAM.tgt.y + diry * d, pz = CAM.tgt.z + dirz * d;
   if (S.debugCam) { // caméra libre (fond du menu, tests)
     const [lx, ly, lz] = S.debugCam.look; S.cam.position.set(...S.debugCam.pos); S.cam.lookAt(lx, ly, lz);
     S.sun.position.set(lx + S.sunDir.x * 60, ly + S.sunDir.y * 60, lz + S.sunDir.z * 60); S.sun.target.position.set(lx, ly, lz); return;
