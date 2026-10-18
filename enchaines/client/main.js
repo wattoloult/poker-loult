@@ -570,4 +570,6 @@ backdrop();
 // lien d'invitation : ?r=CODE ouvre directement le salon
 // (avec un pseudo déjà choisi, on rejoint dès que la connexion est ouverte ; sinon on attend le bouton « Rejoindre »)
 if (qs.get('r')) { const c = qs.get('r').toUpperCase().slice(0, 6); show('online'); $('#o-code').value = c; $('#o-name').value = CFG.name; const n = getNet(); if (CFG.name) n.setRoom(c); }
+// rechargement de la page pendant une partie en ligne : le salon est retenu dans l'onglet, on s'y reconnecte tout seul (même jeton = même place, 60 s de grâce)
+else if (safe(() => sessionStorage.getItem('ch-room'), null)) getNet();
 if (qs.has('local')) startLocal();
