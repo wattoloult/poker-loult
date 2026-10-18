@@ -21,6 +21,16 @@ const DATA = process.env.DATA_DIR || path.join(ROOT, 'data'), BEST = path.join(D
 // Pour le désactiver : retirer ENCH_PT_KEY du service (et supprimer le fichier). Voir CLAUDE.md.
 const PT_KEY = process.env.ENCH_PT_KEY || '', PT_FILE = process.env.ENCH_PT_FILE || path.join(ROOT, 'playtest', 'playtest.js');
 const ptOk = (k) => { if (!PT_KEY || typeof k !== 'string') return false; const a = Buffer.from(k), b = Buffer.from(PT_KEY); return a.length === b.length && crypto.timingSafeEqual(a, b); };
+// chat vocal : relais TURN (coturn sur la même machine, partagé avec together) pour les liaisons que les box / opérateurs empêchent d'aller en direct.
+// Identifiants éphémères « TURN REST » : nom = expiration:client, mot de passe = HMAC-SHA1 du secret partagé avec coturn (ENCH_TURN_SECRET, drop-in systemd).
+const TURN_SECRET = process.env.ENCH_TURN_SECRET || '', TURN_HOST = process.env.ENCH_TURN_HOST || 'loultparty.fr';
+function iceServers(id) {
+  const list = [{ urls: 'stun:' + TURN_HOST + ':3478' }, { urls: 'stun:stun.l.google.com:19302' }];
+  if (!TURN_SECRET) return list;
+  const username = Math.floor(Date.now() / 1000) + 12 * 3600 + ':ench' + id;
+  list.push({ urls: ['turn:' + TURN_HOST + ':3478?transport=udp', 'turn:' + TURN_HOST + ':3478?transport=tcp'], username, credential: crypto.createHmac('sha1', TURN_SECRET).update(username).digest('base64') });
+  return list;
+}
 const SNAP_EVERY = 4, GRACE = 60, MAX_Q = 36, LENS = [4.5, 6.5, 9];
 fs.mkdirSync(DATA, { recursive: true });
 // classement par parcours : { idParcours: [ ... ] } (ancien format = liste de la Tour)
@@ -170,7 +180,7 @@ const wss = new WebSocketServer({ server, path: '/enchaines-ws', maxPayload: 163
 wss.on('connection', (ws) => {
   ws.id = nextId++; ws.name = 'Grimpeur'; ws.alive = true; ws.budget = 400;
   ws.on('pong', () => { ws.alive = true; });
-  send(ws, { t: 'hi', id: ws.id });
+  send(ws, { t: 'hi', id: ws.id, ice: iceServers(ws.id) });
   ws.on('message', (data) => {
     if (--ws.budget < 0) return; // un client fou ne peut pas noyer le serveur
     let m; try { m = JSON.parse(data); } catch { return; }

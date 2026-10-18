@@ -47,6 +47,9 @@ export function make(world, c, i, grp, PACK) {
   const light = new THREE.PointLight(sp.light, 0, 9, 1.8); light.position.set(fire.position.x, fire.position.y + 0.2, 0.6); g.add(light);
   const glow = sprite(0xffcf70, 3.2); glow.position.set(0, 2.2, 0); glow.material.opacity = 0; g.add(glow); // éclat d'activation (scene.js)
   const mats = sp.glowBody ? emissives(body) : [];
+  // les grimpeurs réapparaissent à c.x ± 1,6 m sur l'axe c.z : un modèle large (statue du sommet, rouages, feu de camp) ne doit pas déborder sur ces places
+  g.updateMatrixWorld(true); const bb = new THREE.Box3(); g.traverse((o) => { if (o.isMesh) bb.expandByObject(o); });
+  if (!bb.isEmpty() && bb.min.x < c.x + 2.2 && bb.max.x > c.x - 2.2 && bb.max.z > c.z - 1.0) g.position.z -= bb.max.z - (c.z - 1.0); // 1 m : corps, bras et flamme du totem ne recouvrent pas le grimpeur
   return { g, ban, glow, tot: { sp, fire, halo, light, spin, mats, a: 0, body } };
 }
 // image : montée de la flamme à l'activation, respiration du point courant, rotation de la pièce mécanique

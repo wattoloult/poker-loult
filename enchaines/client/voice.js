@@ -1,7 +1,8 @@
 // LES ENCHAÎNÉS — chat vocal entre les deux grimpeurs d'un salon : WebRTC direct (l'audio ne passe pas par le serveur, qui ne relaie que
 // la négociation, message 'rtc'). Négociation « parfaite » : le grimpeur 2 est poli (il cède en cas d'offres croisées).
 // Le micro n'est demandé qu'au clic sur le bouton (jamais d'office) ; on entend son partenaire même micro coupé.
-const ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+let ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+export const setIce = (l) => { if (Array.isArray(l) && l.length) ICE = l; }; // relais TURN du serveur (message 'hi') : indispensable derrière certaines box / en 4G
 const V = { pc: null, net: null, polite: false, making: false, ignore: false, mic: null, on: false, audio: null, level: 0, meLevel: 0, an: null, anMe: null, state: 'off', onChange: null };
 const safe = async (f) => { try { return await f(); } catch (e) { console.info('[vocal]', e?.message || e); } };
 const sig = (d) => V.net?.send({ t: 'rtc', d });

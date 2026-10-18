@@ -376,7 +376,7 @@ function getNet() {
   net.on('chat', (m) => chatAdd(m));
   net.on('rtc', (m) => Voice.onSignal(m.d));
   net.on('rooms', (m) => renderRooms(m.list));
-  net.on('hi', () => { if (G.pt?.key) net.send({ t: 'pt', key: G.pt.key }); if (document.body.dataset.screen === 'board') askBoard(); if (document.body.dataset.screen === 'online') net.send({ t: 'list' }); });
+  net.on('hi', (m) => { Voice.setIce(m.ice); if (G.pt?.key) net.send({ t: 'pt', key: G.pt.key }); if (document.body.dataset.screen === 'board') askBoard(); if (document.body.dataset.screen === 'online') net.send({ t: 'list' }); });
   net.on('err', (m) => { if (net.auto) { net.auto = false; net.setRoom(null); G.room = null; return; } toast(m.m); }); // reprise automatique sur un salon disparu : silence
   net.on('left', () => { net.setRoom(null); G.room = null; Voice.stop(); chatShow(false); stopGame(); show('online'); });
   net.on('start', async (m) => {
@@ -385,8 +385,8 @@ function getNet() {
     G.mode = 'online'; G.demo = null; G.me = m.seat; G.names = m.names; G.L = m.L;
     G.course = m.course || DEFAULT_COURSE; setTimeout(() => $('#fade').classList.remove('on'), 400);
     G.W = applySnap(createWorld({ L: m.L, course: G.course }), m.s); G.ct = 0; G.pend = []; G.out = []; G.partnerIn = IDLE; G.done = false; slot[0].jc = slot[0].dc = slot[0].uc = 0;
-    await Scene.buildLevel(G.W); Scene.setRoster(); Music.playWorld(G.W.level.world);
-    await prepare(G.W); G.prep = false; G.last = performance.now(); G.acc = 0;
+    const W = G.W; await Scene.buildLevel(W); if (G.W !== W) return; Scene.setRoster(); Music.playWorld(W.level.world); // partie quittée pendant le chargement : on s'arrête là
+    await prepare(W); if (G.W !== W) return; G.prep = false; G.last = performance.now(); G.acc = 0;
     show(null); $('#hud').classList.add('on'); $('#hud').dataset.mode = 'online'; $('#end').classList.remove('on');
     $('#help').classList.add('show'); setTimeout(() => $('#help').classList.remove('show'), 9000);
   });
@@ -426,7 +426,7 @@ async function micToggle() {
   else toast(r.on ? "Micro ouvert : ton partenaire t'entend" : 'Micro coupé', 1500);
   micLabel();
 }
-function micLabel() { const s = Voice.status(); $('#mic').textContent = !s.mic ? tr('Activer le micro (M)') : s.on ? tr('Micro ouvert (M)') : tr('Micro coupé (M)'); $('#mic').classList.toggle('live', s.mic && s.on); $('#mic-link').textContent = s.link === 'connected' ? 'vocal relié' : s.link === 'off' ? '' : 'vocal : connexion…'; }
+function micLabel() { const s = Voice.status(); $('#mic').textContent = !s.mic ? tr('Activer le micro (M)') : s.on ? tr('Micro ouvert (M)') : tr('Micro coupé (M)'); $('#mic').classList.toggle('live', s.mic && s.on); $('#mic-link').textContent = s.link === 'connected' ? 'vocal relié' : s.link === 'off' ? '' : s.link === 'failed' ? 'vocal : échec de la liaison' : 'vocal : connexion…'; }
 Voice.onChange(micLabel);
 function renderRoom(m) {
   $('#r-code').textContent = m.code;
