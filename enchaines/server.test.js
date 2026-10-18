@@ -87,6 +87,10 @@ test('speedrun solo : rejeu identique au jeu, arrivée chronométrée, partie in
   let last = null; for (let i = 1; i <= 5; i++) last = await soloRun({ course: '__t', name: 'S' + i, run: [[60, 0, 1, 0, 0, 0, 0], [60, 0, -1, 0, 0, 0, 0], ...Array.from({ length: i }, () => [[40, 0, 1, 0, 0, 0, 0], [40, 0, -1, 0, 0, 0, 0]]).flat(), ...run] }, replayRun); // i détours de plus = i fois plus lent
   assert.equal(last.board.length, 5, 'top 5 seulement'); assert.equal(last.rank, -1, 'le plus lent est hors du top 5'); assert.deepEqual(last.board.map((x) => x.names[0]), ['Rapide', 'Lent', 'S1', 'S2', 'S3']);
   const again2 = await soloRun({ course: '__t', name: 'rapide', run: slow }, replayRun); assert.equal(again2.board[0].names[0], 'Rapide');
+  // ancien record sans replay (d'avant la fonction) : la prochaine montée validée du même joueur le remplace, même plus lente
+  const { boards: bd } = await import('./server.js'); bd['solo:__t'] = [{ names: ['Ancien'], time: 1.5, falls: 0, date: '2026-01-01' }];
+  const mig = await soloRun({ course: '__t', name: 'ancien', run: slow }, replayRun);
+  assert.ok(mig.ok && mig.board[0].rid && mig.board[0].time > 1.5, 'le record sans replay est remplacé par une montée avec replay');
   // replay : chaque record garde sa partie, rejouable à l'identique ; l'ancien replay d'un joueur qui s'améliore disparaît
   const rid = again.board[0].rid; assert.match(rid, /^[0-9a-f]{16}$/);
   const { server: srv } = await import('./server.js'); if (!srv.listening) srv.listen(18807); await wait(100);

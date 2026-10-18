@@ -410,6 +410,7 @@ async function submitRun(W) {
   let r = null; try { r = await (await fetch(new URL('/enchaines-ws/solo', location.origin), { method: 'POST', body: JSON.stringify({ course: W.level.id, name: CFG.name, run: G.run }) })).json(); } catch { }
   if (!r?.ok) { $('#e-board').innerHTML = `<li class="muted">${tr('Montée non validée par le serveur')}${r?.why ? ' (' + esc(tr(r.why)) + ')' : ''}</li>`; return; }
   renderBoard(r.board, r.rank >= 0 && r.rank < 5 ? r.rank : null);
+  if (r.kept) { const mine = r.board.find((x) => x.names[0].toLowerCase() === CFG.name.toLowerCase()); $('#e-board').insertAdjacentHTML('beforeend', `<li class="muted">${tr("Ton record est meilleur ({0}) : cette montée n'est pas enregistrée.", mine ? fmt(mine.time) : '')}</li>`); }
 }
 function renderBoard(list, mine) {
   const el = $('#e-board');
@@ -464,7 +465,7 @@ function getNet() {
     if (m.e?.length) handleEvents(W, m.e, true);
   });
   net.on('end', (m) => { renderBoard(m.board, m.rank); });
-  net.on('board', (m) => { if ((m.solo || 0) !== +$('#b-solo').checked) return; if (m.simV) SIMV = m.simV; $('#b-list').innerHTML = m.list.length ? m.list.map((r, i) => `<li><span>${i + 1}</span><b>${esc(r.names.join(' & '))}</b><em>${fmt(r.time)}</em><small>${tr("{0} chutes", r.falls)}</small>${r.rid ? `<button class="mini watch" data-replay="${r.rid}" title="${tr('Revoir la montée')}${r.v && r.v !== SIMV ? ' — ' + tr('enregistrée avec une ancienne version du jeu : peut diverger') : ''}">▶ ${tr('Revoir')}</button>` : ''}</li>`).join('') : `<li class="muted">${tr('Personne n\'a encore atteint le sommet.')}</li>`; });
+  net.on('board', (m) => { if ((m.solo || 0) !== G.bSolo || m.course !== G.bCourse) return; if (m.simV) SIMV = m.simV; renderRecords(m.list); });
   return net;
 }
 /* ------------------------------ chat texte et vocal du salon ------------------------------ */
@@ -531,11 +532,34 @@ function showCourses(mode) {
 }
 function fillCourseSelects() {
   const opts = visible().map((c) => `<option value="${c.id}">${esc(tr(c.name))}${c.published ? '' : ' (test)'}</option>`).join('');
-  $('#r-course').innerHTML = opts; $('#b-course').innerHTML = courseList(true).filter((c) => c.published || G.pt).map((c) => `<option value="${c.id}">${esc(tr(c.name))}</option>`).join('');
+  $('#r-course').innerHTML = opts;
 }
 $('#r-course').addEventListener('change', (e) => net?.send({ t: 'cfg', course: e.target.value }));
-const askBoard = () => { $('#b-list').innerHTML = `<li class="muted">${tr('Chargement…')}</li>`; getNet().send({ t: 'board', course: $('#b-course').value, solo: $('#b-solo').checked ? 1 : 0 }); };
-$('#b-course').addEventListener('change', askBoard); $('#b-solo').addEventListener('change', askBoard);
+// RECORDS : deux onglets (à deux / speedrun solo), un parcours à la fois ; chaque ligne du top 5 a son bouton « Revoir »
+G.bSolo = 0; G.bCourse = null;
+function renderRecords(list) {
+  const rows = [];
+  for (let i = 0; i < 5; i++) {
+    const r = list?.[i];
+    rows.push(r ? `<li class="r${i + 1}"><span>${i + 1}</span><b>${esc(r.names.join(' & '))}</b><em>${fmt(r.time)}</em><small>${tr('{0} chutes', r.falls)}</small>${r.rid ? `<button class="mini watch" data-replay="${r.rid}" title="${tr('Revoir la montée')}${r.v && r.v !== SIMV ? ' — ' + tr('enregistrée avec une ancienne version du jeu : peut diverger') : ''}">▶ ${tr('Revoir')}</button>` : ''}</li>` : `<li class="empty"><span>${i + 1}</span><b>—</b></li>`);
+  }
+  $('#b-list').innerHTML = rows.join('');
+  const mine = (G.bSolo ? BEST_SOLO : BEST)[G.bCourse];
+  $('#b-mine').textContent = mine ? tr('Ton meilleur temps sur cet appareil : {0}', fmt(mine.time)) : '';
+}
+function askBoard() {
+  if (!G.bCourse) G.bCourse = G.course || DEFAULT_COURSE;
+  for (const b of $$('#board .tabs button')) b.classList.toggle('on', +b.dataset.solo === G.bSolo);
+  const list = courseList(true).filter((c) => c.published || G.pt);
+  $('#b-courses').innerHTML = list.map((c) => `<button data-course="${c.id}" class="${c.id === G.bCourse ? 'on' : ''}" style="--wc:${WCOL[c.world] || '#888'}">${esc(tr(c.name))}</button>`).join('');
+  $('#b-title').textContent = tr(getCourse(G.bCourse)?.name || '') + ' · ' + tr(G.bSolo ? 'Speedrun solo' : 'À deux');
+  $('#b-list').innerHTML = `<li class="muted">${tr('Chargement…')}</li>`;
+  getNet().send({ t: 'board', course: G.bCourse, solo: G.bSolo });
+}
+$('#board').addEventListener('click', (e) => {
+  const t = e.target.closest('.tabs button'), c = e.target.closest('.chips button');
+  if (t) { G.bSolo = +t.dataset.solo; askBoard(); } else if (c) { G.bCourse = c.dataset.course; askBoard(); }
+});
 
 /* ------------------------------ boutons ------------------------------ */
 document.addEventListener('click', (e) => {
@@ -550,7 +574,7 @@ document.addEventListener('click', (e) => {
   else if (id === 'm-lang') setLang(LANG === 'en' ? 'fr' : 'en');
   else if (id === 'm-help' || id === 'p-help') $('#help').classList.add('show');
   else if (id === 'help-close') $('#help').classList.remove('show');
-  else if (id === 'm-board') { fillCourseSelects(); show('board'); $('#b-course').value = G.course; askBoard(); }
+  else if (id === 'm-board') { G.bCourse = G.course || DEFAULT_COURSE; show('board'); askBoard(); }
   else if (id === 'back' || b.classList.contains('back')) show('home');
   else if (id === 'o-create') { if (!nameOk()) return; getNet().send({ t: 'create', L: G.L, course: G.course }); }
   else if (id === 'o-join') { if (!nameOk()) return; const c = $('#o-code').value.trim().toUpperCase(); if (c) getNet().send({ t: 'join', code: c }); }

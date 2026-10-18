@@ -172,7 +172,8 @@ async function soloRun(m, rp = replay) { // rp : rejoueur (tests : en direct, sa
   const r = await rp(m.course, m.run); if (!r.ok) return r;
   const name = clean(m.name, 16) || 'Grimpeur', key = 'solo:' + m.course, e = { names: [name], time: r.time, falls: r.falls, date: new Date().toISOString().slice(0, 10) };
   let board = boardOf(key); const old = board.find((x) => x.names[0].toLowerCase() === name.toLowerCase());
-  if (old && old.time <= e.time) return { ok: true, time: r.time, rank: board.indexOf(old), board: board.slice(0, TOP), kept: 1 };
+  // un ancien record SANS replay (d'avant la fonction) est remplacé par la prochaine montée validée du même joueur, même plus lente : sans cela il resterait à jamais sans bouton « Revoir »
+  if (old && old.rid && old.time <= e.time) return { ok: true, time: r.time, rank: board.indexOf(old), board: board.slice(0, TOP), kept: 1 };
   e.rid = crypto.randomBytes(8).toString('hex'); e.v = SIM_V;
   try { fs.writeFileSync(path.join(REPLAYS, e.rid + '.json'), JSON.stringify({ course: m.course, name, time: r.time, falls: r.falls, date: e.date, v: SIM_V, run: m.run })); } catch (err) { delete e.rid; console.error('replay non écrit', err.message); }
   dropReplay(old); board = board.filter((x) => x !== old); board.push(e); board.sort((a, b) => a.time - b.time);
@@ -273,4 +274,4 @@ const timers = [
 ];
 server.listen(PORT, DEV ? '0.0.0.0' : '127.0.0.1', () => console.log(`enchaines-mm sur :${PORT}${DEV ? ' (DEV, sert aussi les fichiers)' : ''}`));
 export const stop = () => { timers.forEach(clearInterval); for (const ws of wss.clients) ws.terminate(); wss.close(); server.close(); };
-export { rooms, server, soloRun };
+export { rooms, server, soloRun, boards };

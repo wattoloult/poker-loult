@@ -73,7 +73,13 @@
 
 <!-- classement -->
 <section id="board" class="screen">
-  <div class="card wide"><h2>Top 5 · meilleurs temps</h2><label>Parcours <select id="b-course"></select></label><label class="chk"><input type="checkbox" id="b-solo"> Speedrun solo</label><ol id="b-list" class="board"></ol><button class="back">Retour</button></div>
+  <div class="card wide board-card"><h2>Records</h2>
+    <div class="tabs" role="tablist"><button id="bt-duo" data-solo="0" class="on" role="tab">À deux</button><button id="bt-solo" data-solo="1" role="tab">Speedrun solo</button></div>
+    <div id="b-courses" class="chips"></div>
+    <h3 id="b-title" class="sub"></h3>
+    <ol id="b-list" class="board"></ol>
+    <p id="b-mine" class="muted"></p>
+    <button class="back">Retour</button></div>
 </section>
 
 <!-- chargement -->

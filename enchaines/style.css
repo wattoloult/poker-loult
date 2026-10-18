@@ -258,3 +258,15 @@ body[data-screen="room"] #chat { left: 50%; transform: translateX(-50%); bottom:
 #s-keys .krow button.wait { outline: 2px solid var(--ember); animation: pulse 0.8s ease-in-out infinite alternate; }
 @keyframes pulse { from { opacity: 1; } to { opacity: 0.6; } }
 #h-fps { position: absolute; right: 18px; top: 50px; font: 700 13px 'Grenze'; color: var(--bone2); opacity: 0.75; }
+
+/* ---------- classement : onglets, pastilles de parcours, podium ---------- */
+.board-card .tabs { display: flex; gap: 0; margin: 4px 0 10px; border: 1px solid #000; border-radius: 4px; overflow: hidden; }
+.board-card .tabs button { flex: 1; padding: 10px 8px; border: 0; border-radius: 0; font: 800 17px 'Grenze', serif; background: #1a1411; color: var(--bone2); cursor: pointer; }
+.board-card .tabs button.on { background: linear-gradient(180deg, #8a4a1c, #5a2e10); color: #fff5e0; box-shadow: inset 0 -3px 0 var(--ember); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.chips button { padding: 5px 10px; font: 700 13px 'Grenze', serif; background: #15120f; border: 1px solid #000; border-left: 4px solid var(--wc, #888); border-radius: 3px; color: var(--bone2); cursor: pointer; }
+.chips button.on { background: #2a211a; color: #fff5e0; box-shadow: 0 0 0 1px var(--ember); }
+.board-card .sub { margin: 6px 0 6px; font: 800 18px 'Grenze', serif; color: #fff5e0; }
+.board li.r1 span { color: #ffd34d; } .board li.r2 span { color: #d6dde6; } .board li.r3 span { color: #d9955a; }
+.board li.r1 { border-color: #6b5316; } .board li.empty { opacity: 0.45; }
+#b-mine { margin: 8px 2px 0; font-size: 14px; }
