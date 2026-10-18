@@ -5,6 +5,7 @@ const TRACKS = {
   japan: { music: 'music/japan.mp3', amb: 'amb/japan.mp3' }, deep: { music: 'music/deep.mp3', amb: 'amb/deep.mp3' },
   sky: { music: 'music/sky.mp3', amb: 'amb/sky.mp3' }, mech: { music: 'music/mech.mp3', amb: 'amb/mech.mp3' },
   ice: { music: 'music/ice.mp3', amb: 'amb/ice.mp3' }, summit: { music: 'music/summit.mp3', amb: 'amb/summit.mp3' },
+  greek: { music: 'music/greek.mp3', amb: 'amb/greek.mp3' },
 };
 const BASE = new URL('../assets/', import.meta.url), FADE = 2.5;
 const M = { cur: null, music: null, amb: null, vMusic: 0.45, vAmb: 0.5, k: 1, unlocked: false, want: null };

@@ -138,3 +138,17 @@ téléchargeables sans compte ; les WAV originaux (48 kHz) exigent une connexion
 - Stylized Nature MegaKit (version Standard, gratuite) : arbres, sapins, buissons, fleurs, herbes, champignons, roches, cailloux — https://quaternius.com
 - Fantasy Props MegaKit (version Standard) : bannières, tonneaux, caisses, outils, établi, enclume, marmite, torche, chaînes, cordes… — https://quaternius.com
 - Convertis en .glb, textures réduites à 512 px (webp), sans cartes de normales ; assemblés par client/scatter.js.
+
+## L'Odyssée (assets/worlds/greek, 2026-10-18) — poly.pizza
+| Fichier | Modèle | Auteur | Licence |
+|---|---|---|---|
+| temple.glb | Greek Temple | Alexandre Thomas | CC BY 3.0 |
+| parthenon.glb | Parthenon | Nick Kramer | CC BY 3.0 |
+| column.glb | Doric Greek Column | Victor Vi | CC BY 3.0 |
+| amphora.glb | Amphora | Bruno Oliveira | CC BY 3.0 |
+| olive.glb | Olive tree (texture réduite 512 px WebP) | Poly by Google | CC BY 3.0 |
+| bust.glb | Bust | Anna M | CC BY 3.0 |
+| ship.glb | Sail Ship | Quaternius | CC0 |
+| horse.glb | Horse Statue | Quaternius | CC0 |
+Musique (assets/music/greek.mp3) : « Guardsman's Break » (HenryOfSkalitz, freesound 608915, CC0) + « Lyre » (Hedmarking, freesound 191883, CC0). Ambiance (assets/amb/greek.mp3) : « Ocean Noise - Surf and Gulls » (amholma, freesound 376793, CC0).
+Sauts : voix du propriétaire (assets/sfx/voice).

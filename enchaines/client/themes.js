@@ -57,6 +57,13 @@ export const THEMES = {
     mats: { ...COMMON, snow: C('plain', 0xf2f6ff, { rough: 0.9, snow: 1 }), ice: C('plain', 0x9fd4f0, { rough: 0.12, metal: 0.05, ice: 1 }),
       frost: C('plain', 0xd4e8f6, { rough: 0.5 }), snowbridge: C('wood', 0xe8eef8), icicle: C('plain', 0xbfe6ff, { rough: 0.1, ice: 1 }), rock: C('stone', 0xb0b8c8) }, props: 'ice',
   },
+  // L'Odyssée : fin d'après-midi sur la mer Égée, marbre blanc chauffé par le soleil, ciel turquoise, brume de mer
+  greek: {
+    sky: [0x2e6fb8, 0x8fc4e8, 0xffe2b0, 0xf2c89a], sun: { dir: [-0.6, 0.55, 0.45], color: 0xfff0d0, int: 2.3 }, hemi: [0xcfe6ff, 0x7a6448, 0.8],
+    fog: [0xd8e4ec, 60, 320], clouds: null, ridges: [0x7a8aa0, 0x9aa4b0, 0xb8b4b0], backdrop: 'valley', exposure: 1.02,
+    rock: { lo: [0.36, 0.3, 0.24], hi: [0.66, 0.58, 0.48], moss: [0.42, 0.48, 0.26], snowY: 999, color: 0xa08c74 }, particles: 'motes',
+    mats: { ...COMMON, marble: C('stone', 0xfaf6ee, { rough: 0.55 }), sand: C('stone', 0xeed9a8), rock: C('stone', 0xc4ae90), bronze: C('metal', 0xc08a4a, { metal: 0.7, rough: 0.35 }), wood: C('wood', 0xe0c8a0) }, props: 'greek',
+  },
   summit: {
     // haute montagne : granit gris-bleu, neige sur chaque replat, ciel profond ; client/worlds/summit.js le fait évoluer avec l'ascension
     // (matin clair -> orage plombé -> éclaircie -> or du couchant au sommet)

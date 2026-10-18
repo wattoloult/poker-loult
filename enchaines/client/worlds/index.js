@@ -6,4 +6,5 @@ import sky from './sky.js';
 import mech from './mech.js';
 import ice from './ice.js';
 import summit from './summit.js';
-export const VIEWS = { jungle, japan, deep, sky, mech, ice, summit };
+import greek from './greek.js';
+export const VIEWS = { jungle, japan, deep, sky, mech, ice, summit, greek };

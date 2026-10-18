@@ -17,6 +17,7 @@ const SPEC = {
   sky: { decor: 'Banner_1', h: 3.0, fire: 0xdff4ff, fy: 3.35, light: 0xbfe8ff }, // mât à fanion (l'ancienne colonne grecque flottante n'avait aucun sens sur une île)
   mech: { file: 'mech/piston-square', h: 1.6, fire: 0xffa448, fy: 2.1, light: 0xff9a40, spin: 'mech/cog-a', sh: 1.2 },
   ice: { file: 'ice/rock_tallA', h: 2.4, fire: 0xffb060, fy: 0.55, light: 0xffa050, base: 'ice/campfire-pit', bh: 0.5, baseX: 0.9 },
+  greek: { file: 'greek/column', h: 2.6, fire: 0xffa040, fy: 2.85, light: 0xffa850 }, // colonne dorique et sa flamme (le feu sacré)
   summit: { file: 'summit/statue_ring', h: 2.8, fire: 0xfff1c8, fy: 1.7, light: 0xffe6b0, glowBody: 0x8a6a30 },
 };
 export async function load(world) {

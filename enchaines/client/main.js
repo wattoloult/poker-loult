@@ -406,7 +406,7 @@ function renderRooms(list) {
 }
 
 /* ------------------------------ choix du parcours ------------------------------ */
-const WCOL = { medieval: '#b0743c', jungle: '#3f8f4a', japan: '#c4486a', deep: '#3a4a7a', sky: '#3d8fe0', mech: '#8a6a3a', ice: '#5aa0d0', summit: '#6a5ab0' };
+const WCOL = { medieval: '#b0743c', jungle: '#3f8f4a', japan: '#c4486a', deep: '#3a4a7a', sky: '#3d8fe0', mech: '#8a6a3a', ice: '#5aa0d0', greek: '#2fa0b0', summit: '#6a5ab0' };
 const visible = () => courseList(!!G.pt); // en playtest : tous les parcours, sinon seulement ceux publiés
 function showCourses(mode) {
   G.pick = mode; $('#c-mode').textContent = tr(mode === 'local' ? '· à deux sur ce clavier' : '· pour ton salon');

@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { S, LIB, sprite } from './scene.js';
 import { place } from './levelview.js';
 
-export const COLOR = { medieval: 0xffc46a, jungle: 0x8dffb0, japan: 0xff9cc4, deep: 0x7adcff, sky: 0xd6f0ff, mech: 0xffa448, ice: 0xb0ecff, summit: 0xfff4e0 };
+export const COLOR = { greek: 0x6fe0e8, medieval: 0xffc46a, jungle: 0x8dffb0, japan: 0xff9cc4, deep: 0x7adcff, sky: 0xd6f0ff, mech: 0xffa448, ice: 0xb0ecff, summit: 0xfff4e0 };
 let P = null;
 export function build(L, grp, nextWorld) {
   P = null;
