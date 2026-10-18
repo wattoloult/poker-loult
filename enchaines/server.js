@@ -99,7 +99,7 @@ function leave(ws) {
 function closeRoom(r) { rooms.delete(r.code); for (const ws of r.spect) ws.room = null; }
 function startMsg(r, seat) { return { t: 'start', seat, course: r.cfg.course, names: [0, 1].map((s) => r.people.find((p) => p.seat === s)?.name || 'Grimpeur ' + (s + 1)), L: r.cfg.L, s: snapWorld(r.W) }; }
 function startGame(r) {
-  r.W = createWorld({ L: r.cfg.L, course: r.cfg.course }); r.phase = 'play'; r.acc = 0; r.k = 0; r.ev = []; r.saved = false;
+  r.W = createWorld({ L: r.cfg.L, course: r.cfg.course }); r.phase = 'play'; r.acc = 0; r.k = 0; r.ev = []; r.saved = false; r.run = []; // r.run : les entrées des deux grimpeurs pas à pas (replay des records)
   for (const p of r.people) { p.q = []; p.last = null; p.ack = 0; p.fresh = true; }
   for (const p of r.people) send(p.ws, startMsg(r, p.seat));
   for (const ws of r.spect) send(ws, startMsg(r, null));
@@ -120,11 +120,17 @@ function update(r, dt) {
       if (p.offline) p.last = { ...(p.last || IDLE), mx: 0, mz: 0, jump: false };
       ins[p.seat] = p.last || IDLE;
     }
-    stepWorld(r.W, ins);
+    recTick(r, ins); stepWorld(r.W, ins);
     for (const e of r.W.ev) if (KEEP.has(e.k)) r.ev.push(e);
     if (++r.k % SNAP_EVERY === 0) snap(r, ins);
     if (r.W.done && !r.saved) { r.saved = true; record(r); }
   }
+}
+// enregistre le pas : séries d'entrées identiques regroupées (voir core/coop-run.js) ; au-delà de 300 000 séries on abandonne l'enregistrement
+function recTick(r, ins) {
+  if (!r.run || r.W.done) return;
+  const a = encIn(ins[0]), b = encIn(ins[1]), e = [1, ...a.slice(1), ...b.slice(1)], l = r.run[r.run.length - 1];
+  if (l && l.length === 13 && l.every((v, k) => k === 0 || v === e[k])) l[0]++; else { r.run.push(e); if (r.run.length > 300000) r.run = null; }
 }
 function snap(r, ins) {
   const w = snapWorld(r.W), ack = [0, 0];
@@ -136,7 +142,12 @@ function snap(r, ins) {
 function record(r) { // classement par meilleur temps (le serveur a chronométré lui-même la montée)
   const names = [0, 1].map((s) => r.people.find((p) => p.seat === s)?.name || '?');
   const e = { names, time: Math.round(r.W.time * 100) / 100, falls: r.W.falls, saves: r.W.saves, L: r.cfg.L, date: new Date().toISOString().slice(0, 10) };
-  let board = boardOf(r.cfg.course); board.push(e); board.sort((a, b) => a.time - b.time); boards[r.cfg.course] = board = board.slice(0, 50);
+  if (r.run?.length) { // replay du record : la montée entière, rejouée chez le client avec la vraie physique
+    e.rid = crypto.randomBytes(8).toString('hex'); e.v = SIM_V;
+    try { fs.writeFileSync(path.join(REPLAYS, e.rid + '.json'), JSON.stringify({ coop: 1, course: r.cfg.course, L: r.cfg.L, names, time: e.time, falls: e.falls, saves: e.saves, date: e.date, v: SIM_V, run: r.run })); } catch (err) { delete e.rid; console.error('replay non écrit', err.message); }
+  }
+  let board = boardOf(r.cfg.course); board.push(e); board.sort((a, b) => a.time - b.time);
+  for (const x of board.slice(50)) dropReplay(x); boards[r.cfg.course] = board = board.slice(0, 50);
   try { fs.writeFileSync(BEST, JSON.stringify(boards)); } catch (err) { console.error('classement non écrit', err.message); }
   cast(r, { t: 'end', course: r.cfg.course, board: board.slice(0, 10), rank: board.indexOf(e) < 10 ? board.indexOf(e) : null });
 }
@@ -229,7 +240,7 @@ wss.on('connection', (ws) => {
       case 'start': if (r && r.host === ws.id && live(r).length === 2) startGame(r); break;
       case 'next': if (r && r.host === ws.id && r.phase === 'play' && live(r).length === 2) { r.cfg.course = okCourse(ws, m.course); startGame(r); pushRoom(r); } break; // portail de fin : parcours suivant
       case 'restart': if (r && r.host === ws.id && r.phase === 'play') startGame(r); break;
-      case 'cp': if (r && p && r.W) { r.W.resetHold[p.seat] = 1.01; } break; // retour au point de passage demandé depuis le menu
+      case 'cp': if (r && p && r.W) { r.W.resetHold[p.seat] = 1.01; r.run?.push(['cp', p.seat]); } break; // retour au point de passage demandé depuis le menu
       case 'i': {
         if (!p || !r.W || !Array.isArray(m.a)) break;
         for (const e of m.a.slice(0, 12)) if (Array.isArray(e) && e.length >= 6 && e.length <= 7 && Number.isInteger(e[0]) && e[0] > p.ack) { if (p.fresh) { p.fresh = false; p.q = []; } p.q.push(e); }

@@ -39,6 +39,10 @@ test('salon à deux, départ, entrées, instantanés identiques', async () => {
   assert.ok(a.last.end && b.last.end, 'fin annoncée aux deux');
   assert.equal(a.last.end.board[0].names.join('+'), 'Alpha+Bravo');
   assert.equal(a.last.end.rank, 0);
+  // replay du record à deux : la montée est gardée au serveur (entrées des deux grimpeurs) et servie par le HTTP
+  const rid = a.last.end.board[0].rid; assert.match(rid, /^[0-9a-f]{16}$/, 'le record garde un replay');
+  const rep = await (await fetch('http://127.0.0.1:18807/enchaines-ws/replay?id=' + rid)).json();
+  assert.ok(rep.coop && Array.isArray(rep.run) && rep.run.length > 0 && rep.names.join('+') === 'Alpha+Bravo' && rep.L === 6.5, 'replay à deux complet');
   // portail : seul l'hôte enchaîne ; un parcours inconnu ramène au parcours par défaut
   b.send({ t: 'next', course: 'remparts' }); await wait(150); a.last.start = null; a.send({ t: 'next', course: 'remparts' }); await wait(250);
   assert.equal(a.last.start?.course, 'remparts', "l'hôte enchaîne sur le parcours suivant");
