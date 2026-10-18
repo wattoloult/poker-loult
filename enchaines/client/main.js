@@ -246,7 +246,7 @@ function stepOnline() {
 }
 function loop(now) {
   G.raf = now; if (!(!G.mode && G.demo)) Scene.homeChain(0, false);
-  const dt = Math.min(0.1, (now - G.last) / 1000) * (G.pt?.speed || 1); G.last = now;
+  const dt = Math.min(0.1, (now - G.last) / 1000) * (G.mode === 'online' ? 1 : G.pt?.speed || 1); G.last = now;
   if (!G.mode && G.demo && Scene.S.ready) demoFrame(dt);
   if (G.mode && G.W && !Scene.S.building) {
     camKeys(dt);
@@ -402,6 +402,7 @@ function getNet() {
     for (const [, I] of G.pend) stepWorld(W, me === 0 ? [I, G.partnerIn] : [G.partnerIn, I]);
     W.ev.length = 0;
     W.pl.forEach((p, k) => Scene.addError(k, before[k][0] - p.x, before[k][1] - p.y, before[k][2] - p.z));
+    desyncWatch(W, me, before, m);
     if (m.e?.length) handleEvents(W, m.e, true);
   });
   net.on('end', (m) => { renderBoard(m.board, m.rank); });
@@ -428,6 +429,15 @@ async function micToggle() {
 }
 function micLabel() { const s = Voice.status(); $('#mic').textContent = !s.mic ? tr('Activer le micro (M)') : s.on ? tr('Micro ouvert (M)') : tr('Micro coupé (M)'); $('#mic').classList.toggle('live', s.mic && s.on); $('#mic-link').textContent = s.link === 'connected' ? 'vocal relié' : s.link === 'off' ? '' : s.link === 'failed' ? 'vocal : échec de la liaison' : 'vocal : connexion…'; }
 Voice.onChange(micLabel);
+// MOUCHARD : si la prédiction s'écarte nettement de ce que calcule le serveur (> 0,8 m, 4 fois en 3 s), on envoie l'état au serveur (journal
+// enchaines-mm, message 'err' déjà enregistré) : de quoi comprendre un « bloqué / sauts infinis » signalé en partie sans pouvoir le reproduire.
+const DS = { n: 0, t0: 0, sent: 0 };
+function desyncWatch(W, me, before, m) {
+  const p = W.pl[me], e = Math.hypot(before[me][0] - p.x, before[me][1] - p.y, before[me][2] - p.z), now = performance.now();
+  if (e < 0.8) return; if (now - DS.t0 > 3000) { DS.t0 = now; DS.n = 0; } if (++DS.n < 4 || now - DS.sent < 15000) return; DS.sent = now;
+  const f = (q) => `st${q.st} ${q.x.toFixed(2)},${q.y.toFixed(2)},${q.z.toFixed(2)} v${q.vy.toFixed(1)} jc${q.jc} cup${q.cup ? 1 : 0} mate${q.onMate ? 1 : 0} gb${q.gb}`;
+  try { net?.send({ t: 'err', m: `DESYNC ${W.level.id} cp${W.cp} seat${me} e=${e.toFixed(2)} n${DS.n}`, at: `moi(prédit) ${before[me].map((v) => v.toFixed(2)).join(',')} | serveur+rejeu ${f(p)} | partenaire ${f(W.pl[1 - me])} | pend ${G.pend.length} ack ${m.ack[me]} ct ${G.ct} rtt ${Math.round(net?.rtt || 0)} in ${JSON.stringify(m.in[me])} pt ${G.pt ? 1 : 0}` }); } catch { }
+}
 function renderRoom(m) {
   $('#r-code').textContent = m.code;
   $('#r-link').value = location.origin + location.pathname + '?r=' + m.code;
