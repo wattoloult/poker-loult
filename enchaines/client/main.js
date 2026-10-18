@@ -298,7 +298,7 @@ function hud(W, dt) {
   }
   // astuce du coin
   let hint = '';
-  for (const h of LV().hints) for (const p of W.pl) if (Math.hypot(p.x - h.x, p.y - h.y, p.z - h.z) < 4.5) hint = hintKeys(tr(h.txt));
+  for (const h of LV().hints) for (const p of W.pl) if (Math.hypot(p.x - h.x, p.y - h.y, p.z - h.z) < 4.5) { const t = G.solo ? soloHint(h.txt) : h.txt; if (t) hint = hintKeys(tr(t)); }
   const resetting = Math.max(...W.resetHold);
   if (resetting > 0.05) hint = tr('Retour au point de passage… {0}', Math.ceil((1 - resetting) * 10) / 10);
   else if (Math.max(a.y, b.y) < LV().checkpoints[W.cp].y - 10 && a.st === ST.GROUND && b.st === ST.GROUND && !G.solo) hint = hintKeys(tr('Tombés bien bas ? Maintenez R pour revenir au point de passage'));
@@ -306,6 +306,13 @@ function hud(W, dt) {
   // débogage : états, tension, longueur
   if (G.debug) $('#dbg').textContent = W.pl.map((p, k) => `J${k + 1} ${['sol', 'air', 'rebord', 'paroi', 'hisse'][p.st]} y=${p.y.toFixed(2)} v=${Math.hypot(p.vx, p.vz).toFixed(1)}/${p.vy.toFixed(1)} end=${p.sta.toFixed(2)} ${p.brace ? 'ARC' : ''} ${p.dangling ? 'PEND' : ''}`).join('\n') + `\nchaîne ${W.Lc.toFixed(2)}/${W.L} tension ${W.ten.toFixed(2)}  tick ${W.tick}  ${G.mode === 'online' ? 'rtt ' + Math.round(net.rtt) + ' ms, en attente ' + G.pend.length : ''}`;
   $('#dbg').style.display = G.debug ? 'block' : 'none';
+}
+// speedrun solo : les astuces écrites pour deux sont reformulées (pas de partenaire ni de chaîne)
+function soloHint(txt) {
+  if (/courte échelle/i.test(txt)) return "Seul : saute, puis appuie encore sur Espace en l'air (second saut) pour attraper le rebord";
+  if (/balises/i.test(txt)) return "Seul : allume les trois balises d'affilée en courant (F), elles brûlent juste assez longtemps";
+  if (/plaque|dalle/i.test(txt)) return 'Seul : une seule plaque suffit à ouvrir, puis cours';
+  return /partenaire|chaîne|ensemble|chacun|tous les deux/i.test(txt) ? '' : txt;
 }
 function flashZone(cp) { const el = $('#zonecard'); const c = LV().checkpoints[cp]; el.innerHTML = `<small>${tr("Zone {0}", c.zone)}</small><b>${esc(tr(c.name))}</b>`; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); }
 /* ------------------------------ records et médailles (par parcours, sur cet appareil) ------------------------------ */
