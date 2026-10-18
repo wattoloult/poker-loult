@@ -345,11 +345,11 @@ function stepPlayer(W, p, I, mate) {
   p.haul = !!I.pull && p.st === ST.GROUND && p.sta > 0.02 && mate?.st === ST.AIR && W.taut > 0.4; if (I.pull && p.st === ST.GROUND) p.brace = false;
   // COURTE ÉCHELLE (action dédiée, maintenue) : debout au sol, on joint les mains devant soi et on ne bouge plus, tourné vers le partenaire ;
   // le partenaire qui saute tout près (au sol ou en retombant à hauteur des mains) pose le pied dedans et part bien plus haut (P.CUP_V)
-  p.cup = !!I.cup && p.st === ST.GROUND && !p.onMate && !p.haul && !W.alone && !W.solo;
+  p.cup = !!I.cup && wl < 0.2 && p.st === ST.GROUND && !p.onMate && !p.haul && !W.alone && !W.solo;
   if (p.cup) { p.brace = false; p.cupT = (p.cupT || 0) + dt; wx = wz = 0; const d = Math.atan2(mate.x - p.x, mate.z - p.z) - p.yaw; p.yaw += clamp(Math.atan2(Math.sin(d), Math.cos(d)), -P.TURN * dt, P.TURN * dt); } else p.cupT = 0;
   p.pushT = Math.max(0, (p.pushT || 0) - dt);
   p.ropeUp = false;
-  if (p.st !== ST.AIR) p.dj = false; // second saut (mode solo) rendu dès qu'on touche quelque chose
+  if (p.st !== ST.AIR) { p.dj = false; p.cupUsed = false; } // second saut (mode solo) rendu dès qu'on touche quelque chose
   p.ropeCd = Math.max(0, (p.ropeCd || 0) - dt);
   // levier à portée : « Interagir » le bascule
   if (uPress && p.st !== ST.AIR) for (const b of W.bodies) if (b.lever && Math.hypot(b.px - p.x, b.pz - p.z) < P.USE_R && Math.abs(b.py - (p.y + 1)) < 2.2) {
@@ -536,10 +536,10 @@ function uStep(b, f, fi, d) { const ax = FACE[f][0] ? b.s : b.c, az = FACE[f][0]
 function roomAbove(W, b, f, u) { facePoint(b, f, u, -0.4, b.py + b.hh + 1.0, FP); return !inside(W, FP.x, FP.y, FP.z); }
 // le grimpeur p saute dans les mains jointes de son partenaire (mains depuis au moins 0,15 s, à portée, pieds à hauteur du sol ou des mains)
 function cupBoost(W, p, m) {
-  if (!m || !m.cup || m.cupT < 0.15 || p.cup) return false;
+  if (!m || !m.cup || m.cupT < 0.15 || p.cup || (p.st === ST.AIR && p.cupUsed)) return false; // en l'air : une seule relance avant de retoucher le sol
   const h = Math.hypot(p.x - m.x, p.z - m.z), dy = p.y - m.y;
   if (h > P.CUP_R || dy < -0.4 || dy > 1.4 || (p.st === ST.AIR && p.vy > 1)) return false;
-  p.buf = 0; p.vy = P.CUP_V + Math.max(0, m.gvy || 0); toAir(p); p.coy = 0; p.cut = false; p.jHeld = true; p.noCut = true;
+  p.buf = 0; p.vy = P.CUP_V + Math.max(0, m.gvy || 0); toAir(p); p.cupUsed = true; p.coy = 0; p.cut = false; p.jHeld = true; p.noCut = true;
   m.pushT = 0.4; ev(W, 'boost', { p: p.id, by: m.id, x: m.x, y: m.y + 0.8, z: m.z });
   return true;
 }

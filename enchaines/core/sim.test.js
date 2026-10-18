@@ -201,8 +201,8 @@ test('courte échelle : le partenaire joint les mains (immobile), on saute dedan
   const W = createWorld(); run(W, 30);
   const [A, B] = W.pl; Object.assign(A, { x: B.x - 0.8, z: B.z }); layChain(W); run(W, 30);
   const bx = B.x, y0 = A.y; let top = 0;
-  // B tient « courte échelle » 0,3 s (et pousse le stick : il ne doit pas bouger), puis A saute
-  run(W, 36, () => IDLE, () => ({ ...IDLE, cup: true, mx: 1 }));
+  // B tient « courte échelle » 0,3 s puis A saute
+  run(W, 36, () => IDLE, () => ({ ...IDLE, cup: true }));
   assert.ok(B.cup && Math.abs(B.x - bx) < 0.02, 'les mains jointes : on ne bouge plus');
   for (let i = 0; i < 160; i++) { stepWorld(W, [{ ...IDLE, jc: 1, jump: true }, { ...IDLE, cup: true }]); top = Math.max(top, A.y - y0); }
   assert.ok(top > 3.1 && top < 3.9, 'apex avec courte échelle ' + top.toFixed(2) + ' m (saut normal ~1,6 m)');
@@ -218,4 +218,14 @@ test('courte échelle : le partenaire joint les mains (immobile), on saute dedan
   Object.assign(A3, { y: B3.y + 1.0, vy: -2, st: ST.AIR }); let t3 = 0;
   for (let i = 0; i < 160; i++) { stepWorld(W3, [{ ...IDLE, jc: 1, jump: true }, { ...IDLE, cup: true }]); t3 = Math.max(t3, A3.y - B3.y); }
   assert.ok(t3 > 3.5, 'relancé depuis les mains : ' + t3.toFixed(2));
+});
+
+test("courte échelle : pas de relances infinies en l'air, et bouger annule les mains jointes (touche restée enfoncée)", () => {
+  const W = createWorld(); run(W, 30); const [A, B] = W.pl; Object.assign(A, { x: B.x - 0.6 }); layChain(W); run(W, 30);
+  run(W, 36, () => IDLE, () => ({ ...IDLE, cup: true }));
+  let jc = 0, k = 0, worst = 0;
+  for (let i = 0; i < 120 * 6; i++) { if (i % 12 === 0) jc++; stepWorld(W, [{ ...IDLE, jc, jump: true }, { ...IDLE, cup: true }]); if (A.st === ST.GROUND) k = 0; k += W.ev.filter((e) => e.k === 'boost').length; worst = Math.max(worst, k); }
+  assert.ok(worst <= 2, 'entre deux contacts avec le sol : un élan + une relance au plus, pas un envol sans fin (' + worst + ')');
+  const bx = B.x; run(W, 120, () => IDLE, () => ({ ...IDLE, cup: true, mx: 1 }));
+  assert.ok(!B.cup && B.x > bx + 2, 'avec G enfoncé, pousser une direction fait marcher : x ' + bx.toFixed(1) + ' -> ' + B.x.toFixed(1));
 });
