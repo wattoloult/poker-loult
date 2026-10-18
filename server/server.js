@@ -124,8 +124,6 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=u
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p === '/') p = '/play.html';
-  else if (p === '/enchaines') { res.writeHead(301, { Location: '/enchaines/' }); return res.end(); }
-  else if (p.endsWith('/')) p += 'index.html';
   const file = path.join(ROOT, path.normalize(p).replace(/^(\.\.[\\/])+/, ''));
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end('404'); return; }
