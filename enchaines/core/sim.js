@@ -17,7 +17,7 @@ export const P = {
   WJ_OUT: 5.6, WJ_UP: 8.2,                      // saut depuis un mur ou un rebord
   STA_CLIMB: 1 / 7, STA_HANG: 1 / 16, STA_LOAD: 1 / 5, STA_ROPE: 1 / 6, STA_REGEN: 0.6,
   PULL_V: 2.6, DRAG_V: 0.9, TOW_V: 3.2, HAUL_MOVE: 0.3, HAUL_SLIP: 0.45, STA_HAUL: 1 / 4.5, // tirer la chaîne : petits pas, on glisse vers le partenaire (HAUL_SLIP x charge), ça épuise                     // au sol avec un partenaire suspendu : vitesse en le hissant / glissade si on ne s'arc-boute pas
-  KNOCK: 7,
+  KNOCK: 7, CUP_V: 12.6, CUP_R: 1.25, // courte échelle : élan donné par les mains jointes (apex ~3,4 m, comme debout sur la tête puis sauter), portée
   ROPE_REACH: 0.7, ROPE_PUMP: 22, ROPE_VMAX: 9, ROPE_CLIMB: 1.6, ROPE_JUMP: 6, ROPE_STA: 1 / 22, BAR_FWD: 5.8, BAR_UP: 7.4, USE_R: 1.9,
 };
 export const CH = { N: 12, L: 6.5, MIN: 1.6, ITER: 16, NODE_G: 0.6, DAMP: 0.996, CLIMB: 1.5, HAUL: 1.9, GROW: 2.2, MAXDV: 18 };
@@ -343,6 +343,11 @@ function stepPlayer(W, p, I, mate) {
   // tirer la chaîne (action dédiée) : seulement debout au sol et avec de l'endurance ; on ne peut pas s'arc-bouter en même temps
   // on ne ravale la chaîne que si elle porte un partenaire en l'air : posé ou accroché, on ne tire plus (sinon on le colle à soi et ils s'envolent)
   p.haul = !!I.pull && p.st === ST.GROUND && p.sta > 0.02 && mate?.st === ST.AIR && W.taut > 0.4; if (I.pull && p.st === ST.GROUND) p.brace = false;
+  // COURTE ÉCHELLE (action dédiée, maintenue) : debout au sol, on joint les mains devant soi et on ne bouge plus, tourné vers le partenaire ;
+  // le partenaire qui saute tout près (au sol ou en retombant à hauteur des mains) pose le pied dedans et part bien plus haut (P.CUP_V)
+  p.cup = !!I.cup && p.st === ST.GROUND && !p.onMate && !p.haul && !W.alone && !W.solo;
+  if (p.cup) { p.brace = false; p.cupT = (p.cupT || 0) + dt; wx = wz = 0; const d = Math.atan2(mate.x - p.x, mate.z - p.z) - p.yaw; p.yaw += clamp(Math.atan2(Math.sin(d), Math.cos(d)), -P.TURN * dt, P.TURN * dt); } else p.cupT = 0;
+  p.pushT = Math.max(0, (p.pushT || 0) - dt);
   p.ropeUp = false;
   if (p.st !== ST.AIR) p.dj = false; // second saut (mode solo) rendu dès qu'on touche quelque chose
   p.ropeCd = Math.max(0, (p.ropeCd || 0) - dt);
@@ -451,13 +456,15 @@ function stepPlayer(W, p, I, mate) {
       const nvx = approach(rvx, tx, Math.abs(k * (tx - rvx) / (Math.hypot(tx - rvx, tz - rvz) || 1)));
       const nvz = approach(rvz, tz, Math.abs(k * (tz - rvz) / (Math.hypot(tx - rvx, tz - rvz) || 1)));
       p.vx = nvx + p.gvx; p.vz = nvz + p.gvz; p.vy = Math.min(p.vy, p.gvy);
-      if (p.buf > 0) { // saut : on garde l'élan de la plateforme
+      if (p.buf > 0 && cupBoost(W, p, mate)) { /* courte échelle */ }
+      else if (p.buf > 0) { // saut : on garde l'élan de la plateforme
         p.buf = 0; p.vy = P.JUMP + Math.max(0, p.gvy); p.st = ST.AIR; p.stT = 0; p.coy = 0; p.cut = false; p.jHeld = true; p.onMate = false;
         ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z });
       }
     } else {
       p.coy = Math.max(0, p.coy - dt);
-      if (p.buf > 0 && p.coy > 0) { // coyote time : le saut part encore juste après avoir quitté le bord
+      if (p.buf > 0 && cupBoost(W, p, mate)) { /* courte échelle en retombant sur les mains */ }
+      else if (p.buf > 0 && p.coy > 0) { // coyote time : le saut part encore juste après avoir quitté le bord
         p.buf = 0; p.vy = P.JUMP; p.coy = 0; p.cut = false; p.jHeld = true; ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z });
       } else if (W.alone && p.buf > 0 && !p.dj && p.stT > 0.08) { // MODE SOLO : un second saut en l'air remplace la courte échelle (passages prévus pour deux)
         p.buf = 0; p.dj = true; p.vy = Math.max(p.vy, P.JUMP); p.cut = false; p.jHeld = true; ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z, dj: 1 });
@@ -527,6 +534,15 @@ function turnCorner(W, p, b, fi, lat) {
 function uStep(b, f, fi, d) { const ax = FACE[f][0] ? b.s : b.c, az = FACE[f][0] ? b.c : -b.s; return d * (fi.nz * ax - fi.nx * az); }
 // place pour se hisser au-dessus du bord ?
 function roomAbove(W, b, f, u) { facePoint(b, f, u, -0.4, b.py + b.hh + 1.0, FP); return !inside(W, FP.x, FP.y, FP.z); }
+// le grimpeur p saute dans les mains jointes de son partenaire (mains depuis au moins 0,15 s, à portée, pieds à hauteur du sol ou des mains)
+function cupBoost(W, p, m) {
+  if (!m || !m.cup || m.cupT < 0.15 || p.cup) return false;
+  const h = Math.hypot(p.x - m.x, p.z - m.z), dy = p.y - m.y;
+  if (h > P.CUP_R || dy < -0.4 || dy > 1.4 || (p.st === ST.AIR && p.vy > 1)) return false;
+  p.buf = 0; p.vy = P.CUP_V + Math.max(0, m.gvy || 0); toAir(p); p.coy = 0; p.cut = false; p.jHeld = true; p.noCut = true;
+  m.pushT = 0.4; ev(W, 'boost', { p: p.id, by: m.id, x: m.x, y: m.y + 0.8, z: m.z });
+  return true;
+}
 function toAir(p) { p.st = ST.AIR; p.stT = 0; p.vx += 0; p.onMate = false; p.gb = -1; p.gvx = p.gvy = p.gvz = 0; }
 function setGround(W, p, b) {
   if (p.st === ST.AIR) {

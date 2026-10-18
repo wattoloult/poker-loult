@@ -323,7 +323,7 @@ export function sprite(color, size) {
 
 /* ------------------------------ grimpeurs : pose ------------------------------ */
 const ST_ANIM = (p, spd) => {
-  if (p.st === ST.GROUND) return p.brace || p.haul ? 'Crouch_Idle_Loop' : spd < 0.35 ? 'Idle_Loop' : spd < 2.6 ? 'Walk_Loop' : 'Jog_Fwd_Loop';
+  if (p.st === ST.GROUND) return p.brace || p.haul || p.cup || p.pushT > 0 ? 'Crouch_Idle_Loop' : spd < 0.35 ? 'Idle_Loop' : spd < 2.6 ? 'Walk_Loop' : 'Jog_Fwd_Loop';
   if (p.st === ST.AIR) return p.knock > 0 ? 'Hit_Knockback' : p.vy > 2 && p.stT < 0.35 ? 'Jump_Start' : 'Jump_Loop';
   return 'Jump_Loop';
 };
@@ -371,6 +371,9 @@ function poseClimber(c, p, mate, W, dt, rp) {
     // pendu à la chaîne : les deux mains serrent les maillons au-dessus de la ceinture
     const n = W.ch[p.id ? W.ch.length - 2 : 1]; const tgt = new THREE.Vector3(n.x, n.y, n.z);
     armTo(c, 'l', tgt.clone().add(right.clone().multiplyScalar(-0.08)), 0.9); armTo(c, 'r', tgt.clone().add(right.clone().multiplyScalar(0.08)), 0.9);
+  } else if (p.st === ST.GROUND && (p.cup || p.pushT > 0)) { // courte échelle : mains jointes en coupe devant les genoux ; la poussée les lève au-dessus de la tête
+    const k = p.pushT > 0 ? Math.sin(Math.min(1, (0.4 - p.pushT) / 0.25) * Math.PI / 2) : 0, y = 0.72 + k * 1.25, z = 0.42 - k * 0.1;
+    armTo(c, 'l', at(-0.05, y, z), 0.95); armTo(c, 'r', at(0.05, y, z), 0.95);
   } else if (p.st === ST.GROUND && (p.brace || p.haul) && W.taut > 0.4) {
     const n = W.ch[p.id ? W.ch.length - 2 : 1]; const tgt = new THREE.Vector3(n.x, n.y, n.z);
     armTo(c, 'l', tgt, 0.8); armTo(c, 'r', tgt, 0.8);

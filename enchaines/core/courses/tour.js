@@ -85,7 +85,7 @@ block(-17.8, 44, 54, 3, 4, 5, { mat: 'rock', climb: 1, climbFaces: [0], coop: 1 
 block(-18.4, 54, 56.6, 3, 3.2, 5, { mat: 'stone' });
 for (let i = 0; i < 7; i++) plat(-22.6 - i * 1.75, 56.6, 3, 1.4, 2.6, { mat: 'wood', h: 0.35, sink: { d: 0.45, k: 38, max: 1.5 }, plank: 1 });
 plat(-37.5, 57.4, 3, 5, 5, { mat: 'stone', h: 1.4 });
-hint(-37.5, 57.4, 3, 'Courte échelle : monte sur la tête de ton partenaire pour attraper le rebord');
+hint(-37.5, 57.4, 3, "Courte échelle : l'un tient G au bord (mains jointes), l'autre saute dedans pour attraper le rebord"); // (ou monter sur sa tête)
 block(-37.5, 52, 62.6, -3.5, 5, 5, { mat: 'stone', coop: 1 });
 /* ------------------------- zone 7 — L'Épreuve (difficulté avancée) ------------------------- */
 zone(7, "L'Épreuve");

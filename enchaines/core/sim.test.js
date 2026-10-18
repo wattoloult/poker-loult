@@ -196,3 +196,26 @@ test("courte échelle : l'un saute sur la tête de l'autre, s'y tient debout et 
   for (let i = 0; i < 360; i++) { const j = i < 10 ? 0 : i < 120 ? 1 : 2; stepWorld(W, [{ ...IDLE, mz: i < 60 ? 0.6 : 0, jc: j, jump: i >= 10 && i < 40 || i >= 120 && i < 150 }, IDLE]); onHead ||= A.onMate && A.st === ST.GROUND; top = Math.max(top, A.y); }
   assert.ok(onHead, 'debout sur la tête du partenaire'); assert.ok(top > 3, 'ressaut depuis la tête (apex ' + top.toFixed(2) + ')');
 });
+
+test('courte échelle : le partenaire joint les mains (immobile), on saute dedans et on monte bien plus haut ; en retombant dessus aussi', () => {
+  const W = createWorld(); run(W, 30);
+  const [A, B] = W.pl; Object.assign(A, { x: B.x - 0.8, z: B.z }); layChain(W); run(W, 30);
+  const bx = B.x, y0 = A.y; let top = 0;
+  // B tient « courte échelle » 0,3 s (et pousse le stick : il ne doit pas bouger), puis A saute
+  run(W, 36, () => IDLE, () => ({ ...IDLE, cup: true, mx: 1 }));
+  assert.ok(B.cup && Math.abs(B.x - bx) < 0.02, 'les mains jointes : on ne bouge plus');
+  for (let i = 0; i < 160; i++) { stepWorld(W, [{ ...IDLE, jc: 1, jump: true }, { ...IDLE, cup: true }]); top = Math.max(top, A.y - y0); }
+  assert.ok(top > 3.1 && top < 3.9, 'apex avec courte échelle ' + top.toFixed(2) + ' m (saut normal ~1,6 m)');
+  assert.ok(W.ev !== undefined && B.pushT >= 0);
+  // trop loin : saut normal
+  const W2 = createWorld(); run(W2, 30); const [A2, B2] = W2.pl; Object.assign(A2, { x: B2.x - 2.2 }); layChain(W2); run(W2, 30);
+  run(W2, 36, () => IDLE, () => ({ ...IDLE, cup: true })); let t2 = 0; const y2 = A2.y;
+  for (let i = 0; i < 160; i++) { stepWorld(W2, [{ ...IDLE, jc: 1, jump: true }, { ...IDLE, cup: true }]); t2 = Math.max(t2, A2.y - y2); }
+  assert.ok(t2 < 1.8, 'hors de portée : saut normal ' + t2.toFixed(2));
+  // en retombant à hauteur des mains, appuyer sur saut relance
+  const W3 = createWorld(); run(W3, 30); const [A3, B3] = W3.pl; Object.assign(A3, { x: B3.x - 0.6 }); layChain(W3); run(W3, 30);
+  run(W3, 36, () => IDLE, () => ({ ...IDLE, cup: true }));
+  Object.assign(A3, { y: B3.y + 1.0, vy: -2, st: ST.AIR }); let t3 = 0;
+  for (let i = 0; i < 160; i++) { stepWorld(W3, [{ ...IDLE, jc: 1, jump: true }, { ...IDLE, cup: true }]); t3 = Math.max(t3, A3.y - B3.y); }
+  assert.ok(t3 > 3.5, 'relancé depuis les mains : ' + t3.toFixed(2));
+});

@@ -62,8 +62,8 @@ cam(66, 0, -6, 112, 12, 6, { mode: 'far', dist: 5, pitch: 0.18 });
 block(86, -6, 5.4, 0, 7, 6, { mat: 'stone', name: 'îlot' });
 hint(88, 5.4, 0, 'Les planches de l\'autre pont sont pourries : elles cèdent quand on s\'y attarde, et le vent se lève');
 for (let i = 0; i < 8; i++) plat(91.4 + i * 1.55, 5.4, 0, 1.15, 2.2, { mat: 'wood', h: 0.3, plank: 1, crumble: { t: 0.8, back: 5 } });
-wind(96, 7, 0, 15, 6, 6, [0, 0, -8], { pulse: 5 });
-wind(96, 7, 0, 15, 6, 6, [0, 0, 8], { pulse: 5, ph: Math.PI });
+wind(96, 7, 0, 15, 6, 6, [0, 0, -6], { pulse: 5 }); // 8 -> 6 : une petite erreur de direction sur ce pont étroit suffisait à faire tomber
+wind(96, 7, 0, 15, 6, 6, [0, 0, 6], { pulse: 5, ph: Math.PI });
 block(106, -6, 5.4, 0, 7, 6, { mat: 'stone', name: 'rive' });
 
 /* ---------------- 4. Le Bosquet de bambous : paroi à escalader, toits de tuiles mouillés ---------------- */
