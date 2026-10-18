@@ -609,6 +609,7 @@ function setGround(W, p, b) {
     const drop = p.peakY - p.y;
     p.land = 0.25; ev(W, 'land', { p: p.id, x: p.x, y: p.y, z: p.z, v: -p.vy, h: drop });
     if (drop > 9) { W.falls++; ev(W, 'fall', { p: p.id, h: drop }); }
+    if (drop > 8 && p.y < W.level.checkpoints[W.cp].y - 6) p.fell = true; // retombé bien plus bas que son point de passage (retour auto si les deux le sont)
     p.peakY = p.y;
   }
   const vy = p.vy; p.noCut = false; p.lgx = p.x; p.lgy = p.y; p.lgz = p.z; // dernier appui (anti-chute du mode test)
@@ -932,11 +933,17 @@ export function stepWorld(W, inputs) {
   }
   for (const m of BIOMES) m.post?.(W, X);
   // retour au dernier point de passage : maintenir R (les deux en local, l'un ou l'autre en ligne)
-  for (let k = 0; k < 2; k++) { const I = inputs[k] || IDLE; W.resetHold[k] = I.reset ? W.resetHold[k] + DT : 0; }
+  W.rLock ||= [false, false]; // après un retour, il faut relâcher R (sinon on réapparaîtrait en boucle en le gardant enfoncé)
+  for (let k = 0; k < 2; k++) { const I = inputs[k] || IDLE; if (!I.reset) W.rLock[k] = false; W.resetHold[k] = I.reset && !W.rLock[k] ? W.resetHold[k] + DT : 0; }
   if (W.noAbyss) for (const p of W.pl) if (p.y < W.level.abyss && p.lgx != null) { Object.assign(p, { x: p.lgx, y: p.lgy + 0.05, z: p.lgz, vx: 0, vy: 0, vz: 0, st: ST.AIR, hang: null, climb: null, rope: null }); layChain(W); ev(W, 'respawn', {}); }
+  // TOMBÉS BIEN BAS (pas dans le vide, sur un rebord en contrebas) : quand les deux le sont et posés depuis 1,5 s, retour au point de passage
+  const cpY = W.level.checkpoints[W.cp].y; for (const p of W.pl) if (p.fell && p.y > cpY - 3) p.fell = false; // il est remonté
+  const lost = W.solo ? false : W.alone ? A.fell && A.st === ST.GROUND : A.fell && B.fell && A.st === ST.GROUND && B.st === ST.GROUND;
+  W.lostT = lost ? (W.lostT || 0) + DT : 0;
   const abyss = A.y < W.level.abyss || B.y < W.level.abyss;
-  if (abyss || Math.max(...W.resetHold) > 1.0) {
-    if (abyss) { W.falls++; ev(W, 'abyss'); } else { W.resets++; ev(W, 'reset'); }
+  if (abyss || Math.max(...W.resetHold) > (W.alone ? 0.05 : 1.0) || W.lostT > 1.5) { // solo : R réagit tout de suite ; à deux on le maintient (pas de retour par erreur)
+    if (abyss) { W.falls++; ev(W, 'abyss'); } else if (W.lostT > 1.5) ev(W, 'lost'); else { W.resets++; ev(W, 'reset'); }
+    W.lostT = 0; if (!abyss) W.rLock = [true, true];
     spawnAt(W, W.cp); ev(W, 'respawn', { cp: W.cp }); return W;
   }
   // points de passage : les deux grimpeurs dans la zone, au moins un au sol
@@ -959,7 +966,7 @@ export function snapWorld(W, exact = false) {
   const r3 = exact ? (v) => v : R3;
   return {
     k: W.tick, L: W.L, Lc: r3(W.Lc), cp: W.cp, cpm: W.cpMax, tm: r3(W.time), st: W.started ? 1 : 0, dn: W.done ? 1 : 0, f: W.falls, sv: W.saves, rs: W.resets, ten: r3(W.ten), ta: r3(W.taut), be: r3(W.best),
-    rh: W.resetHold.map(r3),
+    rh: W.resetHold.map(r3), lt: r3(W.lostT || 0), rl: (W.rLock || [false, false]).slice(),
     pl: W.pl.map((p) => ({ ...p, hang: p.hang && { ...p.hang }, climb: p.climb && { ...p.climb }, mantle: p.mantle && { ...p.mantle } })),
     ch: W.ch.map((n) => [r3(n.x), r3(n.y), r3(n.z), r3(n.ox), r3(n.oy), r3(n.oz)]),
     cr: W.cr, sk: W.sk, dr: W.dr, cw: W.cw, sw: W.sw, gt: W.gt, gtp: W.gtp, hs: W.hs, db: W.db, ext: W.ext,
@@ -967,7 +974,7 @@ export function snapWorld(W, exact = false) {
 }
 export function applySnap(W, s) {
   W.tick = s.k; W.L = s.L; W.Lc = s.Lc; W.cp = s.cp; W.cpMax = s.cpm; W.time = s.tm; W.started = !!s.st; W.done = !!s.dn; W.falls = s.f; W.saves = s.sv; W.resets = s.rs; W.ten = s.ten; W.taut = s.ta; W.best = s.be;
-  W.resetHold = s.rh.slice();
+  W.resetHold = s.rh.slice(); W.lostT = s.lt || 0; W.rLock = (s.rl || [false, false]).slice();
   W.pl = s.pl.map((p) => ({ ...p, hang: p.hang && { ...p.hang }, climb: p.climb && { ...p.climb }, mantle: p.mantle && { ...p.mantle } }));
   W.ch = s.ch.map((a) => ({ x: a[0], y: a[1], z: a[2], ox: a[3], oy: a[4], oz: a[5] }));
   const cp = (o) => JSON.parse(JSON.stringify(o || {}));

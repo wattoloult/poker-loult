@@ -197,14 +197,14 @@ function restartFromStart() {
   togglePause(false);
 }
 function toCheckpoint() {
-  if (G.solo) G.forceReset = 125; // solo : comme maintenir R (une entrée enregistrée, donc rejouée par le serveur)
+  if (G.solo) G.forceReset = 20; // solo : comme appuyer sur R (une entrée enregistrée, donc rejouée par le serveur)
   else if (G.mode === 'local') { G.W.resets++; spawnAt(G.W, G.W.cp); Scene.onEvent(G.W, { k: 'respawn' }); Snd.play('respawn'); }
   else net?.send({ t: 'cp' });
   togglePause(false);
 }
 
 /* ------------------------------ événements -> sons et effets ------------------------------ */
-const GLOBAL = new Set(['punch', 'down', 'checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
+const GLOBAL = new Set(['lost', 'punch', 'down', 'checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
 function handleEvents(W, list, fromServer) {
   for (const e of list) {
     if (G.mode === 'online' && GLOBAL.has(e.k) !== !!fromServer) continue; // en ligne : le serveur annonce les événements communs, la prédiction les gestes
@@ -228,6 +228,7 @@ function handleEvents(W, list, fromServer) {
       case 'save': Snd.play('save'); toast('Sauvetage !', 1500); break;
       case 'respawn': Snd.play('respawn'); break;
       case 'abyss': toast('Chute dans le vide… retour au point de passage', 2200); break;
+      case 'lost': toast('Tombés trop bas… retour au point de passage', 2200); break;
       case 'finish': Snd.play('finish'); break;
     }
   }
@@ -332,8 +333,10 @@ function hud(W, dt) {
   let hint = '';
   for (const h of LV().hints) for (const p of W.pl) if (Math.hypot(p.x - h.x, p.y - h.y, p.z - h.z) < 4.5) { const t = G.solo ? soloHint(h.txt) : h.txt; if (t) hint = hintKeys(tr(t)); }
   const resetting = Math.max(...W.resetHold);
-  if (resetting > 0.05) hint = tr('Retour au point de passage… {0}', Math.ceil((1 - resetting) * 10) / 10);
+  if (W.lostT > 0.05) hint = tr('Tombés trop bas : retour au point de passage…');
+  else if (resetting > 0.05 && !G.solo) hint = tr('Retour au point de passage… {0}', Math.ceil((1 - resetting) * 10) / 10);
   else if (Math.max(a.y, b.y) < LV().checkpoints[W.cp].y - 10 && a.st === ST.GROUND && b.st === ST.GROUND && !G.solo) hint = hintKeys(tr('Tombés bien bas ? Maintenez R pour revenir au point de passage'));
+  else if (G.solo && Math.max(a.y, b.y) < LV().checkpoints[W.cp].y - 6 && a.st === ST.GROUND) hint = hintKeys(tr('R : revenir au point de passage'));
   $('#h-hint').textContent = hint; $('#h-hint').classList.toggle('on', !!hint);
   // débogage : états, tension, longueur
   if (G.debug) $('#dbg').textContent = W.pl.map((p, k) => `J${k + 1} ${['sol', 'air', 'rebord', 'paroi', 'hisse'][p.st]} y=${p.y.toFixed(2)} v=${Math.hypot(p.vx, p.vz).toFixed(1)}/${p.vy.toFixed(1)} end=${p.sta.toFixed(2)} ${p.brace ? 'ARC' : ''} ${p.dangling ? 'PEND' : ''}`).join('\n') + `\nchaîne ${W.Lc.toFixed(2)}/${W.L} tension ${W.ten.toFixed(2)}  tick ${W.tick}  ${G.mode === 'online' ? 'rtt ' + Math.round(net.rtt) + ' ms, en attente ' + G.pend.length : ''}`;

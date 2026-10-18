@@ -273,3 +273,22 @@ test("coups : on fait un pas vers le partenaire pour le toucher (poing à 1,8 m)
   assert.ok(k.fly > p.fly + 0.5, 'le pied éjecte plus loin : ' + k.fly.toFixed(1) + ' m contre ' + p.fly.toFixed(1) + ' m');
   assert.ok(!far.hit && far.step < 0.05, 'à 3,2 m : ni pas ni touche');
 });
+
+test("retour au point de passage : solo = un appui sur R (une seule fois même s'il reste enfoncé) ; à deux, tombés bien bas tous les deux = retour auto", () => {
+  // solo : appui bref
+  const S1 = createWorld({ course: 'tour' }); S1.alone = true; run(S1, 30); const A = S1.pl[0];
+  run(S1, 120, () => ({ ...IDLE, mx: 1 })); const moved = A.x;
+  let resets = 0; for (let i = 0; i < 240; i++) { stepWorld(S1, [{ ...IDLE, reset: i < 8 || (i > 40 && i < 200) }, IDLE]); resets += S1.ev.filter((e) => e.k === 'reset').length; }
+  assert.ok(moved > 3 && Math.abs(S1.pl[0].x - S1.level.checkpoints[0].x) < 2 && resets === 2, 'appui bref = retour, R gardé enfoncé = un seul retour de plus : ' + resets);
+  // à deux : tous deux retombés 20 m plus bas que leur point de passage -> retour auto ; un seul -> rien
+  const drop = (both) => {
+    const W = createWorld({ course: 'tour' }); const hi = W.level.checkpoints[6], lo = W.level.checkpoints[2]; W.cp = 6; W.cpMax = 6; spawnAt(W, 6);
+    const [P1, P2] = W.pl; Object.assign(P1, { x: lo.x - 0.8, y: lo.y + 0.5, z: lo.z, st: ST.AIR, vy: -12, peakY: hi.y });
+    if (both) Object.assign(P2, { x: lo.x + 0.8, y: lo.y + 0.5, z: lo.z, st: ST.AIR, vy: -12, peakY: hi.y }); layChain(W);
+    let lost = false; for (let i = 0; i < 120 * 3; i++) { stepWorld(W, [IDLE, IDLE]); if (W.ev.some((e) => e.k === 'lost')) lost = true; }
+    return { lost, y: W.pl[0].y, cp: W.cp };
+  };
+  const two = drop(true), one = drop(false);
+  assert.ok(two.lost && two.y > 40, 'les deux tombés : retour au point de passage (y=' + two.y.toFixed(1) + ')');
+  assert.ok(!one.lost, 'un seul tombé : on ne renvoie personne');
+});

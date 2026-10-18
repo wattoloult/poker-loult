@@ -231,6 +231,7 @@ export const EN = {
   "Ici !": "Here!", "Top départ": "Countdown", "STOP, attends !": "STOP, wait!", "STOP": "STOP", "Viens !": "Come!", "GO !": "GO!", "Coup de poing": "Punch",
   "coup de poing ·": "punch ·", "coup de pied (tout près : on fait un pas vers lui)": "kick (up close: you step towards them)", "Coup de pied": "Kick", "Clic droit maintenu (glisser) ou": "Hold right click (drag) or", "Clic molette": "Middle click",
   "ping « Ici ! » · maintenu : roue (3-2-1, STOP, Viens)": "\"Here!\" ping · hold: wheel (3-2-1, STOP, Come)",
+  "Tombés trop bas… retour au point de passage": "Fell too far… back to the checkpoint", "Tombés trop bas : retour au point de passage…": "Fell too far: back to the checkpoint…", "R : revenir au point de passage": "R: back to the checkpoint",
   // ---- speedrun solo ----
   "Seul : saute, puis appuie encore sur Espace en l'air (second saut) pour attraper le rebord": "Solo: jump, then press Space again in the air (double jump) to grab the ledge",
   "Seul : allume les trois balises d'affilée en courant (F), elles brûlent juste assez longtemps": "Solo: light the three beacons in a row while running (F), they burn just long enough",

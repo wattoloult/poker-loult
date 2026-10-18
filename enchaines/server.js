@@ -105,7 +105,7 @@ function startGame(r) {
   for (const ws of r.spect) send(ws, startMsg(r, null));
   pushRoom(r);
 }
-const KEEP = new Set(['punch', 'down', 'checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
+const KEEP = new Set(['lost', 'punch', 'down', 'checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
 function update(r, dt) {
   if (r.phase !== 'play' || !r.W) return;
   r.acc += dt; let n = 0;
