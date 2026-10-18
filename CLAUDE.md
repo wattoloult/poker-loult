@@ -238,6 +238,12 @@ sfx.js                   SFX synthétisés Web Audio (deal/flip/chip/check/win/t
 
 ---
 
+## Les Enchaînés (jeu annexe, dossier `enchaines/`)
+
+Platformer 3D séparé du poker (three.js vendorisé, aucune dépendance npm). Servi par le même serveur : http://localhost:8770/enchaines/. Voir `enchaines/README.md`. Tests : `node enchaines/test_sim.js`, `node enchaines/test_level.js`.
+
+---
+
 ## Assets
 
 - `assets/` — images utilisées par le jeu (logo, plateau, cartes, jetons, croupier, avatars people,

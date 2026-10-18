@@ -498,6 +498,7 @@ body.is-host .host-only{ display:flex !important; }
 .link-rules{ background:none; border:none; font:inherit; font-size:14px; color:#a9bce6; cursor:pointer;
   text-decoration:underline; text-underline-offset:3px; padding:6px; }
 .link-rules:hover{ color:var(--gold); }
+a.link-rules{ display:block; text-align:center; text-decoration:none; margin-top:8px; }
 #rules-modal{ position:fixed; inset:0; z-index:200; background:rgba(3,7,18,.8); backdrop-filter:blur(3px);
   display:flex; align-items:center; justify-content:center; padding:18px; }
 #rules-modal[hidden]{ display:none; }
