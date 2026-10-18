@@ -158,6 +158,32 @@ export function spawnAt(W, cpIndex) {
   resetMechanisms(W);
   W.ten = 0; W.taut = 0; W.resetHold = [0, 0];
   updateBodies(W);
+  safeSpots(W, cp, dx);
+}
+// une place d'apparition doit avoir un sol fixe à hauteur du point de passage et rien de solide dans le corps du grimpeur ; sinon on prend
+// la place sûre la plus proche autour du point (avant : réapparition dans une planche mobile du Pont de la vallée, ou au-dessus du vide)
+function spotOk(W, x, y, z) {
+  const g = groundBelow(W, x, y + 0.6, z, 1.4);
+  if (!g || g.b.move || g.b.crumble || g.b.sink || Math.abs(g.y - y) >= 0.7 || inside(W, x, g.y + 0.5, z, P.R - 0.05) || inside(W, x, g.y + 1.4, z, P.R - 0.05)) return null;
+  // ni dans la course d'un obstacle mobile (mur coulissant, pilon, plateforme qui passe) : sa boîte élargie de son amplitude
+  for (const b of W.bodies) { const m = b.move; if (!m || b.ghost || m.k !== 'lin') continue; const bx = b.x ?? b.px, by = b.y ?? b.py, bz = b.z ?? b.pz;
+    if (Math.abs(x - bx) < b.w / 2 + Math.abs(m.ax || 0) + P.R && Math.abs(z - bz) < b.d / 2 + Math.abs(m.az || 0) + P.R && g.y + P.H > by - b.h / 2 - Math.abs(m.ay || 0) && g.y < by + b.h / 2 + Math.abs(m.ay || 0)) return null; }
+  return g.y;
+}
+function safeSpots(W, cp, dx) {
+  let moved = false; const taken = [];
+  for (const p of W.pl) {
+    const side = p.id ? 1 : -1; let best = null;
+    if (spotOk(W, p.x, cp.y, p.z) != null) { taken.push(p); continue; }
+    for (const ox of [dx, 1.1, 0.7, 0.35, 0, -0.35, -0.7]) for (const oz of [0, 0.6, -0.6, 1.2, -1.2]) {
+      const x = cp.x + side * ox, z = cp.z + oz, y = spotOk(W, x, cp.y, z);
+      if (y == null || taken.some((q) => Math.hypot(q.x - x, q.z - z) < 0.75)) continue;
+      const d = Math.hypot(x - (cp.x + side * dx), z - cp.z); if (!best || d < best.d) best = { x, y, z, d };
+    }
+    if (best) { p.x = best.x; p.y = best.y; p.z = best.z; moved = true; }
+    taken.push(p);
+  }
+  if (moved) layChain(W);
 }
 // remise en état des mécanismes (départ, réapparition) : planches, passerelles, portes, contrepoids, leviers et plaques
 export function resetMechanisms(W) {

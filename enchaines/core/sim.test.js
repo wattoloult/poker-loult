@@ -250,3 +250,12 @@ test("coup de poing : main gauche ou droite au hasard, le partenaire à portée 
   const sides = new Set(); for (let t = 0; t < 40; t++) { const W4 = createWorld(); W4.tick = t * 37; stepWorld(W4, [{ ...IDLE, punch: true }, IDLE]); sides.add(W4.pl[0].pSide); }
   assert.deepEqual([...sides].sort(), [0, 1], 'gauche et droite');
 });
+
+test("points d'apparition : sur tous les parcours, chaque grimpeur réapparaît posé sur un sol fixe (ni dans un objet, ni au-dessus du vide, ni dans la course d'un mur mobile)", async () => {
+  const { COURSES } = await import('./worlds.js'); const bad = [];
+  for (const id of Object.keys(COURSES)) for (let cp = 0; cp < COURSES[id].checkpoints.length; cp++) {
+    const W = createWorld({ course: id }); W.cp = cp; spawnAt(W, cp); run(W, 240);
+    for (const p of W.pl) if (p.st !== ST.GROUND || Math.abs(p.y - COURSES[id].checkpoints[cp].y) > 1) bad.push(`${id} cp${cp} grimpeur ${p.id + 1} : st${p.st} y=${p.y.toFixed(2)}`);
+  }
+  assert.deepEqual(bad, []);
+});
