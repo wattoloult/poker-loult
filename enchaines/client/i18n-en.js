@@ -232,6 +232,8 @@ export const EN = {
   "coup de poing ·": "punch ·", "coup de pied (tout près : on fait un pas vers lui)": "kick (up close: you step towards them)", "Coup de pied": "Kick", "Clic droit maintenu (glisser) ou": "Hold right click (drag) or", "Clic molette": "Middle click",
   "ping « Ici ! » · maintenu : roue (3-2-1, STOP, Viens)": "\"Here!\" ping · hold: wheel (3-2-1, STOP, Come)",
   "Tombés trop bas… retour au point de passage": "Fell too far… back to the checkpoint", "Tombés trop bas : retour au point de passage…": "Fell too far: back to the checkpoint…", "R : revenir au point de passage": "R: back to the checkpoint",
+  "Replay": "Replay", "Revoir": "Watch", "REPLAY": "REPLAY", "Revoir la montée": "Watch the climb", "enregistrée avec une ancienne version du jeu : peut diverger": "recorded with an older version of the game: may drift", "Replay introuvable": "Replay not found",
+  "Replay enregistré avec une ancienne version du jeu : il peut diverger": "Replay recorded with an older version of the game: it may drift", "Temps du record : {0}": "Record time: {0}", "Suppr : revoir · Échap : quitter": "Delete: watch again · Esc: quit", "Recommencer": "Restart",
   // ---- speedrun solo ----
   "Seul : saute, puis appuie encore sur Espace en l'air (second saut) pour attraper le rebord": "Solo: jump, then press Space again in the air (double jump) to grab the ledge",
   "Seul : allume les trois balises d'affilée en courant (F), elles brûlent juste assez longtemps": "Solo: light the three beacons in a row while running (F), they burn just long enough",

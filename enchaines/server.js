@@ -2,7 +2,7 @@
 // et de la chaîne tourne ici (120 pas/s, core/sim.js) ; chaque client n'envoie que ses entrées et prédit en les rejouant.
 // Service : systemd `enchaines-mm`, Caddy route /enchaines-ws* -> PORT (8807). Classement : DATA_DIR/best.json (hors des fichiers servis), lu par le message `board`.
 // pings : mark {k, x, y, z} -> relayé {t:'mark', seat, k, x, y, z} ; client -> serveur : hello {name, token} · list · board · create {L} · join {code} · leave · cfg {L} (hôte) · start (hôte) · restart (hôte) · cp · i {a:[[ct,mx,mz,bits,jc,dc],...]} · ping {n}
-// speedrun solo : POST /enchaines-ws/solo {course, name, run} -> le serveur rejoue la partie (core/replay.js, dans un worker) et la classe ; board {course, solo:1}
+// speedrun solo : POST /enchaines-ws/solo {course, name, run} ; GET /enchaines-ws/replay?id= (replay d'un record) -> le serveur rejoue la partie (core/replay.js, dans un worker) et la classe ; board {course, solo:1}
 // serveur -> client : hi {id} · rooms {list} · board {list} · room {...} · start {seat, names, L, s} · s {w, ack:[a0,a1], in:[i0,i1], e:[...]} (30/s) · end {board, rank} · left · err {m} · pong
 import http from 'node:http';
 import fs from 'node:fs';
@@ -147,6 +147,11 @@ function replay(course, run) {
   if (!worker) { worker = new Worker(new URL('./core/replay.js', import.meta.url)); worker.on('message', ({ id, r }) => { jobs.get(id)?.(r); jobs.delete(id); }); worker.on('error', (e) => { console.error('rejeu', e.message); for (const f of jobs.values()) f({ ok: false, why: 'rejeu' }); jobs.clear(); worker = null; }); worker.unref(); }
   return new Promise((res) => { const id = ++jobN; jobs.set(id, res); worker.postMessage({ id, course, run }); });
 }
+// REPLAYS des records solo : la partie (entrées pas à pas) est gardée dans DATA_DIR/replays/<rid>.json et rejouée chez le client avec la vraie
+// physique. SIM_V = empreinte des fichiers de physique : un replay enregistré avec une autre version peut diverger (le client le signale).
+const REPLAYS = path.join(DATA, 'replays'); fs.mkdirSync(REPLAYS, { recursive: true });
+const SIM_V = crypto.createHash('md5').update(['core/sim.js', 'core/kit.js', 'core/worlds.js', ...['courses', 'biomes'].flatMap((d) => fs.readdirSync(path.join(ROOT, 'core', d)).filter((f) => f.endsWith('.js')).sort().map((f) => `core/${d}/${f}`))].map((f) => fs.readFileSync(path.join(ROOT, f))).join('|')).digest('hex').slice(0, 10);
+const dropReplay = (e) => { if (e?.rid) fs.rm(path.join(REPLAYS, e.rid + '.json'), { force: true }, () => {}); };
 async function soloRun(m, rp = replay) { // rp : rejoueur (tests : en direct, sans worker)
   if (!m || !COURSES[m.course]?.published || !Array.isArray(m.run)) return { ok: false, why: 'parcours' };
   if (jobs.size > 8) return { ok: false, why: 'serveur occupé, réessaie' };
@@ -154,7 +159,10 @@ async function soloRun(m, rp = replay) { // rp : rejoueur (tests : en direct, sa
   const name = clean(m.name, 16) || 'Grimpeur', key = 'solo:' + m.course, e = { names: [name], time: r.time, falls: r.falls, date: new Date().toISOString().slice(0, 10) };
   let board = boardOf(key); const old = board.find((x) => x.names[0].toLowerCase() === name.toLowerCase());
   if (old && old.time <= e.time) return { ok: true, time: r.time, rank: board.indexOf(old), board: board.slice(0, 10), kept: 1 };
-  board = board.filter((x) => x !== old); board.push(e); board.sort((a, b) => a.time - b.time); boards[key] = board = board.slice(0, 50);
+  e.rid = crypto.randomBytes(8).toString('hex'); e.v = SIM_V;
+  try { fs.writeFileSync(path.join(REPLAYS, e.rid + '.json'), JSON.stringify({ course: m.course, name, time: r.time, falls: r.falls, date: e.date, v: SIM_V, run: m.run })); } catch (err) { delete e.rid; console.error('replay non écrit', err.message); }
+  dropReplay(old); board = board.filter((x) => x !== old); board.push(e); board.sort((a, b) => a.time - b.time);
+  for (const x of board.slice(50)) dropReplay(x); boards[key] = board = board.slice(0, 50);
   try { fs.writeFileSync(BEST, JSON.stringify(boards)); } catch (err) { console.error('classement non écrit', err.message); }
   return { ok: true, time: r.time, rank: board.indexOf(e), board: board.slice(0, 10) };
 }
@@ -164,6 +172,10 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   if (u.pathname === '/stats') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ rooms: rooms.size, players: [...rooms.values()].reduce((s, r) => s + live(r).length, 0) })); }
+  if (u.pathname === '/enchaines-ws/replay' && req.method === 'GET') { // replay d'un record solo : ?id=<rid>
+    const id = u.searchParams.get('id') || ''; if (!/^[0-9a-f]{16}$/.test(id)) { res.writeHead(400); return res.end(); }
+    return fs.readFile(path.join(REPLAYS, id + '.json'), (err, b) => { if (err) { res.writeHead(404); return res.end(); } res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'public, max-age=86400' }); res.end(b); });
+  }
   if (u.pathname === '/enchaines-ws/solo' && req.method === 'POST') { // la partie entière (~20 octets par changement d'entrée), 4 Mo au plus
     let body = '', len = 0;
     req.on('data', (c) => { len += c.length; if (len > 4e6) { res.writeHead(413); res.end(); req.destroy(); } else body += c; });
@@ -208,7 +220,7 @@ wss.on('connection', (ws) => {
         let code = ''; try { code = fs.readFileSync(PT_FILE, 'utf8'); } catch { send(ws, { t: 'pt', ok: 0, m: 'module absent' }); break; }
         ws.pt = true; send(ws, { t: 'pt', ok: 1, code }); break;
       }
-      case 'board': { const id = COURSES[m.course] ? m.course : DEFAULT_COURSE; send(ws, { t: 'board', course: id, solo: m.solo ? 1 : 0, list: boardOf(m.solo ? 'solo:' + id : id).slice(0, 20) }); break; }
+      case 'board': { const id = COURSES[m.course] ? m.course : DEFAULT_COURSE; send(ws, { t: 'board', course: id, solo: m.solo ? 1 : 0, simV: SIM_V, list: boardOf(m.solo ? 'solo:' + id : id).slice(0, 20) }); break; }
       case 'list': send(ws, { t: 'rooms', list: [...rooms.values()].filter((x) => x.phase === 'lobby' && live(x).length < 2).slice(0, 20).map((x) => ({ code: x.code, host: live(x)[0]?.name || '?', n: live(x).length })) }); break;
       case 'create': create(ws, m); break;
       case 'join': join(ws, m); break;

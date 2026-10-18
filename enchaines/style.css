@@ -188,6 +188,9 @@ input[type=range] { padding: 0; accent-color: var(--ember); box-shadow: none; ba
 #wheel span { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 2px; font: 800 14px 'Grenze'; color: var(--bone2); transition: 0.1s; transform: translate(-50%, -50%); }
 #wheel span i { font-style: normal; font-size: 24px; } #wheel span.sel { color: #fff; transform: translate(-50%, -50%) scale(1.25); text-shadow: 0 0 12px var(--ember2); }
 #wheel .n { left: 50%; top: 22%; } #wheel .e { left: 79%; top: 50%; } #wheel .s { left: 50%; top: 78%; } #wheel .w { left: 21%; top: 50%; }
+#h-replay { position: absolute; left: 50%; top: 108px; transform: translateX(-50%); display: none; padding: 5px 16px; border-radius: 4px; font: 700 17px 'Grenze'; background: var(--hide); box-shadow: var(--seam), 0 6px 16px rgba(0, 0, 0, 0.6); text-align: center; }
+#h-replay.on { display: block; } #h-replay b { color: var(--ember2); letter-spacing: 2px; margin-right: 6px; } #h-replay small { display: block; font-size: 12px; color: var(--bone2); }
+.board li:has(.watch) { grid-template-columns: 34px 1fr auto auto auto; align-items: center; } .board li .watch { padding: 3px 10px; font-size: 13px; white-space: nowrap; }
 label.chk { flex-direction: row; align-items: center; gap: 8px; }
 #e-sub { gap: 8px; } #e-sub input { flex: 1; }
 #dbg { position: absolute; left: 60px; top: 70px; margin: 0; font: 12px/1.4 ui-monospace, monospace; background: rgba(0, 0, 0, 0.7); padding: 8px; border-radius: 4px; text-shadow: none; display: none; }

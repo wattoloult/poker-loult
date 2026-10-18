@@ -173,10 +173,10 @@ async function startLocal() {
 }
 // SPEEDRUN SOLO : un seul grimpeur sans chaîne (W.alone : second saut, une plaque suffit) ; chaque pas d'entrée est enregistré (G.run, par séries
 // identiques) pour que le serveur rejoue la partie et la chronomètre lui-même (core/replay.js) ; temps de passage comparés au record de l'appareil.
-function freshWorld() { const W = createWorld({ L: G.L, course: G.course }); if (G.solo) { W.alone = true; G.run = []; G.splits = []; G.forceReset = 0; } return W; }
+function freshWorld() { const W = createWorld({ L: G.L, course: G.course }); if (G.solo) { W.alone = true; G.run = []; G.splits = []; G.forceReset = 0; } if (G.replay) { G.replay.i = 0; G.replay.k = 0; } return W; }
 const quant = (I) => decIn(encIn(0, I)); // entrées arrondies comme celles envoyées au serveur : le rejeu est identique au pas près
 function recStep(I) { const e = encIn(0, I), l = G.run[G.run.length - 1]; if (l && l.every((v, k) => k === 0 || v === e[k])) l[0]++; else { e[0] = 1; G.run.push(e); } }
-function stopGame() { Pings.clear(); if (G.mode) setTimeout(backdrop, 0); G.mode = null; G.solo = false; G.W = null; $('#hud').classList.remove('on'); G.paused = false; $('#pause').classList.remove('on'); }
+function stopGame() { Pings.clear(); G.replay = null; $('#h-replay').classList.remove('on'); if (G.mode) setTimeout(backdrop, 0); G.mode = null; G.solo = false; G.W = null; $('#hud').classList.remove('on'); G.paused = false; $('#pause').classList.remove('on'); }
 function togglePause(v) {
   G.paused = v ?? !G.paused; $('#pause').classList.toggle('on', G.paused);
   $('#p-restart').style.display = G.mode === 'online' && G.room && G.room.host !== G.room.you ? 'none' : '';
@@ -257,6 +257,7 @@ function footsteps(W, dt) {
 function stepLocal() {
   const W = G.W;
   if (G.solo) { // un seul grimpeur : les deux côtés du clavier et toutes les manettes le pilotent
+    if (G.replay) { const R = G.replay, e = R.run[R.i]; pressed.clear(); const I = e ? decIn(e) : IDLE; if (e && ++R.k >= e[0]) { R.i++; R.k = 0; } stepWorld(W, [I, IDLE]); handleEvents(W, W.ev, false); return; }
     const I = quant({ ...readInput(0, ['k1', 'k2'], [0, 1, 2, 3]), ...(G.forceReset > 0 ? { reset: true } : {}) }); pressed.clear();
     if (G.forceReset > 0) G.forceReset--;
     if (!W.done) recStep(I);
@@ -369,6 +370,12 @@ function record(W) {
   return { medal, clean, rec };
 }
 function showEnd(W) {
+  if (G.replay) {
+    $('#e-medal').innerHTML = `<i class="rec">${tr('Replay')}</i>`; $('#e-time').textContent = fmt(W.time); $('#e-falls').textContent = W.falls; $('#e-resets').textContent = W.resets;
+    $('#e-names').textContent = G.replay.name; $('#e-saves').parentElement.style.display = 'none'; $('#e-sub').style.display = 'none'; $('#e-next').style.display = 'none'; $('#e-again').style.display = '';
+    $('#e-again').textContent = tr('Revoir'); $('#e-board').innerHTML = `<li class="muted">${tr('Temps du record : {0}', fmt(G.replay.time))}</li>`; $('#end').classList.add('on'); return;
+  }
+  $('#e-again').textContent = tr('Recommencer');
   const r = record(W);
   $('#e-medal').innerHTML = (r.medal ? `<i class="${r.medal}">${tr('Médaille {0}', tr(MEDAL[r.medal]))}</i>` : '') + (r.clean ? `<i class="clean">${tr('Sans chute')}</i>` : '') + (r.rec ? `<i class="rec">${tr('Record personnel')}</i>` : '');
   $('#e-time').textContent = fmt(W.time); $('#e-falls').textContent = W.falls; $('#e-saves').textContent = W.saves; $('#e-resets').textContent = W.resets;
@@ -382,6 +389,17 @@ function showEnd(W) {
   else if (G.mode === 'local') renderBoard(null);
 }
 // classement solo : le serveur rejoue la partie ; il faut un pseudo (demandé sur l'écran de fin s'il n'y en a pas encore)
+let SIMV = ''; // version de la physique au serveur (pour signaler un replay enregistré avec une autre)
+// REPLAY d'un record solo : la partie (entrées pas à pas) est rejouée avec la vraie physique, caméra et sons comme en jeu ; Suppr la relance, Échap pour quitter
+async function watchReplay(rid) {
+  let rep = null; try { const r = await fetch(new URL('/enchaines-ws/replay?id=' + rid, location.origin)); if (r.ok) rep = await r.json(); } catch { }
+  if (!rep?.run) { toast('Replay introuvable'); return; }
+  if (SIMV && rep.v !== SIMV) toast('Replay enregistré avec une ancienne version du jeu : il peut diverger', 4000);
+  $('#end').classList.remove('on'); if (G.mode) stopGame();
+  G.course = rep.course; G.solo = true; G.replay = { run: rep.run, i: 0, k: 0, name: rep.name, time: rep.time };
+  await startLocal(); G.names = [rep.name, ''];
+  $('#h-replay').innerHTML = `<b>${tr('REPLAY')}</b> ${esc(rep.name)} · ${fmt(rep.time)}<small>${tr('Suppr : revoir · Échap : quitter')}</small>`; $('#h-replay').classList.add('on'); $('#help').classList.remove('show');
+}
 async function submitRun(W) {
   if (!CFG.name) { $('#e-sub').style.display = ''; $('#e-board').innerHTML = `<li class="muted">${tr('Choisis un pseudo pour entrer au classement')}</li>`; return; }
   $('#e-board').innerHTML = `<li class="muted">${tr('Le serveur vérifie ta montée…')}</li>`;
@@ -392,7 +410,7 @@ async function submitRun(W) {
 function renderBoard(list, mine) {
   const el = $('#e-board');
   if (!list) { el.innerHTML = `<li class="muted">${tr(G.solo ? 'Parcours en test : pas de classement.' : 'Le classement est réservé aux parties en ligne.')}</li>`; return; }
-  el.innerHTML = list.length ? list.map((r, i) => `<li class="${mine === i ? 'me' : ''}"><span>${i + 1}</span><b>${esc(r.names.join(' & '))}</b><em>${fmt(r.time)}</em><small>${tr('{0} chutes', r.falls)}</small></li>`).join('') : `<li class="muted">${tr('Personne n\'a encore atteint le sommet.')}</li>`;
+  el.innerHTML = list.length ? list.map((r, i) => `<li class="${mine === i ? 'me' : ''}"><span>${i + 1}</span><b>${esc(r.names.join(' & '))}</b><em>${fmt(r.time)}</em><small>${tr('{0} chutes', r.falls)}</small>${G.solo && r.rid ? `<button class="mini watch" data-replay="${r.rid}" title="${tr('Revoir la montée')}${r.v && r.v !== SIMV ? ' — ' + tr('enregistrée avec une ancienne version du jeu : peut diverger') : ''}">▶ ${tr('Revoir')}</button>` : ''}</li>`).join('') : `<li class="muted">${tr('Personne n\'a encore atteint le sommet.')}</li>`;
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -442,7 +460,7 @@ function getNet() {
     if (m.e?.length) handleEvents(W, m.e, true);
   });
   net.on('end', (m) => { renderBoard(m.board, m.rank); });
-  net.on('board', (m) => { if ((m.solo || 0) !== +$('#b-solo').checked) return; $('#b-list').innerHTML = m.list.length ? m.list.map((r, i) => `<li><span>${i + 1}</span><b>${esc(r.names.join(' & '))}</b><em>${fmt(r.time)}</em><small>${tr("{0} chutes", r.falls)}</small></li>`).join('') : `<li class="muted">${tr('Personne n\'a encore atteint le sommet.')}</li>`; });
+  net.on('board', (m) => { if ((m.solo || 0) !== +$('#b-solo').checked) return; if (m.simV) SIMV = m.simV; $('#b-list').innerHTML = m.list.length ? m.list.map((r, i) => `<li><span>${i + 1}</span><b>${esc(r.names.join(' & '))}</b><em>${fmt(r.time)}</em><small>${tr("{0} chutes", r.falls)}</small>${m.solo && r.rid ? `<button class="mini watch" data-replay="${r.rid}" title="${tr('Revoir la montée')}${r.v && r.v !== SIMV ? ' — ' + tr('enregistrée avec une ancienne version du jeu : peut diverger') : ''}">▶ ${tr('Revoir')}</button>` : ''}</li>`).join('') : `<li class="muted">${tr('Personne n\'a encore atteint le sommet.')}</li>`; });
   return net;
 }
 /* ------------------------------ chat texte et vocal du salon ------------------------------ */
@@ -521,7 +539,8 @@ document.addEventListener('click', (e) => {
   const id = b.id;
   if (id === 'm-local') showCourses('local');
   else if (id === 'm-solo') showCourses('solo');
-  else if (b.dataset.course) { G.course = b.dataset.course; safe(() => localStorage.setItem('ch-course', G.course)); if (G.pick === 'local' || G.pick === 'solo') { G.solo = G.pick === 'solo'; startLocal(); } }
+  else if (b.dataset.replay) watchReplay(b.dataset.replay);
+  else if (b.dataset.course) { G.replay = null; G.course = b.dataset.course; safe(() => localStorage.setItem('ch-course', G.course)); if (G.pick === 'local' || G.pick === 'solo') { G.solo = G.pick === 'solo'; startLocal(); } }
   else if (id === 'e-send') { const n = $('#e-name').value.replace(/[<>]/g, '').trim().slice(0, 16); if (!n) return; CFG.name = n; saveCfg(); G.names[0] = n; $('#e-names').textContent = n; $('#e-sub').style.display = 'none'; submitRun(G.W); }
   else if (id === 'm-online') { show('online'); $('#o-name').value = CFG.name; getNet().send({ t: 'list' }); }
   else if (id === 'm-lang') setLang(LANG === 'en' ? 'fr' : 'en');

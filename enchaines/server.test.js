@@ -79,6 +79,12 @@ test('speedrun solo : rejeu identique au jeu, arrivée chronométrée, partie in
   const f = await soloRun({ course: '__t', name: 'Rapide', run }, replayRun); assert.equal(f.rank, 0, 'le plus rapide passe devant');
   const again = await soloRun({ course: '__t', name: 'rapide', run: slow }, replayRun); assert.equal(again.kept, 1, 'un temps moins bon ne remplace pas le record du joueur');
   assert.deepEqual(again.board.map((x) => x.names[0]), ['Rapide', 'Lent']);
+  // replay : chaque record garde sa partie, rejouable à l'identique ; l'ancien replay d'un joueur qui s'améliore disparaît
+  const rid = again.board[0].rid; assert.match(rid, /^[0-9a-f]{16}$/);
+  const { server: srv } = await import('./server.js'); if (!srv.listening) srv.listen(18807); await wait(100);
+  const rep = await (await fetch('http://127.0.0.1:18807/enchaines-ws/replay?id=' + rid)).json();
+  assert.equal(rep.name, 'Rapide'); assert.equal(replayRun('__t', rep.run).time, rep.time, 'le replay rejoue le même temps');
+  assert.equal((await fetch('http://127.0.0.1:18807/enchaines-ws/replay?id=../best')).status, 400, 'identifiant refusé');
   delete COURSES.__t;
   const post = (o) => fetch('http://127.0.0.1:18807/enchaines-ws/solo', { method: 'POST', body: JSON.stringify(o) }).then((x) => x.json());
   const { server } = await import('./server.js'); if (!server.listening) server.listen(18807); await wait(100);
