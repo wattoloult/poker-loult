@@ -339,7 +339,7 @@ export function sprite(color, size) {
 
 /* ------------------------------ grimpeurs : pose ------------------------------ */
 const ST_ANIM = (p, spd) => {
-  if (p.st === ST.GROUND) return p.brace || p.haul || p.cup || p.pushT > 0 ? 'Crouch_Idle_Loop' : spd < 0.35 ? 'Idle_Loop' : spd < 2.6 ? 'Walk_Loop' : 'Jog_Fwd_Loop';
+  if (p.st === ST.GROUND) return p.brace || p.haul || p.cup || p.pushT > 0 || p.slideT > 0 ? 'Crouch_Idle_Loop' : spd < 0.35 ? 'Idle_Loop' : spd < 2.6 ? 'Walk_Loop' : 'Jog_Fwd_Loop';
   if (p.st === ST.AIR) return p.knock > 0 ? 'Hit_Knockback' : p.vy > 2 && p.stT < 0.35 ? 'Jump_Start' : 'Jump_Loop';
   return 'Jump_Loop';
 };
@@ -530,14 +530,16 @@ function camera(W, rp, me, dt) {
   CAM.tgt.addScaledVector(CAM.vel, dt);
   // cadrage de la zone où se trouve la cordée
   // la zone ne change qu'après 0,4 s passées dans la nouvelle (pas de bascule d'avant en arrière à la limite de deux zones)
-  const cand = camZone(W.level, CAM.tgt.x, CAM.tgt.y - 2.2, CAM.tgt.z);
+  // PAR DÉFAUT la caméra ne bouge JAMAIS seule : le cadrage reste celui du joueur. Seules les zones marquées `turn` (un chemin qui tourne pour de bon, ex. 90°)
+  // s'appliquent toujours ; les autres cadrages de zone (3/4, éloigné, tunnel) ne servent que si le joueur active « cadrage automatique » (S.camAuto).
+  let cand = camZone(W.level, CAM.tgt.x, CAM.tgt.y - 2.2, CAM.tgt.z); if (cand && !cand.turn && !S.camAuto) cand = null;
   if (cand !== CAM.zone) { if (cand === CAM.cand) CAM.candT += dt; else { CAM.cand = cand; CAM.candT = 0; } if (CAM.candT > 0.4 || !CAM.seen) CAM.zone = cand; }
   CAM.seen = true;
   const zc = CAM.zone, md = MODES[zc?.mode || 'side'] || MODES.side; CAM.mode = zc?.mode || 'side';
   const k = Math.min(1, dt * 0.9);
   CAM.baseYaw = zc?.yaw ?? md.yaw; CAM.nomYaw = CAM.baseYaw + CAM.uyaw;
   CAM.zyaw += ((zc?.yaw ?? md.yaw) - CAM.zyaw) * k; CAM.zpitch += ((zc?.pitch ?? md.pitch) - CAM.zpitch) * k; CAM.zdist += ((md.dist + (zc?.dist || 0) * (zc?.mode === 'far' ? 1 : 0)) - CAM.zdist) * k;
-  if (performance.now() - (CAM.lastUser || 0) > 4000) { CAM.uyaw *= 1 - dt * 0.4; CAM.upitch *= 1 - dt * 0.4; } // le cadrage revient au réglage de la zone
+  if (S.camAuto && performance.now() - (CAM.lastUser || 0) > 4000) { CAM.uyaw *= 1 - dt * 0.4; CAM.upitch *= 1 - dt * 0.4; } // (cadrage automatique seulement) il revient au réglage de la zone
   CAM.yaw = CAM.zyaw + CAM.uyaw; CAM.pitch = Math.max(-0.15, Math.min(0.85, CAM.zpitch + CAM.upitch));
   const dist = Math.max(7, Math.min(30, 13 + sep * 0.8 + (CAM.zoom || 0) + CAM.zdist));
   CAM.dist += (dist - CAM.dist) * Math.min(1, dt * 2.5);

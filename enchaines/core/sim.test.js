@@ -2,6 +2,7 @@
 import './botmode.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { COURSES } from './worlds.js';
 import { createWorld, stepWorld, snapWorld, applySnap, spawnAt, layChain, ST, DT, P, IDLE } from './sim.js';
 
 const run = (W, n, fa = () => IDLE, fb = () => IDLE) => { for (let i = 0; i < n; i++) stepWorld(W, [fa(i, W), fb(i, W)]); return W; };
@@ -84,7 +85,7 @@ function haulFrom(az) {
   const A = W.pl[0], B = W.pl[1]; A.x = 0; A.z = az; B.x = 1; B.z = 6.6; layChain(W);
   let upT = null, zMax = 0, staMin = 1;
   for (let i = 0; i < 900; i++) {
-    stepWorld(W, [i < 240 ? { ...IDLE, brace: true } : { ...IDLE, pull: true }, i < 60 ? { ...IDLE, mz: 1, jc: i > 20 ? 1 : 0, jump: i > 20 } : { ...IDLE, mz: -1, jc: 1 + (i >> 5), jump: true }]); // au rebord : Espace pour se hisser
+    stepWorld(W, [i < 240 ? { ...IDLE, brace: true } : { ...IDLE, pull: true }, i < 75 ? { ...IDLE, mz: 1, jc: i > 20 ? 1 : 0, jump: i > 20 } : { ...IDLE, mz: -1, jc: 1 + (i >> 5), jump: true }]); // au rebord : Espace pour se hisser
     zMax = Math.max(zMax, A.z); staMin = Math.min(staMin, A.sta); if (upT == null && i > 240 && B.st === ST.GROUND && B.y > -0.5) upT = (i - 240) * DT;
   }
   return { W, upT, zMax, staMin };
@@ -291,4 +292,28 @@ test("retour au point de passage : solo = un appui sur R (une seule fois même s
   const two = drop(true), one = drop(false);
   assert.ok(two.lost && two.y > 40, 'les deux tombés : retour au point de passage (y=' + two.y.toFixed(1) + ')');
   assert.ok(!one.lost, 'un seul tombé : on ne renvoie personne');
+});
+
+test('glissade : élan x1,28 puis freinage, coupée au relâché, saut glissé plus long qu\'un saut normal', () => {
+  const dist = (slideFirst) => {
+    const W = createWorld({ course: 'tour' }); W.alone = true; run(W, 5); const A = W.pl[0]; A.x = 0.5; A.z = 3; layChain(W);
+    let maxv = 0, jc = 0;
+    for (let i = 0; i < 80; i++) stepWorld(W, [{ ...IDLE, mx: 1 }, IDLE]);   // course lancée
+    const x0 = A.x;
+    if (slideFirst) { stepWorld(W, [{ ...IDLE, mx: 1, slide: true }, IDLE]); }
+    for (let i = 0; i < 24; i++) { stepWorld(W, [{ ...IDLE, mx: 1, slide: slideFirst }, IDLE]); maxv = Math.max(maxv, Math.hypot(A.vx, A.vz)); }
+    jc++; for (let i = 0; i < 200; i++) { stepWorld(W, [{ ...IDLE, mx: 1, jump: i < 40, jc, slide: false }, IDLE]); if (i > 10 && A.st === ST.GROUND) break; }
+    return { d: A.x - x0, maxv, slid: slideFirst && A.slideCd >= 0 };
+  };
+  const n = dist(false), s = dist(true);
+  assert.ok(s.maxv > 6.2 * 1.2, 'la glissade dépasse la vitesse de course : ' + s.maxv.toFixed(2));
+  assert.ok(s.d > n.d + 0.3, 'le saut glissé va plus loin : ' + s.d.toFixed(2) + ' contre ' + n.d.toFixed(2));
+});
+
+test('rouleau à pics : projette au contact et repousse le grimpeur', () => {
+  const L = COURSES.tour; COURSES.__r = { ...L, id: '__r', bodies: [...L.bodies, { x: 3, y: 1.3, z: 3, w: 1.6, h: 1.6, d: 4, mat: 'metal', zone: 1, hit: 1, spike: 1, nograb: 1, roller: { axis: 'z', r: 0.8, len: 4, spin: 2 } }] };
+  const W = createWorld({ course: '__r' }); run(W, 5); W.alone = true; const B = W.pl[0]; B.x = 1.0; B.z = 3; B.y = 0; layChain(W);
+  let knocked = false; for (let k = 0; k < 120; k++) { stepWorld(W, [{ ...IDLE, mx: 1 }, IDLE]); if (B.knock > 0) knocked = true; }
+  assert.ok(knocked, 'le contact avec le rouleau projette le grimpeur'); assert.ok(B.x < 2.6, 'il est repoussé (x=' + B.x.toFixed(2) + ')');
+  delete COURSES.__r;
 });

@@ -9,11 +9,12 @@ export const ST_NAME = ['sol', 'air', 'rebord', 'escalade', 'hisse', 'liane'];
 export const P = {
   R: 0.32, H: 1.75, WAIST: 1.0,                 // capsule verticale (pieds = origine), point d'attache de la chaîne
   RUN: 6.2, ACC: 52, DEC: 44, TURN: 14,         // course : vitesse, accélération, freinage, rotation du corps (rad/s)
-  AIR_ACC: 24, AIR_MAX: 6.4, AIR_DRAG: 0.15, SWING_ACC: 36,    // contrôle aérien façon « air strafing » : accélère vers la direction voulue tant que la vitesse dans cette direction < AIR_MAX
+  AIR_ACC: 24, AIR_MAX: 6.4, AIR_DRAG: 0.4, AIR_BRAKE: 1.4, AIR_LAT: 0, SWING_ACC: 36,    // contrôle aérien façon « air strafing » : accélère vers la direction voulue tant que la vitesse dans cette direction < AIR_MAX
   JUMP: 8.6, G_UP: 23, G_DOWN: 30, G_CUT: 46, FALL_MAX: 30, // saut (apex ~1,6 m), pesanteur montée / descente / saut relâché tôt
   COYOTE: 0.12, BUFFER: 0.14,
-  GRAB_LO: 0.95, GRAB_HI: 2.2, GRAB_REACH: 0.42, GRAB_VY: 7.5, GRAB_CD: 0.35, // fenêtre d'accroche des rebords (hauteur du bord au-dessus des pieds)
-  HANG_DROP: 2.0, SHIMMY: 1.9, MANTLE_T: 0.42, CLIMB_V: 2.5, CLIMB_LAT: 2.2,
+  GRAB_LO: 0.8, GRAB_HI: 2.4, GRAB_REACH: 0.5, GRAB_VY: 9, GRAB_CD: 0.3, // fenêtre d'accroche des rebords (hauteur du bord au-dessus des pieds)
+  HANG_DROP: 2.0, SHIMMY: 1.9, MANTLE_T: 0.36, CLIMB_V: 2.5, CLIMB_LAT: 2.2,
+  SLIDE_T: 0.62, SLIDE_MIN: 0.22, SLIDE_BOOST: 1.28, SLIDE_DECEL: 7.5, SLIDE_TURN: 2.4, SLIDE_CD: 0.3, SLIDE_JUMP: 1.14, // glissade : durée, durée mini avant de pouvoir la couper, élan, freinage, virage, recharge, bonus de saut glissé
   WJ_OUT: 5.6, WJ_UP: 8.2,                      // saut depuis un mur ou un rebord
   STA_CLIMB: 1 / 7, STA_HANG: 1 / 16, STA_LOAD: 1 / 5, STA_ROPE: 1 / 6, STA_REGEN: 0.6,
   PULL_V: 2.6, DRAG_V: 0.9, TOW_V: 3.2, HAUL_MOVE: 0.3, HAUL_SLIP: 0.45, STA_HAUL: 1 / 4.5, // tirer la chaîne : petits pas, on glisse vers le partenaire (HAUL_SLIP x charge), ça épuise                     // au sol avec un partenaire suspendu : vitesse en le hissant / glissade si on ne s'arc-boute pas
@@ -239,11 +240,12 @@ function collidePlayer(W, p, groundOk = true) {
       // vitesse relative à la surface : on retire la part qui rentre dedans
       const rvx = p.vx - b.vx, rvy = p.vy - b.vy, rvz = p.vz - b.vz, vn = rvx * CN.x + rvy * CN.y + rvz * CN.z;
       if (vn < 0) { p.vx -= vn * CN.x; p.vy -= vn * CN.y; p.vz -= vn * CN.z; }
-      if (CN.y > 0.55 && groundOk) { if (CN.y > gn) { gn = CN.y; ground = b; } }
+      if (CN.y > 0.55 && groundOk && !b.spike) { if (CN.y > gn) { gn = CN.y; ground = b; } }
       else if (CN.y < -0.6 && p.vy > b.vy) p.vy = b.vy;
-      if (b.hit && Math.abs(CN.y) < 0.6 && p.knock <= 0) { // obstacle qui frappe : projeté
+      if (b.hit && (b.spike || Math.abs(CN.y) < 0.6) && p.knock <= 0) { // obstacle qui frappe : projeté (rouleau à pics : aussi par-dessus, dans l'axe d'éloignement du centre)
         const hs = Math.hypot(b.vx, b.vz) + Math.abs(b.wy) * 2;
-        p.vx = CN.x * P.KNOCK + b.vx * 0.6; p.vz = CN.z * P.KNOCK + b.vz * 0.6; p.vy = Math.max(p.vy, 4.5); p.knock = 0.5;
+        let kx = CN.x, kz = CN.z; if (b.spike && Math.abs(CN.y) >= 0.6) { const dx = p.x - b.px, dz = p.z - b.pz, l = Math.hypot(dx, dz) || 1; kx = dx / l; kz = dz / l; }
+        p.vx = kx * P.KNOCK + b.vx * 0.6; p.vz = kz * P.KNOCK + b.vz * 0.6; p.vy = Math.max(p.vy, b.spike ? 6.5 : 4.5); p.knock = 0.5;
         if (p.st !== ST.AIR) { p.st = ST.AIR; p.stT = 0; p.hang = p.climb = p.mantle = null; }
         ev(W, 'hit', { p: p.id, x: p.x, y: p.y + 1, z: p.z, v: hs });
       }
@@ -398,7 +400,8 @@ function stepPlayer(W, p, I, mate) {
     ev(W, 'swing', { p: p.id, side: p.pSide, kick: p.pK, x: p.x, y: p.y + 1.4, z: p.z });
   }
   p.ropeUp = false;
-  if (p.st !== ST.AIR) { p.dj = false; p.cupUsed = false; } // second saut (mode solo) rendu dès qu'on touche quelque chose
+  if (p.st !== ST.GROUND && p.slideT) { p.slideT = 0; p.slideCd = P.SLIDE_CD; }
+  if (p.st !== ST.AIR) { p.dj = false; p.cupUsed = false; p.slideJump = false; } // second saut (mode solo) rendu dès qu'on touche quelque chose
   p.ropeCd = Math.max(0, (p.ropeCd || 0) - dt);
   // levier à portée : « Interagir » le bascule
   if (uPress && p.st !== ST.AIR) for (const b of W.bodies) if (b.lever && Math.hypot(b.px - p.x, b.pz - p.z) < P.USE_R && Math.abs(b.py - (p.y + 1)) < 2.2) {
@@ -433,7 +436,7 @@ function stepPlayer(W, p, I, mate) {
         p.st = ST.AIR; p.stT = 0; p.hang = null; p.grabCd = 0.22; p.thru = b.i; p.thruT = 0.3; p.vx = dx * P.BAR_FWD + b.vx; p.vz = dz * P.BAR_FWD + b.vz; p.vy = P.BAR_UP; p.jHeld = true; p.cut = false;
         ev(W, 'jump', { p: p.id, wall: 1 });
       }
-      else if (p.buf > 0 && p.stT > 0.12) {
+      else if (p.buf > 0 && p.stT > 0.06) {
         p.buf = 0;
         if (into > -0.3 && canUp) startMantle(W, p, b, p.hang.f, p.hang.u);
         else { leaveWall(p, fi.nx, fi.nz, wx, wz, 'jump'); ev(W, 'jump', { p: p.id, wall: 1 }); }
@@ -483,6 +486,14 @@ function stepPlayer(W, p, I, mate) {
     if (gbody?.launch && gbody.move && gbody.vy > 3) { p.vy = gbody.launch; toAir(p); p.coy = 0; p.noCut = true; ev(W, 'launch', { p: p.id, x: p.x, y: p.y, z: p.z }); }
     if (p.st === ST.GROUND) {
       p.dj = false; p.coy = P.COYOTE; p.sta = p.haul ? p.sta - P.STA_HAUL * (0.4 + (p.load || 0)) * dt : Math.min(1, p.sta + P.STA_REGEN * dt);
+      // GLISSADE (touche dédiée) : en courant, un appui lance une glissade rapide (élan ×1,28, freinage doux, virage lent) ; sauter pendant la glissade donne
+      // un saut plus long ; on peut la couper (relâcher) après 0,22 s. Recharge courte.
+      const sPress = !!I.slide && !p.sHeld; p.sHeld = !!I.slide; p.slideCd = Math.max(0, (p.slideCd || 0) - dt);
+      if (sPress && !p.slideT && p.slideCd <= 0 && !p.haul && !p.cup && !p.downT) {
+        const rvx0 = p.vx - p.gvx, rvz0 = p.vz - p.gvz, sp0 = Math.hypot(rvx0, rvz0);
+        if (sp0 > 1.2) { p.sdx = rvx0 / sp0; p.sdz = rvz0 / sp0; } else if (wl > 0.3) { p.sdx = wx / wl; p.sdz = wz / wl; } else { p.sdx = Math.sin(p.yaw); p.sdz = Math.cos(p.yaw); }
+        p.slideT = P.SLIDE_T; p.sv = Math.max(sp0, P.RUN) * P.SLIDE_BOOST; ev(W, 'slide', { p: p.id, x: p.x, y: p.y, z: p.z });
+      }
       let spd = P.RUN;
       let tx = wx * spd, tz = wz * spd;
       if (p.brace) { tx *= 0.25; tz *= 0.25; } // arc-bouté : on avance à petits pas
@@ -505,10 +516,19 @@ function stepPlayer(W, p, I, mate) {
       const nvx = approach(rvx, tx, Math.abs(k * (tx - rvx) / (Math.hypot(tx - rvx, tz - rvz) || 1)));
       const nvz = approach(rvz, tz, Math.abs(k * (tz - rvz) / (Math.hypot(tx - rvx, tz - rvz) || 1)));
       p.vx = nvx + p.gvx; p.vz = nvz + p.gvz; p.vy = Math.min(p.vy, p.gvy);
+      if (p.slideT > 0) { // la glissade impose la vitesse : direction qui tourne lentement vers la direction voulue, vitesse qui retombe
+        p.slideT -= dt;
+        if (wl > 0.2) { const a0 = Math.atan2(p.sdx, p.sdz), d = Math.atan2(Math.sin(Math.atan2(wx, wz) - a0), Math.cos(Math.atan2(wx, wz) - a0)), a1 = a0 + clamp(d, -P.SLIDE_TURN * dt, P.SLIDE_TURN * dt); p.sdx = Math.sin(a1); p.sdz = Math.cos(a1); }
+        p.sv = Math.max(P.RUN * 0.7, p.sv - P.SLIDE_DECEL * dt);
+        p.vx = p.sdx * p.sv + p.gvx; p.vz = p.sdz * p.sv + p.gvz;
+        if ((!I.slide && p.slideT < P.SLIDE_T - P.SLIDE_MIN) || p.brace || p.haul) p.slideT = 0;
+        if (p.slideT <= 0) { p.slideT = 0; p.slideCd = P.SLIDE_CD; }
+      }
       if (p.buf > 0 && cupBoost(W, p, mate)) { /* courte échelle */ }
       else if (p.buf > 0) { // saut : on garde l'élan de la plateforme
         p.buf = 0; p.vy = P.JUMP + Math.max(0, p.gvy); p.st = ST.AIR; p.stT = 0; p.coy = 0; p.cut = false; p.jHeld = true; p.onMate = false;
-        ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z });
+        if (p.slideT > 0) { p.vx = (p.vx - p.gvx) * P.SLIDE_JUMP + p.gvx; p.vz = (p.vz - p.gvz) * P.SLIDE_JUMP + p.gvz; p.slideT = 0; p.slideCd = P.SLIDE_CD; p.slideJump = true; } // saut glissé : plus long
+        ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z, slide: p.slideJump ? 1 : 0 });
       }
     } else {
       p.coy = Math.max(0, p.coy - dt);
@@ -522,8 +542,12 @@ function stepPlayer(W, p, I, mate) {
       if (wl > 0.05) {
         // suspendu à la chaîne : on « pompe » le balancement plus fort (c'est ce qui permet d'atteindre une paroi lointaine)
         const sw = p.dangling ? P.SWING_ACC / P.AIR_ACC : 1, cur = p.vx * wx + p.vz * wz;
-        const add = clamp(P.AIR_MAX * (p.dangling ? 1.2 : 1) * Math.min(1, wl) - cur, 0, P.AIR_ACC * sw * dt * (p.knock > 0 ? 0.3 : 1));
+        const opp = cur < 0 ? P.AIR_BRAKE : 1; // demi-tour en l'air : on freine plus fort qu'on n'accélère (un virage raté se rattrape)
+        const add = clamp(P.AIR_MAX * (p.dangling ? 1.2 : 1) * Math.min(1, wl) - cur, 0, P.AIR_ACC * sw * opp * dt * (p.knock > 0 ? 0.3 : 1));
         p.vx += wx * add; p.vz += wz * add;
+        if (!p.dangling && p.knock <= 0) { // la dérive latérale s'amortit quand on pousse : l'élan de côté ne s'accumule pas
+          const cu = p.vx * wx + p.vz * wz, lx = p.vx - cu * wx, lz = p.vz - cu * wz, kk = Math.min(1, P.AIR_LAT * dt * Math.min(1, wl)); p.vx -= lx * kk; p.vz -= lz * kk;
+        }
       } else { const k = 1 - P.AIR_DRAG * dt; p.vx *= k; p.vz *= k; }
       // saut à hauteur variable : relâcher tôt = pesanteur plus forte jusqu'à l'apex
       if (!I.jump) p.jHeld = false;

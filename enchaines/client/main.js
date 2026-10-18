@@ -22,7 +22,7 @@ G.play = (id) => { G.course = id; return startLocal(); }; // tests / mode test
 G.tp = (i) => { if (G.mode !== 'local') return; G.W.cp = i; G.W.cpMax = Math.max(G.W.cpMax, i); spawnAt(G.W, i); Scene.onEvent(G.W, { k: 'respawn' }); };
 
 /* ------------------------------ réglages persistants ------------------------------ */
-const CFG = Object.assign({ name: '', vol: 0.8, sens: 1, invert: false, vMusic: 1, vSfx: 1, vChain: 1, vVoice: 1, vMic: 1, devIn: '', devOut: '', keys: {} }, safe(() => JSON.parse(localStorage.getItem('ch-cfg')), {}));
+const CFG = Object.assign({ name: '', vol: 0.8, sens: 1, invert: false, camLock: 0, camAuto: 0, vMusic: 1, vSfx: 1, vChain: 1, vVoice: 1, vMic: 1, devIn: '', devOut: '', keys: {} }, safe(() => JSON.parse(localStorage.getItem('ch-cfg')), {}));
 const saveCfg = () => safe(() => localStorage.setItem('ch-cfg', JSON.stringify(CFG)));
 
 /* ------------------------------ entrées ------------------------------ */
@@ -45,7 +45,7 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
 // touches du grimpeur 1 (réglables : clavier ou boutons de souris « Mouse0..4 ») ; défauts : E = tirer la chaîne, Z / X = tourner la caméra
-const KEYDEF = { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space'], brace: ['ShiftLeft'], pull: ['KeyE'], cup: ['KeyG'], punch: ['Mouse0'], kick: ['KeyQ'], drop: ['KeyC'], use: ['KeyF'], reset: ['KeyR'], camL: ['KeyZ'], camR: ['KeyX'] };
+const KEYDEF = { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space'], brace: ['ShiftLeft'], pull: ['KeyE'], cup: ['KeyG'], punch: ['Mouse0'], kick: ['KeyQ'], slide: ['KeyV'], drop: ['KeyC'], use: ['KeyF'], reset: ['KeyR'], camL: ['KeyZ'], camR: ['KeyX'] };
 const BIND = {}; const rebuildBind = () => { for (const a in KEYDEF) BIND[a] = CFG.keys?.[a] ?? KEYDEF[a]; };
 rebuildBind();
 const SCHEMES = {
@@ -55,11 +55,11 @@ const SCHEMES = {
 const anyKey = (l) => l.some((k) => keys.has(k)), anyPress = (l) => l.some((k) => pressed.has(k));
 const slot = [{ jc: 0, dc: 0, uc: 0 }, { jc: 0, dc: 0, uc: 0 }];
 function readInput(k, schemes, pads) {
-  let ax = 0, ay = 0, jump = false, brace = false, pull = false, cup = false, punch = false, kick = false, reset = false, jp = false, dp = false, up = false;
+  let ax = 0, ay = 0, jump = false, brace = false, pull = false, cup = false, punch = false, kick = false, slide = false, reset = false, jp = false, dp = false, up = false;
   for (const s of schemes) {
     const S = SCHEMES[s];
     ax += (anyKey(S.right) ? 1 : 0) - (anyKey(S.left) ? 1 : 0); ay += (anyKey(S.up) ? 1 : 0) - (anyKey(S.down) ? 1 : 0);
-    jump ||= anyKey(S.jump); brace ||= anyKey(S.brace); pull ||= anyKey(S.pull); cup ||= anyKey(S.cup || []); punch ||= anyKey(S.punch || []); kick ||= anyKey(S.kick || []); reset ||= anyKey(S.reset); jp ||= anyPress(S.jump); dp ||= anyPress(S.drop); up ||= anyPress(S.use);
+    jump ||= anyKey(S.jump); brace ||= anyKey(S.brace); pull ||= anyKey(S.pull); cup ||= anyKey(S.cup || []); punch ||= anyKey(S.punch || []); kick ||= anyKey(S.kick || []); slide ||= anyKey(S.slide || []); reset ||= anyKey(S.reset); jp ||= anyPress(S.jump); dp ||= anyPress(S.drop); up ||= anyPress(S.use);
   }
   for (const i of pads) {
     const gp = safe(() => navigator.getGamepads()[i], null); if (!gp) continue;
@@ -75,7 +75,7 @@ function readInput(k, schemes, pads) {
   const l = Math.hypot(ax, ay); if (l > 1) { ax /= l; ay /= l; }
   // déplacement relatif à la caméra
   const yaw = Scene.controlYaw(k, G.W?.pl[G.mode === 'online' ? G.me ?? 0 : k], l > 0.2), c = Math.cos(yaw), s = Math.sin(yaw);
-  return { mx: ax * c - ay * s, mz: -ax * s - ay * c, jump, brace, pull, cup, punch, kick, reset, jc: slot[k].jc, dc: slot[k].dc, uc: slot[k].uc };
+  return { mx: ax * c - ay * s, mz: -ax * s - ay * c, jump, brace, pull, cup, punch, kick, slide, reset, jc: slot[k].jc, dc: slot[k].dc, uc: slot[k].uc };
 }
 // souris : glisser = tourner la caméra, molette = recul
 let drag = null;
@@ -83,13 +83,14 @@ addEventListener('pointerdown', (e) => {
   Music.unlock(); Snd.unlock(); Sfx.load();
   if (G.capturing && G.capturing.armed) { e.preventDefault(); endCapture('Mouse' + e.button); return; }
   if (e.button === 1 && e.target.id === 'gl' && G.mode && G.W && !Object.values(BIND).some((l) => l.includes('Mouse1'))) { e.preventDefault(); pingDown(e); return; } // molette : pings (sauf si une action y est réglée)
+  if (e.target.id === 'gl' && CFG.camLock && G.mode && !G.paused && !document.pointerLockElement) e.target.requestPointerLock?.(); // caméra verrouillée au pointeur : le premier clic dans le jeu capture la souris
   if (e.target.id === 'gl') { if (!Object.values(BIND).some((l) => l.includes('Mouse' + e.button))) drag = { x: e.clientX, y: e.clientY }; // caméra : un bouton qui n'est pas une action (clic droit par défaut)
     const k = 'Mouse' + e.button; if (!keys.has(k)) pressed.add(k); keys.add(k); }
 });
 addEventListener('mousedown', (e) => { if (e.button > 0 && (e.target.id === 'gl' || G.capturing)) e.preventDefault(); }); // clic molette / boutons latéraux : pas de défilement ni de navigation
 addEventListener('pointerup', (e) => { keys.delete('Mouse' + e.button); if (e.button === 1 && PW.down) pingUp(e); });
 addEventListener('pointercancel', () => { for (let b = 0; b < 5; b++) keys.delete('Mouse' + b); });
-addEventListener('pointermove', (e) => { if (PW.open) wheelHover(e); if (!drag) return; Scene.camInput(-(e.clientX - drag.x) * 0.006 * CFG.sens, (e.clientY - drag.y) * 0.004 * (CFG.invert ? -1 : 1), 0); drag = { x: e.clientX, y: e.clientY }; });
+addEventListener('pointermove', (e) => { if (PW.open) wheelHover(e); if (document.pointerLockElement) { Scene.camInput(-e.movementX * 0.0032 * CFG.sens, e.movementY * 0.0022 * (CFG.invert ? -1 : 1), 0); return; } if (!drag) return; Scene.camInput(-(e.clientX - drag.x) * 0.006 * CFG.sens, (e.clientY - drag.y) * 0.004 * (CFG.invert ? -1 : 1), 0); drag = { x: e.clientX, y: e.clientY }; });
 addEventListener('pointerup', () => { drag = null; });
 addEventListener('contextmenu', (e) => { if (e.target.tagName !== 'INPUT') e.preventDefault(); }); // pas de menu du clic droit dans le jeu
 addEventListener('wheel', (e) => { if (G.mode) Scene.camInput(0, 0, Math.sign(e.deltaY) * 1.2); }, { passive: true });
@@ -179,7 +180,7 @@ const quant = (I) => decIn(encIn(0, I)); // entrées arrondies comme celles envo
 function recStep(I) { const e = encIn(0, I), l = G.run[G.run.length - 1]; if (l && l.every((v, k) => k === 0 || v === e[k])) l[0]++; else { e[0] = 1; G.run.push(e); } }
 function stopGame() { Pings.clear(); if (G.replay?.prevL) G.L = G.replay.prevL; G.replay = null; $('#h-replay').classList.remove('on'); if (G.mode) setTimeout(backdrop, 0); G.mode = null; G.solo = false; G.W = null; $('#hud').classList.remove('on'); G.paused = false; $('#pause').classList.remove('on'); }
 function togglePause(v) {
-  G.paused = v ?? !G.paused; $('#pause').classList.toggle('on', G.paused);
+  G.paused = v ?? !G.paused; if (G.paused) document.exitPointerLock?.(); $('#pause').classList.toggle('on', G.paused);
   $('#p-restart').style.display = G.mode === 'online' && G.room && G.room.host !== G.room.you ? 'none' : '';
 }
 // portail : fondu lumineux, puis parcours suivant (en ligne, l'hôte relance le salon sur ce parcours)
@@ -212,6 +213,7 @@ function handleEvents(W, list, fromServer) {
     Scene.onEvent(W, e);
     const p = e.p != null ? W.pl[e.p] : null, pan = p ? panOf(p) : 0;
     switch (e.k) {
+      case 'slide': Snd.play('slide', { pan }); break;
       case 'jump': if (!p || !Sfx.jump(p.x, p.y + 1.5, p.z, { key: e.p, rate: 0.97 + Math.random() * 0.06 })) Snd.play('jump', { pan }); break; // la voix du propriétaire
       case 'land': if (e.v > 3) Snd.play('land', { pan, v: e.v }); break;
       case 'grab': Snd.play('grab', { pan }); break;
@@ -423,8 +425,8 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 // la liste des salons ouverts se met à jour toute seule tant qu'on est sur l'écran « Jouer en ligne » (avant : une seule demande à l'ouverture, un salon créé ensuite n'apparaissait qu'après avoir cliqué sur ↻)
 setInterval(() => { if (document.body.dataset.screen === 'online' && net?.up) net.send({ t: 'list' }); }, 2500);
 let net = null;
-const encIn = (ct, I) => [ct, Math.round(I.mx * 100) / 100, Math.round(I.mz * 100) / 100, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0) | (I.cup ? 16 : 0) | (I.punch ? 32 : 0) | (I.kick ? 64 : 0), I.jc, I.dc, I.uc || 0];
-const decIn = (a) => (a ? { mx: a[1], mz: a[2], jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), punch: !!(a[3] & 32), kick: !!(a[3] & 64), jc: a[4], dc: a[5], uc: a[6] || 0 } : IDLE);
+const encIn = (ct, I) => [ct, Math.round(I.mx * 100) / 100, Math.round(I.mz * 100) / 100, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0) | (I.cup ? 16 : 0) | (I.punch ? 32 : 0) | (I.kick ? 64 : 0) | (I.slide ? 128 : 0), I.jc, I.dc, I.uc || 0];
+const decIn = (a) => (a ? { mx: a[1], mz: a[2], jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), punch: !!(a[3] & 32), kick: !!(a[3] & 64), slide: !!(a[3] & 128), jc: a[4], dc: a[5], uc: a[6] || 0 } : IDLE);
 function getNet() {
   if (net) return net;
   net = createNet(() => CFG.name || 'Grimpeur');
@@ -618,7 +620,7 @@ safe(() => navigator.mediaDevices.addEventListener('devicechange', () => { if ($
 let LAYOUT = null; safe(() => navigator.keyboard?.getLayoutMap?.().then((l) => { LAYOUT = l; refreshKeys(); }));
 const SPECIAL = { Space: 'Espace', ShiftLeft: 'Maj gauche', ShiftRight: 'Maj droit', ControlLeft: 'Ctrl gauche', ControlRight: 'Ctrl droit', Enter: 'Entrée', Escape: 'Échap', Mouse0: 'Clic gauche', Mouse1: 'Clic molette', Mouse2: 'Clic droit', Mouse3: 'Souris 4', Mouse4: 'Souris 5', Tab: 'Tab', Backquote: '²' };
 const keyLabel = (code) => !code ? tr('non assignée') : SPECIAL[code] ? tr(SPECIAL[code]) : /^Key[A-Z]$/.test(code) ? (LAYOUT?.get(code) || code.slice(3)).toUpperCase() : /^Digit\d$/.test(code) ? code.slice(5) : LAYOUT?.get(code)?.toUpperCase() || code.replace('Numpad', 'Pavé ').replace('Arrow', 'Flèche ');
-const KEYROWS = [['up', 'Haut'], ['down', 'Bas'], ['left', 'Gauche'], ['right', 'Droite'], ['jump', 'Sauter'], ['brace', "S'arc-bouter"], ['pull', 'Tirer la chaîne'], ['cup', 'Courte échelle'], ['punch', 'Coup de poing'], ['kick', 'Coup de pied'], ['drop', 'Lâcher la prise'], ['use', 'Interagir'], ['reset', 'Retour au point de passage'], ['camL', 'Caméra gauche'], ['camR', 'Caméra droite']];
+const KEYROWS = [['up', 'Haut'], ['down', 'Bas'], ['left', 'Gauche'], ['right', 'Droite'], ['jump', 'Sauter'], ['brace', "S'arc-bouter"], ['pull', 'Tirer la chaîne'], ['slide', 'Glisser'], ['cup', 'Courte échelle'], ['punch', 'Coup de poing'], ['kick', 'Coup de pied'], ['drop', 'Lâcher la prise'], ['use', 'Interagir'], ['reset', 'Retour au point de passage'], ['camL', 'Caméra gauche'], ['camR', 'Caméra droite']];
 function refreshKeys() {
   for (const el of $$('[data-bind]')) el.textContent = keyLabel(BIND[el.dataset.bind]?.[0]);
   const box = $('#s-keys'); if (!box) return;
@@ -641,6 +643,8 @@ const hintKeys = (txt) => {
   return txt.replace(/\bV\b/g, L('pull')).replace(/\bF\b/g, L('use')).replace(/\bG\b/g, L('cup')).replace(/\bR\b/g, L('reset')).replace(/\b(Maj|Shift)\b/g, shift(BIND.brace[0]) || L('brace')).replace(/\b(Espace|Space)\b/g, L('jump'));
 };
 refreshKeys();
+$('#s-camlock').value = String(CFG.camLock); $('#s-camlock').addEventListener('change', (e) => { CFG.camLock = +e.target.value; if (!CFG.camLock) document.exitPointerLock?.(); saveCfg(); });
+$('#s-camauto').checked = !!CFG.camAuto; Scene.S.camAuto = !!CFG.camAuto; $('#s-camauto').addEventListener('change', (e) => { CFG.camAuto = e.target.checked ? 1 : 0; Scene.S.camAuto = !!CFG.camAuto; saveCfg(); });
 const openSettings = () => { fillDevices(); refreshKeys(); $('#settings').classList.add('on'); };
 $('#p-sens').value = CFG.sens; $('#p-sens').addEventListener('input', (e) => { CFG.sens = +e.target.value; saveCfg(); });
 

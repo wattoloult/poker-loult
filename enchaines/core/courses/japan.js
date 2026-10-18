@@ -156,4 +156,6 @@ shoji(286.6, 41.4, Zt, 6, ['KC', 'TE', 'TF'], { hold: 8, speed: 1.0, name: 'shoj
 block(293, -6, 41.4, Zt, 11, 8, { mat: 'stone', summit: 1, coop: 1, name: 'sanctuaire' }); // x 287.5 -> 298.5
 cp(293.5, 41.4, Zt, { name: 'Le Sanctuaire du sommet', finish: true, r: 4 });
 
+/* pilier à pics qui tourne sur la dernière terrasse : il décrit un cercle, on passe quand il s'écarte */
+K.roller(293, 42.7, -2.4, 2.6, 0.6, { axis: 'y', spin: 4, zone: 11, move: { k: 'circ', r: 2.4, T: 7 } });
 export default K.done({ abyss: -18, jp: { bells: { K1: 9, KA: 9, KB: 9, KC: 14 } } });

@@ -148,14 +148,14 @@ export function build(W) {
   if (S.level) S.scene.remove(S.level);
   const grp = S.level = new THREE.Group(); S.scene.add(grp);
   applyTheme(th);
-  S.bodyMesh = []; S.fires = []; S.hangs = []; S.levers = []; S.plates = []; S.wheels = []; S.gearHubs = []; S.bigGears = []; S.cwViews = []; S.lights = [];
+  S.rollers = []; S.bodyMesh = []; S.fires = []; S.hangs = []; S.levers = []; S.plates = []; S.wheels = []; S.gearHubs = []; S.bigGears = []; S.cwViews = []; S.lights = [];
   for (const b of W.bodies) {
     if (b.cliff || b.noMesh || (b.herse && b.look !== 'stone') || b.dbseg) { S.bodyMesh.push(null); continue; } // herses et ponts-levis : modèles de mechs.js
     const o = new THREE.Group(); grp.add(o); S.bodyMesh.push(o);
     if (b.lever) { lever(b, o); continue; }
     const mat = matFor(th, b.mat, world);
     const m = new THREE.Mesh(boxGeo(b.w, b.h, b.d, mat.userData.tile), mat); m.castShadow = !b.deco || b.deco !== 'pagoda'; m.receiveShadow = true; o.add(m);
-    if (world === 'medieval') decorMedieval(b, o); else decorWorld(world, th, b, o);
+    if (b.roller) rollerMesh(b, o); else if (world === 'medieval') decorMedieval(b, o); else decorWorld(world, th, b, o);
     mechVisual(world, th, b, o);
   }
   Mechs.build(W, grp);
@@ -374,7 +374,21 @@ function particles(th) {
 
 /* ------------------------------ image ------------------------------ */
 const HA = new THREE.Vector3(), HB = new THREE.Vector3();
+// rouleau à pics : cylindre d'acier cerclé, rangées de pointes (instances), qui tourne autour de son axe ; la boîte physique reste invisible
+function rollerMesh(b, o) {
+  const { axis, r, len, spin } = b.roller, box = o.children[0]; if (box) box.visible = false;
+  const outer = new THREE.Group(), inner = new THREE.Group(); outer.add(inner); o.add(outer);
+  if (axis === 'z') outer.rotation.x = Math.PI / 2; else if (axis === 'x') outer.rotation.z = Math.PI / 2;
+  const steel = new THREE.MeshStandardMaterial({ color: 0x5b5a5e, metalness: 0.85, roughness: 0.42 }), tip = new THREE.MeshStandardMaterial({ color: 0xc9c4bb, metalness: 0.95, roughness: 0.25 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.78, r * 0.78, len, 28), steel); body.castShadow = body.receiveShadow = true; inner.add(body);
+  for (const sy of [-1, 1]) { const cap = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.9, r * 0.9, 0.12, 28), steel); cap.position.y = sy * (len / 2 - 0.02); inner.add(cap); }
+  const rows = Math.max(2, Math.floor(len / 0.62)), per = 10, n = rows * per, spikes = new THREE.InstancedMesh(new THREE.ConeGeometry(r * 0.16, r * 0.5, 8), tip, n), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), dir = new THREE.Vector3(), pos = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1);
+  let i = 0; for (let ro = 0; ro < rows; ro++) for (let a = 0; a < per; a++) { const ang = (a + (ro % 2) * 0.5) / per * Math.PI * 2, y = -len / 2 + (ro + 0.5) * (len / rows); dir.set(Math.cos(ang), 0, Math.sin(ang)); pos.copy(dir).multiplyScalar(r * 0.78 + r * 0.2).setY(y); q.setFromUnitVectors(up, dir); m4.compose(pos, q, sc); spikes.setMatrixAt(i++, m4); }
+  spikes.castShadow = true; inner.add(spikes);
+  S.rollers.push({ inner, spin, ph: (b.i * 1.7) % 6.28 });
+}
 export function update(W, dt, t) {
+  for (const r of S.rollers || []) r.inner.rotation.y = r.ph + t * r.spin;
   for (const b of W.bodies) { // corps animés
     const m = S.bodyMesh[b.i]; if (!m) continue;
     m.position.set(b.px, b.py, b.pz); m.rotation.y = b.yaw;

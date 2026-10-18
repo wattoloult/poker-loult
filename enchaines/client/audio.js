@@ -52,6 +52,7 @@ export function play(name, o = {}) {
       case 'step': if (gap('step' + (o.k || 0), 0.11)) { noise(t, 0.07, o.wood ? 900 : 1500, 1.4, 0.12 * v, 'bandpass', p); noise(t, 0.05, 260, 0.9, 0.09 * v, 'lowpass', p); } break;
       case 'jump': noise(t, 0.16, 700, 0.8, 0.12, 'bandpass', p, 2200); noise(t, 0.05, 300, 1, 0.1, 'lowpass', p); break;
       case 'land': { const g = Math.min(0.5, 0.12 + v * 0.025); noise(t, 0.16 + v * 0.01, 180, 0.8, g, 'lowpass', p); noise(t, 0.08, 1100, 1.2, g * 0.5, 'bandpass', p); if (v > 16) tone(t, 70, 0.3, g * 0.7, 'sine', p, 40); break; }
+      case 'slide': noise(t, 0.5, 1200, 0.9, 0.11, 'bandpass', p, 350); noise(t, 0.2, 260, 0.8, 0.08, 'lowpass', p); break;
       case 'grab': noise(t, 0.06, 2600, 2, 0.16, 'bandpass', p); noise(t, 0.09, 500, 1, 0.14, 'lowpass', p); break;
       case 'mantle': noise(t, 0.2, 900, 0.7, 0.07, 'bandpass', p, 500); break;
       case 'rattle': if (gap('rattle', 0.07)) clink(t, 0.035 * v, p, 2000 + Math.random() * 1500); break;

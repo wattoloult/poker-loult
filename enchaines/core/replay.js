@@ -7,7 +7,7 @@ import { createWorld, stepWorld, IDLE } from './sim.js';
 export const MAX_STEPS = 120 * 60 * 30; // 30 min de jeu au plus
 const num = (v) => (Number.isFinite(+v) ? Math.max(-1, Math.min(1, +v)) : 0);
 const cnt = (v) => (Number.isInteger(v) && v >= 0 && v < 1e9 ? v : 0);
-export const decRun = (a) => ({ mx: num(a[1]), mz: num(a[2]), jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), punch: !!(a[3] & 32), kick: !!(a[3] & 64), jc: cnt(a[4]), dc: cnt(a[5]), uc: cnt(a[6]) });
+export const decRun = (a) => ({ mx: num(a[1]), mz: num(a[2]), jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), punch: !!(a[3] & 32), kick: !!(a[3] & 64), slide: !!(a[3] & 128), jc: cnt(a[4]), dc: cnt(a[5]), uc: cnt(a[6]) });
 export function replayRun(course, run) {
   const W = createWorld({ course }); W.alone = true;
   let steps = 0;

@@ -130,4 +130,6 @@ K.zone(10, 'La Sortie');
 block(326, 12, 26.1, 0, 8, 8, { mat: 'rock', summit: 1 });
 cp(326, 26.1, 0, { name: 'La Sortie', finish: true, r: 4 });
 
+/* rouleau à pics debout dans la salle de la sortie : il balaie la salle d'un côté à l'autre */
+K.roller(268, 8.65, 0, 2.4, 0.55, { axis: 'y', spin: 4, zone: 7, move: { k: 'lin', az: 3, T: 5 } });
 export default K.done({ abyss: -30 });

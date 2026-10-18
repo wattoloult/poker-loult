@@ -26,6 +26,12 @@ export function course(meta) {
     zone(n, name) { Z = n; ZN[n] = name; return K; },
     // plateforme : centre (x, z), dessus à `top`, largeur w (x), profondeur d (z), épaisseur h
     plat(x, top, z, w, d, o = {}) { const h = o.h || 0.7; B.push({ x, y: top - h / 2, z, w, h, d, mat: 'wood', zone: Z, ...o }); return B.length - 1; },
+    // ROULEAU À PICS : cylindre hérissé qui tourne (axis 'x' | 'z' = couché, 'y' = debout) et peut se déplacer (o.move : lin / circ / pend…) ; tout contact projette
+    // (dessus compris) ; il ne porte jamais. Centre en (x, cy, z), longueur len, rayon r ; o.spin = tours (rad/s, signe = sens).
+    roller(x, cy, z, len, r, o = {}) {
+      const { axis = 'z', spin = 2.4, ...rest } = o, w = axis === 'x' ? len : 2 * r, h = axis === 'y' ? len : 2 * r, d = axis === 'z' ? len : 2 * r;
+      B.push({ x, y: cy, z, w, h, d, mat: 'metal', zone: Z, hit: 1, spike: 1, nograb: 1, roller: { axis, r, len, spin }, ...rest }); return B.length - 1;
+    },
     // bloc plein de `from` jusqu'au dessus `top`
     block(x, from, top, z, w, d, o = {}) { const h = top - from; B.push({ x, y: from + h / 2, z, w, h, d, mat: 'stone', zone: Z, ...o }); return B.length - 1; },
     cp(x, y, z, o = {}) { CP.push({ x, y, z, r: 3.2, zone: Z, ...o }); return CP.length - 1; },

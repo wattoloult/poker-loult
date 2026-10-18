@@ -154,4 +154,6 @@ cam(424, 104, -8, 456, 124, 8, { mode: 'far', dist: 6 });
 block(444.4, 100, 109.2, 0, 10, 8, { mat: 'stone', summit: 1, island: 1, coop: 1 });
 cp(444.4, 109.2, 0, { name: 'Le temple du ciel', finish: true, r: 4 });
 
+/* l'île finale : un rouleau à pics balaie la plateforme dans sa profondeur */
+K.roller(444.4, 109.7, 0, 7.4, 0.5, { axis: 'z', spin: 3, zone: 11, move: { k: 'lin', ax: 3, T: 8 } });
 export default K.done({ abyss: -20 });

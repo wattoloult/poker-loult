@@ -151,6 +151,7 @@ for (const [i, x] of [[1, 421.5], [2, 427.5], [3, 433.5]]) plat(x, 76.3, -2.6, 0
 block(438.4, 75.2, 80.6, -2.6, 0.9, 6.4, { mat: 'stone', nograb: 1, noMesh: 1, deco: 'arch', ext: 'summit', sm: { k: 'arch', open: ['B1', 'B2', 'B3'], lift: 5.6, rise: 4 } });
 cp(442, 75.2, -2.6, { name: 'Le Toit du monde', finish: true, r: 3.2 });
 
+
 // falaise derrière tout le parcours + le vide remonte avec l'ascension (au lieu d'une chute de 90 m)
 export default K.done({ abyss: -20, sm: { floors: [
   { x0: 30, x1: 125, y: 2 }, { x0: 125, x1: 186, y: 16 }, { x0: 186, x1: 250, y: 28 }, { x0: 250, x1: 330, y: 38 }, { x0: 330, x1: 460, y: 48 } ] } });

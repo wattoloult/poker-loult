@@ -5,7 +5,7 @@ import { stepWorld } from './sim.js';
 
 const num = (v) => (Number.isFinite(+v) ? Math.max(-1, Math.min(1, +v)) : 0);
 const cnt = (v) => (Number.isInteger(v) && v >= 0 && v < 1e9 ? v : 0);
-const dec = (a, o) => ({ mx: num(a[o]), mz: num(a[o + 1]), jump: !!(a[o + 2] & 1), brace: !!(a[o + 2] & 2), reset: !!(a[o + 2] & 4), pull: !!(a[o + 2] & 8), cup: !!(a[o + 2] & 16), punch: !!(a[o + 2] & 32), kick: !!(a[o + 2] & 64), jc: cnt(a[o + 3]), dc: cnt(a[o + 4]), uc: cnt(a[o + 5]) });
+const dec = (a, o) => ({ mx: num(a[o]), mz: num(a[o + 1]), jump: !!(a[o + 2] & 1), brace: !!(a[o + 2] & 2), reset: !!(a[o + 2] & 4), pull: !!(a[o + 2] & 8), cup: !!(a[o + 2] & 16), punch: !!(a[o + 2] & 32), kick: !!(a[o + 2] & 64), slide: !!(a[o + 2] & 128), jc: cnt(a[o + 3]), dc: cnt(a[o + 4]), uc: cnt(a[o + 5]) });
 // curseur de lecture : R = { i, k } ; renvoie false quand la montée est finie
 export function stepCoop(W, run, R) {
   let e = run[R.i];

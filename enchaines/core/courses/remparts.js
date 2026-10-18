@@ -97,4 +97,7 @@ cp(168, 22.8, Zr, { name: 'Le Sommet du donjon', finish: true, r: 4 });
 // falaise derrière tout le parcours
 block(80, -50, 70, -14, 220, 14, { mat: 'cliff', zone: 0, cliff: 1, nograb: 1 });
 
+/* rouleaux à pics des remparts : un balayeur sur le chemin de ronde, un autre devant le donjon */
+K.roller(27, 9.5, -4.4, 3.6, 0.5, { axis: 'z', spin: 3, zone: 2, move: { k: 'lin', ax: 5.5, T: 9 } });
+K.roller(168, 23.3, -1.9, 5, 0.5, { axis: 'z', spin: -3, zone: 7, move: { k: 'lin', ax: 3.5, T: 8 } });
 export default K.done({ abyss: -24 });
