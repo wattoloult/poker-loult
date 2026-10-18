@@ -1,5 +1,6 @@
 // Mécanismes japonais du parcours « Les Mille Torii » (core/biomes/japan.js) : shoji à plaques, cloches qui retombent seules, shoji à deux
 // leviers éloignés, dernier shoji (cloche + deux dalles), instantané réseau. Joués sur le VRAI parcours avec la vraie physique.
+import './botmode.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, stepWorld, layChain, snapWorld, applySnap, ST, IDLE, DT } from './sim.js';

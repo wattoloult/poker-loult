@@ -1,5 +1,6 @@
 // Tests des mécanismes des mines (core/biomes/deep.js) sur le VRAI parcours « mine » : leviers à impulsion, wagonnets, étais, éboulement,
 // cage du treuil, contrepoids des bennes, instantanés réseau.   node --test core/deep.test.js
+import './botmode.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, stepWorld, layChain, snapWorld, applySnap, spawnAt, groundBelow, ST, IDLE, DT } from './sim.js';

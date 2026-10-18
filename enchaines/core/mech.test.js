@@ -1,4 +1,5 @@
 // Tests des mécanismes sur des mini-parcours de laboratoire (vraie physique, deux grimpeurs + chaîne) : node --test
+import './botmode.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { course } from './kit.js';

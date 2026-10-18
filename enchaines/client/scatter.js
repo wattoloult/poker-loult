@@ -74,7 +74,8 @@ const geo = new THREE.Box3(), V = new THREE.Vector3();
 function put(name, h, parent, x, y, z, ry, frost) {
   const src = LIB[name]; if (!src) return null;
   const c = src.clone(true); c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); c.scale.set(1, 1, 1);
-  geo.setFromObject(c); const sz = geo.getSize(V), s = h / (sz.y || 1);
+  // hauteur visée, mais emprise au sol plafonnée (les fleurs et touffes plates devenaient immenses et cachaient la dalle)
+  geo.setFromObject(c); const sz = geo.getSize(V), s = Math.min(h / (sz.y || 1), Math.max(0.7, h * 2.2) / (Math.max(sz.x, sz.z) || 1));
   c.scale.setScalar(s); c.position.set(-((geo.max.x + geo.min.x) / 2) * s, -geo.min.y * s, -((geo.max.z + geo.min.z) / 2) * s);
   const g = new THREE.Group(); g.add(c); g.position.set(x, y, z); g.rotation.y = ry; g.userData.r = Math.max(sz.x, sz.z) * s * 0.5; parent.add(g);
   if (frost) c.traverse((m) => { if (m.isMesh) { m.material = [].concat(m.material).map((mt) => { const q = mt.clone(); if (q.color) q.color.lerp(new THREE.Color(0xeef4fa), frost); return q; }); if (m.material.length === 1) m.material = m.material[0]; } });

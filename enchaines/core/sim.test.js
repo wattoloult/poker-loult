@@ -1,4 +1,5 @@
 // Tests de la physique : node --test
+import './botmode.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, stepWorld, snapWorld, applySnap, spawnAt, layChain, ST, DT, P, IDLE } from './sim.js';
@@ -83,7 +84,7 @@ function haulFrom(az) {
   const A = W.pl[0], B = W.pl[1]; A.x = 0; A.z = az; B.x = 1; B.z = 6.6; layChain(W);
   let upT = null, zMax = 0, staMin = 1;
   for (let i = 0; i < 900; i++) {
-    stepWorld(W, [i < 240 ? { ...IDLE, brace: true } : { ...IDLE, pull: true }, i < 60 ? { ...IDLE, mz: 1, jc: i > 20 ? 1 : 0, jump: i > 20 } : { ...IDLE, mz: -1 }]);
+    stepWorld(W, [i < 240 ? { ...IDLE, brace: true } : { ...IDLE, pull: true }, i < 60 ? { ...IDLE, mz: 1, jc: i > 20 ? 1 : 0, jump: i > 20 } : { ...IDLE, mz: -1, jc: 1 + (i >> 5), jump: true }]); // au rebord : Espace pour se hisser
     zMax = Math.max(zMax, A.z); staMin = Math.min(staMin, A.sta); if (upT == null && i > 240 && B.st === ST.GROUND && B.y > -0.5) upT = (i - 240) * DT;
   }
   return { W, upT, zMax, staMin };
@@ -160,4 +161,38 @@ test('mode test solo : un seul grimpeur, aucune chaîne, il franchit le vide et 
 test('plateau tournant : vitesse angulaire constante (ne s\'emballe pas avec le temps)', () => {
   const W = createWorld({ course: 'iles' }), b = W.bodies.find((x) => x.move?.k === 'rot'), w = b.move.w, at = (n) => { for (let i = 0; i < n; i++) stepWorld(W, [IDLE, IDLE]); const y = b.yaw; stepWorld(W, [IDLE, IDLE]); return (b.yaw - y) / DT; };
   assert.ok(Math.abs(at(10) - w) < 1e-6 && Math.abs(at(3000) - w) < 1e-6, 'w mesuré = w prévu après 25 s');
+});
+test('rebord : pousser vers le mur ne hisse pas, Espace hisse ; au bout du rebord on passe le coin', () => {
+  globalThis.ENCH_AUTOMANTLE = false; // comme un vrai joueur
+  const W = createWorld(); W.alone = true; run(W, 5);
+  const A = W.pl[0], b = W.bodies.find((x) => !x.cliff && !x.move && x.hw >= 1.5 && x.hd >= 1.5 && x.py + x.hh > 3);
+  // suspendu au bord +x de la boîte
+  Object.assign(A, { st: ST.HANG, hang: { b: b.i, f: 0, u: 0 }, stT: 0, vx: 0, vy: 0, vz: 0, sta: 1 });
+  run(W, 120, () => ({ ...IDLE, mx: -1 })); // pousser vers le mur (-x)
+  assert.equal(A.st, ST.HANG, 'toujours suspendu');
+  // déplacement latéral jusqu'au coin puis au-delà
+  const f0 = A.hang.f; run(W, 360, () => ({ ...IDLE, mz: 1 }));
+  assert.equal(A.st, ST.HANG); assert.notEqual(A.hang.f, f0, 'coin passé : autre face');
+  run(W, 30, (i) => ({ ...IDLE, jc: 1, jump: true }));
+  assert.ok(A.st === ST.MANTLE || A.st === ST.GROUND, 'Espace : on se hisse (' + A.st + ')');
+  globalThis.ENCH_AUTOMANTLE = true;
+});
+test("mode solo : le second saut remplace la courte échelle (rebord de « La Chaîne », 5,2 m plus haut)", () => {
+  const W = createWorld(); W.alone = true; run(W, 5);
+  const A = W.pl[0], goal = W.bodies.find((b) => b.coop && Math.abs(b.x + 37.5) < 0.1 && b.y + b.h / 2 > 62);
+  Object.assign(A, { x: -37.5, y: 57.45, z: 2.2, vx: 0, vy: 0, vz: 0, st: ST.AIR }); run(W, 30);
+  let ok = false;
+  for (let i = 0; i < 360 && !ok; i++) { stepWorld(W, [{ ...IDLE, mz: -1, jc: i < 10 ? 0 : i < 52 ? 1 : 2, jump: i >= 10 }, IDLE]); ok = A.st === ST.GROUND && A.gb === goal.i; }
+  assert.ok(ok, 'en haut du rebord (st ' + A.st + ', y ' + A.y.toFixed(2) + ')');
+  // à deux, pas de second saut
+  const W2 = createWorld(); run(W2, 5); const B = W2.pl[0]; Object.assign(B, { x: 0, y: 0.05, z: 0 });
+  let top = 0; for (let i = 0; i < 150; i++) { stepWorld(W2, [{ ...IDLE, jc: i < 5 ? 0 : i < 40 ? 1 : 2, jump: true }, IDLE]); top = Math.max(top, B.y); }
+  assert.ok(top < 1.9, 'pas de double saut à deux (apex ' + top.toFixed(2) + ')');
+});
+test("courte échelle : l'un saute sur la tête de l'autre, s'y tient debout et peut ressauter de là", () => {
+  const W = createWorld(); run(W, 5); const [A, B] = W.pl;
+  Object.assign(A, { x: 0, z: 1.5, y: 0.05 }); Object.assign(B, { x: 0, z: 2.4, y: 0.05 }); layChain(W);
+  let onHead = false, top = 0;
+  for (let i = 0; i < 360; i++) { const j = i < 10 ? 0 : i < 120 ? 1 : 2; stepWorld(W, [{ ...IDLE, mz: i < 60 ? 0.6 : 0, jc: j, jump: i >= 10 && i < 40 || i >= 120 && i < 150 }, IDLE]); onHead ||= A.onMate && A.st === ST.GROUND; top = Math.max(top, A.y); }
+  assert.ok(onHead, 'debout sur la tête du partenaire'); assert.ok(top > 3, 'ressaut depuis la tête (apex ' + top.toFixed(2) + ')');
 });

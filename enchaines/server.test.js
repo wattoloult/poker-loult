@@ -1,4 +1,5 @@
 // Test du serveur : deux clients WebSocket créent / rejoignent un salon, lancent la partie, l'un court ; les deux reçoivent le même monde.
+import './core/botmode.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';

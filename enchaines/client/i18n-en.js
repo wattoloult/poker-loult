@@ -19,8 +19,8 @@ export const EN = {
   "Grimpeur 2 (même clavier)": "Climber 2 (same keyboard)", "Flèches": "Arrow keys", "0 pavé num.": "Numpad 0", "Ctrl droit": "Right Ctrl", "sauter": "jump",
   "Maj droit": "Right Shift", "1 pavé": "Numpad 1", "s'arc-bouter, grimper à la chaîne": "brace, climb the chain", "4 pavé": "Numpad 4", "tirer la chaîne": "pull the chain",
   "2 pavé": "Numpad 2", "Fin": "End", "lâcher ·": "let go ·", "5 pavé": "Numpad 5", "interagir": "interact",
-  "En l'air, pousser vers un rebord = s'y accrocher. Contre une paroi couverte de prises et de lierre = l'escalader (endurance). Sur un rebord : avancer ou sauter = se hisser, côté = se décaler. Saut depuis un mur = rebond.":
-    "In the air, push towards a ledge = grab it. Against a wall covered in holds and ivy = climb it (stamina). On a ledge: move forward or jump = pull yourself up, sideways = shimmy. Jump from a wall = bounce.",
+  "En l'air, pousser vers un rebord = s'y accrocher. Contre une paroi couverte de prises et de lierre = l'escalader (endurance). Sur un rebord : Espace = se hisser, côtés = longer le bord (et passer les coins). Saut depuis un mur = rebond.":
+    "In the air, push towards a ledge = grab it. Against a wall covered in holds and ivy = climb it (stamina). On a ledge: Space = pull yourself up, sideways = shimmy along the edge (and round the corners). Jump from a wall = bounce.",
   "Tirer la chaîne remonte un partenaire tombé, mais l'effort fait glisser vers lui : reculez d'abord sur un appui stable, sinon vous tomberez ensemble.":
     "Pulling the chain hauls up a fallen partner, but the effort drags you towards them: step back onto solid footing first, or you will both fall.",
   "Souris (glisser) ou": "Mouse (drag) or", "Échap": "Esc",
@@ -66,7 +66,7 @@ export const EN = {
   "La Tour de Loult": "The Tower of Loult", "Ascension de la falaise en ruine": "Climbing the ruined cliff",
   "Le Pied de la tour": "The Foot of the Tower", "départ": "start",
   "Saute de pierre en pierre : maintiens Espace pour sauter plus haut": "Jump from stone to stone: hold Space to jump higher",
-  "Saute vers le rebord en poussant vers lui : tu t'y accroches. Espace ou avancer = se hisser": "Jump towards the ledge while pushing towards it: you grab on. Space or move forward = pull yourself up",
+  "Saute vers le rebord en poussant vers lui : tu t'y accroches. Espace = se hisser, côtés = longer le bord": "Jump towards the ledge while pushing towards it: you grab on. Space = pull yourself up, sideways = shimmy along the edge",
   "Si ton partenaire tombe, maintiens Maj : tu t'arc-boutes et tu le retiens ; puis V pour le remonter (recule d'abord du bord)": "If your partner falls, hold Shift: you brace and hold them; then V to haul them up (step back from the edge first)",
   "Les Piquets": "The Stakes", "Le Vide": "The Void", "Les poutres suspendues se balancent : saute quand elle vient vers toi": "The hanging beams swing: jump when one comes towards you",
   "La Paroi": "The Wall", "Les parois couvertes de prises s'escaladent : saute dessus et pousse vers elles. Attention à l'endurance": "Walls covered in holds can be climbed: jump onto them and push towards them. Watch your stamina",

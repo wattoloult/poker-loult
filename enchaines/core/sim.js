@@ -344,6 +344,7 @@ function stepPlayer(W, p, I, mate) {
   // on ne ravale la chaîne que si elle porte un partenaire en l'air : posé ou accroché, on ne tire plus (sinon on le colle à soi et ils s'envolent)
   p.haul = !!I.pull && p.st === ST.GROUND && p.sta > 0.02 && mate?.st === ST.AIR && W.taut > 0.4; if (I.pull && p.st === ST.GROUND) p.brace = false;
   p.ropeUp = false;
+  if (p.st !== ST.AIR) p.dj = false; // second saut (mode solo) rendu dès qu'on touche quelque chose
   p.ropeCd = Math.max(0, (p.ropeCd || 0) - dt);
   // levier à portée : « Interagir » le bascule
   if (uPress && p.st !== ST.AIR) for (const b of W.bodies) if (b.lever && Math.hypot(b.px - p.x, b.pz - p.z) < P.USE_R && Math.abs(b.py - (p.y + 1)) < 2.2) {
@@ -366,6 +367,9 @@ function stepPlayer(W, p, I, mate) {
       // on ne glisse pas vers un tronçon de bord bouché
       facePoint(b, p.hang.f, nu, 0.12, b.py + b.hh + 0.15, FP);
       if (!inside(W, FP.x, FP.y, FP.z)) p.hang.u = nu;
+      // au bout du rebord, on continue de pousser sur le côté : on passe le coin et on reprend sur la face voisine (on fait le tour de la plateforme)
+      if (!b.bar && !b.nograb && Math.abs(lat) > 0.5 && Math.abs(p.hang.u) >= half - 0.21) { p.cornerT = (p.cornerT || 0) + dt; if (p.cornerT > 0.15) { turnCorner(W, p, b, fi, lat); p.cornerT = 0; } }
+      else p.cornerT = 0;
       p.sta -= (P.STA_HANG + (p.load || 0) * P.STA_LOAD) * dt;
       hangPose(W, p); p.vx = b.vx; p.vy = b.vy; p.vz = b.vz;
       const canUp = !b.bar && roomAbove(W, b, p.hang.f, p.hang.u);
@@ -379,7 +383,8 @@ function stepPlayer(W, p, I, mate) {
         p.buf = 0;
         if (into > -0.3 && canUp) startMantle(W, p, b, p.hang.f, p.hang.u);
         else { leaveWall(p, fi.nx, fi.nz, wx, wz, 'jump'); ev(W, 'jump', { p: p.id, wall: 1 }); }
-      } else if (into > 0.6 && canUp && p.stT > 0.18) startMantle(W, p, b, p.hang.f, p.hang.u);
+      } else if (globalThis.ENCH_AUTOMANTLE && into > 0.6 && canUp && p.stT > 0.18) startMantle(W, p, b, p.hang.f, p.hang.u); // ROBOTS de test seulement : pousser = Espace
+      // joueurs : se hisser = Espace seulement (pousser vers le mur ne hisse plus : on peut longer le rebord sans monter par erreur)
       p.lat = lat;
     }
   } else if (p.st === ST.CLIMB) {
@@ -423,7 +428,7 @@ function stepPlayer(W, p, I, mate) {
     const gbody = ground ? W.bodies[p.gb] : null;
     if (gbody?.launch && gbody.move && gbody.vy > 3) { p.vy = gbody.launch; toAir(p); p.coy = 0; p.noCut = true; ev(W, 'launch', { p: p.id, x: p.x, y: p.y, z: p.z }); }
     if (p.st === ST.GROUND) {
-      p.coy = P.COYOTE; p.sta = p.haul ? p.sta - P.STA_HAUL * (0.4 + (p.load || 0)) * dt : Math.min(1, p.sta + P.STA_REGEN * dt);
+      p.dj = false; p.coy = P.COYOTE; p.sta = p.haul ? p.sta - P.STA_HAUL * (0.4 + (p.load || 0)) * dt : Math.min(1, p.sta + P.STA_REGEN * dt);
       let spd = P.RUN;
       let tx = wx * spd, tz = wz * spd;
       if (p.brace) { tx *= 0.25; tz *= 0.25; } // arc-bouté : on avance à petits pas
@@ -454,6 +459,8 @@ function stepPlayer(W, p, I, mate) {
       p.coy = Math.max(0, p.coy - dt);
       if (p.buf > 0 && p.coy > 0) { // coyote time : le saut part encore juste après avoir quitté le bord
         p.buf = 0; p.vy = P.JUMP; p.coy = 0; p.cut = false; p.jHeld = true; ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z });
+      } else if (W.alone && p.buf > 0 && !p.dj && p.stT > 0.08) { // MODE SOLO : un second saut en l'air remplace la courte échelle (passages prévus pour deux)
+        p.buf = 0; p.dj = true; p.vy = Math.max(p.vy, P.JUMP); p.cut = false; p.jHeld = true; ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z, dj: 1 });
       }
       // contrôle aérien : on accélère vers la direction voulue tant que la vitesse dans ce sens reste sous AIR_MAX (l'élan n'est jamais coupé)
       if (wl > 0.05) {
@@ -507,6 +514,16 @@ function stepPlayer(W, p, I, mate) {
   if (p.st !== ST.AIR) { p.peakY = Math.max(p.y, p.st === ST.GROUND ? p.y : p.peakY); }
 }
 // déplacement monde « vers la droite du grimpeur face au mur » converti en abscisse locale u le long de la face
+function turnCorner(W, p, b, fi, lat) {
+  const mx = fi.nz * Math.sign(lat), mz = -fi.nx * Math.sign(lat); // direction du déplacement le long du bord
+  for (let f2 = 0; f2 < 4; f2++) {
+    if (f2 === p.hang.f) continue; const g = faceInfo(b, f2); if (g.nx * mx + g.nz * mz < 0.7) continue;
+    local(b, p.x, p.z, L); const u2 = clamp(FACE[f2][0] ? L.lz : L.lx, -g.half + 0.25, g.half - 0.25);
+    facePoint(b, f2, u2, 0.12, b.py + b.hh + 0.15, FP); if (inside(W, FP.x, FP.y, FP.z)) return false; // coin bouché
+    p.hang.f = f2; p.hang.u = u2; ev(W, 'grab', { p: p.id, x: p.x, y: p.y + 1.8, z: p.z }); return true;
+  }
+  return false;
+}
 function uStep(b, f, fi, d) { const ax = FACE[f][0] ? b.s : b.c, az = FACE[f][0] ? b.c : -b.s; return d * (fi.nz * ax - fi.nx * az); }
 // place pour se hisser au-dessus du bord ?
 function roomAbove(W, b, f, u) { facePoint(b, f, u, -0.4, b.py + b.hh + 1.0, FP); return !inside(W, FP.x, FP.y, FP.z); }
@@ -738,7 +755,7 @@ function stepMechanisms(W) {
   }
   // herses / portes : s'ouvrent quand leurs interrupteurs sont actifs (tous, ou au moins un), se referment sinon
   for (const b of W.bodies) if (b.door) {
-    const ids = b.door.open || [], ok = b.door.any ? ids.some((i) => W.sw[i]) : ids.every((i) => W.sw[i]);
+    const ids = b.door.open || [], ok = b.door.any || W.alone ? ids.some((i) => W.sw[i]) : ids.every((i) => W.sw[i]); // solo : une plaque suffit
     const o = W.dr[b.i] || 0, n = clamp(o + (ok ? 1 : -(b.door.close ?? 0.6)) * (b.door.speed || 1.4) * DT, 0, 1);
     if (n > 0 && o === 0) ev(W, 'door', { b: b.i, open: 1 }); else if (n === 0 && o > 0) ev(W, 'door', { b: b.i, open: 0 });
     W.dr[b.i] = n;
@@ -749,7 +766,7 @@ function stepMechanisms(W) {
   // contrepoids : deux plateaux liés ; le plus chargé descend (ressort amorti), l'autre monte d'autant
   for (const id in W.cw) {
     const k = W.cw[id]; let load = 0, d = 2;
-    for (const b of W.bodies) if (b.cw && b.cw.id === id) { load += onB(b) * b.cw.side * (b.cw.k || 1); d = b.cw.d || d; } // k = bras de levier (un grimpeur sur le long bras soulève l'autre)
+    for (const b of W.bodies) if (b.cw && b.cw.id === id) { load += onB(b) * b.cw.side * (b.cw.k || 1); d = b.cw.d || d; if (W.alone && b.cw.side < 0 && onB(b)) load += 2 * (b.cw.k || 2); } // solo : le plateau où l'on monte s'élève (le partenaire absent « charge » l'autre) // k = bras de levier (un grimpeur sur le long bras soulève l'autre)
     const target = clamp(-load * d, -d, d); // côté +1 chargé -> y négatif (descend)
     k.v += ((target - k.y) * 10 - k.v * 5) * DT; k.y = clamp(k.y + k.v * DT, -d, d);
   }
@@ -767,7 +784,7 @@ function stepHerse(W, b) {
   s.t += DT;
   const go = (ph) => { s.ph = ph; s.t = 0; s.v = 0; ev(W, 'herse', { b: b.i, ph, x: b.px, y: base, z: b.pz }); };
   if (H.mode === 'switch') {
-    const ids = H.open || [], ok = H.any ? ids.some((i) => W.sw[i]) : ids.every((i) => W.sw[i]);
+    const ids = H.open || [], ok = H.any || W.alone ? ids.some((i) => W.sw[i]) : ids.every((i) => W.sw[i]);
     if (ok && (s.ph === HP.SHUT || s.ph === HP.FALL || s.ph === HP.WARN)) go(HP.RISE);
     else if (!ok && (s.ph === HP.OPEN || s.ph === HP.RISE)) go(HP.WARN);
   }
@@ -802,7 +819,7 @@ function stepHerse(W, b) {
 // Il descend lourdement (accélère, choc en bas) et remonte lentement au treuil.
 function stepBridge(W, id) {
   const D = W.db[id], segs = ((W._dbs ||= {})[id] ||= W.bodies.filter((b) => b.dbseg?.id === id)), S = segs[0].dbseg, C = S.ctl || {};
-  const ids = C.open || [], ok = C.any ? ids.some((i) => W.sw[i]) : ids.length ? ids.every((i) => W.sw[i]) : true;
+  const ids = C.open || [], ok = C.any || W.alone ? ids.some((i) => W.sw[i]) : ids.length ? ids.every((i) => W.sw[i]) : true;
   const tgt = ok ? 0 : S.up, was = D.mv;
   if (Math.abs(D.a - tgt) < 1e-4) { D.v = 0; D.mv = 0; }
   else if (tgt < D.a) { D.v = Math.min(D.v + (C.drop ?? 1.6) * DT, C.vmax ?? 1.1); D.a = Math.max(tgt, D.a - D.v * DT); D.mv = -1; if (D.a === tgt) ev(W, 'bridge', { id, end: 'down', v: D.v, x: S.hx + S.side * S.len / 2, y: S.top, z: segs[0].pz }); }

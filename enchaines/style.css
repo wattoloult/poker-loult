@@ -229,3 +229,4 @@ body[data-screen="room"] #chat { left: 50%; transform: translateX(-50%); bottom:
 #s-keys .krow button { min-width: 52%; padding: 4px 8px; font: 700 14px 'Grenze', serif; }
 #s-keys .krow button.wait { outline: 2px solid var(--ember); animation: pulse 0.8s ease-in-out infinite alternate; }
 @keyframes pulse { from { opacity: 1; } to { opacity: 0.6; } }
+#h-fps { position: absolute; right: 18px; top: 50px; font: 700 13px 'Grenze'; color: var(--bone2); opacity: 0.75; }

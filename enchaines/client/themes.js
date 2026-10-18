@@ -23,9 +23,10 @@ export const THEMES = {
       leaf: C('plain', 0x6fb24a, { rough: 0.7 }), temple: C('stone', 0xd8d0a0), wood: C('wood', 0xe8d8b0) }, props: 'jungle',
   },
   japan: {
-    sky: [0x6a86c8, 0xe8b8c8, 0xffd6b0, 0xf0c8c0], sun: { dir: [-0.5, 0.45, 0.6], color: 0xffd0b0, int: 2.2 }, hemi: [0xf0d8ff, 0x6a4a50, 0.85],
-    fog: [0xf1cfd2, 22, 170], clouds: { y: -20, tint: 0xffe6ea }, ridges: [0x8c7aa8, 0xa98fb4, 0xc6a6c0], backdrop: 'valley',
-    rock: { lo: [0.3, 0.27, 0.3], hi: [0.55, 0.5, 0.52], moss: [0.4, 0.5, 0.3], snowY: 999, color: 0x8a7f88 }, particles: 'petals',
+    // nuit japonaise (pas noire) : clair de lune bleuté qui découpe les toits, brume indigo, les lanternes font les taches chaudes
+    sky: [0x0d1430, 0x23305e, 0x5a4a78, 0x2a2440], sun: { dir: [0.45, 0.55, 0.55], color: 0xb8c8ff, int: 1.35 }, hemi: [0x8a9ad8, 0x2a2030, 0.62],
+    fog: [0x2c2a4c, 26, 175], clouds: { y: -20, tint: 0x6a6898 }, ridges: [0x2a2c50, 0x36345e, 0x48406c], backdrop: 'valley', exposure: 1.12,
+    rock: { lo: [0.22, 0.21, 0.27], hi: [0.44, 0.42, 0.5], moss: [0.3, 0.38, 0.28], snowY: 999, color: 0x6e6a80 }, particles: 'petals',
     mats: { ...COMMON, path: C('stone', 0xe0d6c8), tile: C('brick', 0x5a6a86, { rough: 0.6 }), lacquer: C('plain', 0xb8382e, { rough: 0.5 }), pagoda: C('darkwood', 0xa0503a),
       bamboo: C('plain', 0x9fbf5a, { rough: 0.6, bamboo: 1 }), shoji: C('wood', 0xfff4e0), stone: C('stone', 0xe8e0d8) }, props: 'japan',
   },

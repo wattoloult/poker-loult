@@ -1,5 +1,6 @@
 // Tests des mécanismes du monde glacé (core/biomes/ice.js) sur le VRAI parcours « col » : stalactites, glace mince, mur de glace à deux dalles,
 // avalanche, neige poudreuse, courant de glace, floe commandé par un levier, tremplin, instantanés réseau.   node --test core/ice.test.js
+import './botmode.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, stepWorld, layChain, snapWorld, applySnap, spawnAt, ST, IDLE, DT } from './sim.js';

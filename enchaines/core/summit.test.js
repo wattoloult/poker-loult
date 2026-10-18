@@ -1,5 +1,6 @@
 // Mécanismes du Sommet du monde (core/biomes/summit.js) joués sur le VRAI parcours « toit » : foudre et abris, rochers et niches, avalanche,
 // balises à allumer ensemble + arche, sol du vide, instantané réseau, marge de l'avalanche (robot de tools/route.mjs).
+import './botmode.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';

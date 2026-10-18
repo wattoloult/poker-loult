@@ -71,7 +71,7 @@ function readInput(k, schemes, pads) {
   if (jp) slot[k].jc++; if (dp) slot[k].dc++; if (up) slot[k].uc++;
   const l = Math.hypot(ax, ay); if (l > 1) { ax /= l; ay /= l; }
   // déplacement relatif à la caméra
-  const yaw = Scene.camYaw(), c = Math.cos(yaw), s = Math.sin(yaw);
+  const yaw = Scene.controlYaw(k, G.W?.pl[G.mode === 'online' ? G.me ?? 0 : k]), c = Math.cos(yaw), s = Math.sin(yaw);
   return { mx: ax * c - ay * s, mz: -ax * s - ay * c, jump, brace, pull, reset, jc: slot[k].jc, dc: slot[k].dc, uc: slot[k].uc };
 }
 // souris : glisser = tourner la caméra, molette = recul
@@ -260,6 +260,7 @@ setInterval(() => { const n = performance.now(); if (n - (G.raf || 0) > 120) try
 
 /* ------------------------------ interface en jeu ------------------------------ */
 function hud(W, dt) {
+  $('#h-fps').textContent = Scene.S.fps ? Scene.S.fps + ' FPS' : ''; // compteur d'images par seconde
   if (G.mode === 'online') { const lv = Voice.levels(); for (let k = 0; k < 2; k++) $('#tag' + k).classList.toggle('talk', (k === G.me ? lv.me : lv.partner) > 0.12); } // qui parle
   const [a, b] = W.pl;
   const top = Math.max(a.y, b.y), C = LV().checkpoints, cur = C[W.cp] || C[0], nx = C[W.cp + 1], low = Math.min(a.y, b.y) + 0.5;

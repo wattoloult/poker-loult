@@ -1,4 +1,5 @@
 // Scénarios coopératifs joués sur les VRAIS parcours (deux grimpeurs + chaîne) : contrepoids puis remontée à la chaîne, herse à deux.
+import './botmode.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, stepWorld, layChain, groundBelow, ST, IDLE } from './sim.js';

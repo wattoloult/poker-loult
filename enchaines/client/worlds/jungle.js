@@ -32,22 +32,24 @@ export default {
     load().then(() => {
       if (V !== mine || S.level !== grp) return; // le niveau a été reconstruit entre-temps
       const fit = (src, o, w) => { const p = place(src, o, 1); if (!p) return null; const box = new T.Box3().setFromObject(p), s = box.getSize(new T.Vector3()); p.scale.multiplyScalar(w / (Math.max(s.x, s.z) || 1)); return p; };
+      // plantes plates (fleurs, buissons) : posées à une hauteur, elles devenaient immenses en largeur ; on plafonne leur emprise au sol
+      const cap = (p, w) => { if (!p) return p; const s = new T.Box3().setFromObject(p).getSize(new T.Vector3()), m = Math.max(s.x, s.z); if (m > w) p.scale.multiplyScalar(w / m); return p; };
       for (const b of W.bodies) {
         const o = S.bodyMesh[b.i]; if (!o) continue;
         const top = b.hh, i = b.i, hide = () => { if (o.children[0]) o.children[0].visible = false; };
-        if (b.lily) { hide(); const p = fit(M.lily_large, o, b.w * 1.15); if (p) { p.position.y = top - 0.12; p.rotation.y = rnd(i, 1) * 6; if (rnd(i, 2) > 0.4) { const f = place([M.flower_redA, M.flower_purpleA, M.flower_yellowA][i % 3], o, 0.5); if (f) f.position.set(0.5, top - 0.1, -0.3); } } }
+        if (b.lily) { hide(); const p = fit(M.lily_large, o, b.w * 1.15); if (p) { p.position.y = top - 0.12; p.rotation.y = rnd(i, 1) * 6; if (rnd(i, 2) > 0.4) { const f = cap(place([M.flower_redA, M.flower_purpleA, M.flower_yellowA][i % 3], o, 0.5), 0.6); if (f) f.position.set(0.5, top - 0.1, -0.3); } } }
         else if (b.spring) { const m = place(M.mushroom_red, o, 1.5); if (m) { m.position.y = top - 0.1; m.userData.base = m.scale.clone(); V.springs.push({ b, m }); } const g = place(M.plant_flatTall, o, 0.8); if (g) g.position.set(0.5, top, 0.4); }
         else if (b.root) { const l = place(M.log_large, o, 1); if (l) { l.rotation.y = Math.PI / 2; const box = new T.Box3().setFromObject(l), s = box.getSize(new T.Vector3()); l.scale.multiplyScalar(b.d * 1.05 / (s.z || 1)); l.position.y = top - 0.35; hide(); }
           const mt = place(M.hanging_moss, o, 1.1); if (mt) mt.position.set(0.5, -b.hh - 0.9, 0.2);
           const g = A.sprite(0x9dff6a, 2.4); g.position.y = top + 0.2; g.visible = false; o.add(g); V.roots.push({ b, g }); }
         else if (b.cw) { const l = place(M.log_large, o, 1); if (l) { l.rotation.y = Math.PI / 2; const box = new T.Box3().setFromObject(l), s = box.getSize(new T.Vector3()); l.scale.multiplyScalar(b.d * 1.15 / (s.z || 1)); l.position.y = top - 0.45; hide(); } }
         else if (b.rootwall) { for (let k = 0; k < 3; k++) { const mt = place(M.hanging_moss, o, 1.4); if (mt) mt.position.set(b.hw + 0.02, top - 1.3, (k - 1) * b.hd * 0.3); } }
-        else if (b.plate) { const f = place(M.flower_purpleA, o, 0.5); if (f) f.position.y = top; }
+        else if (b.plate) { const f = cap(place(M.flower_purpleA, o, 0.5), 0.7); if (f) f.position.y = top; }
         else if (b.tree) { const m = place(M.hanging_moss, o, 1.6); if (m) m.position.set(-b.hw * 0.5, -b.hh - 1.5, b.hd * 0.8); }
         // sous-bois sur les grandes plateformes fixes
         if (!b.lily && !b.spring && !b.root && !b.cw && !b.move && !b.sink && !b.crumble && !b.plank && !b.cliff && !b.door && !b.plate && b.w * b.d >= 9 && (b.mat === 'moss' || b.mat === 'wood')) {
           const pool = [M.flower_redA, M.flower_purpleA, M.flower_yellowA, M.plant_bushLarge, M.plant_bushDetailed, M.plant_flatTall, M.mushroom_tan];
-          for (let k = 0; k < 3; k++) { const p = place(pool[Math.floor(rnd(i, k + 5) * pool.length)], o, 0.5 + rnd(i, k + 9) * 0.7); if (p) { p.position.set((rnd(i, k + 11) > 0.5 ? 1 : -1) * (b.hw - 0.45), top, -b.hd + 0.5 + rnd(i, k + 13) * 0.8); p.rotation.y = rnd(i, k) * 6; } }
+          for (let k = 0; k < 3; k++) { const p = cap(place(pool[Math.floor(rnd(i, k + 5) * pool.length)], o, 0.5 + rnd(i, k + 9) * 0.7), 0.9); if (p) { p.position.set((rnd(i, k + 11) > 0.5 ? 1 : -1) * (b.hw - 0.45), top, -b.hd + 0.5 + rnd(i, k + 13) * 0.8); p.rotation.y = rnd(i, k) * 6; } }
           if (rnd(i, 3) > 0.55) { const t = place(M.tree_palmTall, o, 4.5 + rnd(i, 4) * 2); if (t) t.position.set(b.hw - 0.6, top, -b.hd + 0.6); }
         }
         if (b.mat === 'temple' && b.w >= 3 && !b.climb) { // vestiges du sanctuaire

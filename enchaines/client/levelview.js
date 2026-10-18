@@ -164,7 +164,13 @@ export function build(W) {
   try { S.wv?.build?.(W, grp, S.wa); } catch (e) { console.error('monde ' + world, e); }
   Portal.build(L, grp, nextCourse(L.id, true)?.world || world);
   backdrop(L, th, grp, world);
+  // les chaînes des obstacles suspendus et des contrepoids pendent d'une poutre fichée dans la falaise (jamais de « nulle part »)
+  for (const i of S.hangs) { const b = W.bodies[i], len = b.hang || b.hammer; anchorBeam(L, grp, b.x, b.y + len + 0.2, b.z, S.mat.darkwood, 0.4, b.hammer ? 0.9 : b.w + 0.6); }
+  for (const v of S.cwViews) anchorBeam(L, grp, v.b.x, v.top + 0.25, v.b.z, S.mat.darkwood, 0.4, v.b.w + 0.8);
   ropes(L, grp, world);
+  // arbres et plantes vivants : ils ploient doucement au vent (chacun son rythme)
+  S.sway = []; const RX = /tree|palm|bamboo|leaf|bush|fern|plant|pine|birch|maple|willow|grass|flower|vine|reed|sakura|cherry/i, seen = new Set();
+  grp.traverse((o) => { if (!RX.test(o.name || '')) return; let g = o; while (g.parent && g.parent !== grp && !g.userData.placed) g = g.parent; const t = o.parent && o.parent !== grp ? o.parent : o; if (seen.has(t)) return; seen.add(t); S.sway.push({ o: t, rx: t.rotation.x, rz: t.rotation.z, ph: Math.random() * 6, a: 0.025 + Math.random() * 0.02 }); });
   winds(L, grp, th);
   checkpoints(L, grp, world);
   particles(th);
@@ -295,11 +301,40 @@ function ropes(L, grp, world) {
   S.ropes = [];
   const n = (L.ropes || []).length; if (!n) return;
   const vine = world === 'jungle' || world === 'summit';
-  const geo = new THREE.CylinderGeometry(0.05, 0.05, 1, 6), mat = new THREE.MeshStandardMaterial({ color: vine ? 0x4a7a2a : 0x8a6a40, roughness: 0.9 });
+  const geo = new THREE.CylinderGeometry(0.065, 0.065, 1, 7), mat = new THREE.MeshStandardMaterial({ color: vine ? 0x4a7a2a : 0x8a6a40, roughness: 0.9 });
   S.ropeMesh = new THREE.InstancedMesh(geo, mat, n * 24); S.ropeMesh.castShadow = true; S.ropeMesh.frustumCulled = false; grp.add(S.ropeMesh);
-  for (const r of L.ropes) { // point d'attache : une branche ou une poutre
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.3, 0.3), S.mat[vine ? 'darkwood' : 'wood']); beam.position.set(r.x, r.y + 0.15, r.z); beam.castShadow = true; grp.add(beam);
+  for (const r of L.ropes) { // point d'attache : une branche (ou une poutre) qui sort de la falaise jusqu'au-dessus de la liane
+    anchorBeam(L, grp, r.x, r.y + 0.15, r.z, S.mat[vine ? 'darkwood' : 'wood'], vine ? 0.42 : 0.32);
+    S.ropes.push(ropeSim(r));
     if (vine && PACK.jungle?.leaf) { const l = place(PACK.jungle.leaf, grp, 1.4); if (l) l.position.set(r.x, r.y, r.z); }
+  }
+}
+// poutre (ou branche) qui part de la falaise et vient porter un point d'attache ; w = largeur de la traverse au bout
+function cliffFront(L) { let z = null; for (const b of L.bodies) if (b.cliff) z = Math.max(z ?? -1e9, b.z + b.d / 2); return z; }
+function anchorBeam(L, grp, x, y, z, mat, th = 0.36, w = 0) {
+  const zc = cliffFront(L); if (zc == null || zc > z - 0.2) return; // pas de falaise derrière (ciel ouvert) : rien à ficher
+  const len = z - zc + 0.6, m = new THREE.Mesh(boxGeo(th, th, len, mat.userData?.tile || [2.6, 2.6]), mat); m.position.set(x, y, zc - 0.6 + len / 2); m.castShadow = true; grp.add(m);
+  if (w > 0) { const cr = new THREE.Mesh(boxGeo(w, th * 0.9, th * 0.9, mat.userData?.tile || [2.6, 2.6]), mat); cr.position.set(x, y, z); cr.castShadow = true; grp.add(cr); }
+  const brace = new THREE.Mesh(boxGeo(th * 0.6, th * 0.6, Math.min(2.4, len * 0.6), mat.userData?.tile || [2.6, 2.6]), mat); // jambe de force
+  brace.position.set(x, y - 0.7, zc + Math.min(1.2, len * 0.3)); brace.rotation.x = -0.75; grp.add(brace);
+}
+// liane / corde visuelle : chaîne de points (verlet) accrochée en haut ; tenue, elle est tendue jusqu'à la main et le reste pend en dessous
+function ropeSim(r) { const n = 18, seg = r.len / (n - 1), pts = []; for (let i = 0; i < n; i++) pts.push({ x: r.x, y: r.y - i * seg, z: r.z, ox: r.x, oy: r.y - i * seg, oz: r.z }); return { r, n, seg, pts }; }
+function stepRopeSim(R, holder, dt) {
+  const { r, n, seg, pts } = R, g = 22 * dt * dt;
+  for (let i = 1; i < n; i++) { const p = pts[i], vx = (p.x - p.ox) * 0.985, vy = (p.y - p.oy) * 0.985, vz = (p.z - p.oz) * 0.985; p.ox = p.x; p.oy = p.y; p.oz = p.z; p.x += vx; p.y += vy - g; p.z += vz; }
+  let gi = -1, hx = 0, hy = 0, hz = 0;
+  if (holder) { hx = holder.x; hy = holder.y + 1.95; hz = holder.z; gi = Math.min(n - 1, Math.max(1, Math.round(Math.hypot(hx - r.x, hy - r.y, hz - r.z) / seg))); }
+  for (let it = 0; it < 8; it++) {
+    pts[0].x = r.x; pts[0].y = r.y; pts[0].z = r.z;
+    if (gi > 0) { // tenue : la partie haute est tendue droite jusqu'à la main
+      for (let i = 1; i <= gi; i++) { const t = i / gi, p = pts[i]; p.x = r.x + (hx - r.x) * t; p.y = r.y + (hy - r.y) * t; p.z = r.z + (hz - r.z) * t; }
+    }
+    for (let i = 0; i < n - 1; i++) {
+      const a = pts[i], b = pts[i + 1], dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, d = Math.hypot(dx, dy, dz) || 1e-6, c = (d - seg) / d;
+      const fa = i === 0 || i <= gi ? 0 : 1, fb = i + 1 <= gi ? 0 : 1, sw = fa + fb; if (!sw) continue; const wa = fa / sw, wb = fb / sw; // points épinglés (haut, main) : immobiles
+      a.x += dx * c * wa; a.y += dy * c * wa; a.z += dz * c * wa; b.x -= dx * c * wb; b.y -= dy * c * wb; b.z -= dz * c * wb;
+    }
   }
 }
 function winds(L, grp, th) {
@@ -312,6 +347,10 @@ function winds(L, grp, th) {
           vec3 c = mix(vec3(0.55,0.8,0.95), vec3(0.95,1.,1.), s); float a = (0.45 + s*0.4) * smoothstep(0., 0.08, vU.x) * smoothstep(1., 0.92, vU.x); gl_FragColor = vec4(c, a); }` });
       const pl = new THREE.Mesh(new THREE.PlaneGeometry(w.hw * 2, w.hh * 2), m); pl.position.set(w.x, w.y, w.z + (w.thin ? w.hd + 0.05 : 0)); grp.add(pl);
       const pl2 = pl.clone(); pl2.rotation.y = Math.PI / 2; pl2.scale.x = (w.hd * 2) / (w.hw * 2); if (!w.thin) grp.add(pl2);
+      // la cascade sort d'un surplomb rocheux (qui rentre dans la falaise) et écume en bas
+      { const zc = cliffFront(L), top = w.y + w.hh, dz = zc != null && zc < w.z ? w.z - zc + 1.2 : 2.2; const lip = new THREE.Mesh(boxGeo(w.hw * 2 + 1.2, 1.1, dz, S.mat.stone.userData.tile || [2.6, 2.6]), S.mat.stone);
+        lip.position.set(w.x, top + 0.45, w.z - dz / 2 + 0.7); lip.castShadow = lip.receiveShadow = true; grp.add(lip);
+        const foam = sprite(0xe8f6ff, w.hw * 2 + 2); foam.position.set(w.x, w.y - w.hh + 0.4, w.z + 0.4); foam.material.opacity = 0.55; grp.add(foam); }
       S.windViews.push({ w, mats: [m] }); continue;
     }
     // vent : traînées qui filent dans la direction du courant (visibles seulement quand il souffle)
@@ -354,17 +393,17 @@ export function update(W, dt, t) {
   S.hangLinks.count = n; S.hangLinks.instanceMatrix.needsUpdate = true;
   for (const h of S.gearHubs) { const arm = W.bodies.find((x) => x.move?.k === 'orbit' && Math.abs(x.move.cx - h.b.x) < 0.1); if (arm) h.g.rotation.y = arm.yaw; }
   for (const g of S.bigGears) g.g.rotation.y += g.w * dt;
+  for (const s of S.sway || []) { s.o.rotation.z = s.rz + Math.sin(t * 1.1 + s.ph) * s.a; s.o.rotation.x = s.rx + Math.sin(t * 0.8 + s.ph * 1.7) * s.a * 0.6; }
   for (const l of S.levers) { const on = !!W.sw[l.b.lever.id]; l.arm.rotation.z += ((on ? -0.7 : 0.7) - l.arm.rotation.z) * Math.min(1, dt * 8); l.g.material.color.setHex(on ? 0x80ff90 : 0xffc070); }
   for (const p of S.plates) p.r.material.color.setHex(W.sw[p.b.plate.id] ? 0x60ff80 : 0xff6040);
   // lianes : tendues vers la main de celui qui s'y tient, sinon pendantes avec un léger balancement
   if (S.ropeMesh) {
     let k = 0;
     W.level.ropes.forEach((r, i) => {
-      const holder = W.pl.find((p) => p.st === 5 && p.rope?.i === i);
-      HA.set(r.x, r.y, r.z);
-      if (holder) HB.set(holder.x, holder.y + 1.95, holder.z); else { const a = Math.sin(t * 1.3 + i) * 0.08; HB.set(r.x + Math.sin(a) * r.len, r.y - Math.cos(a) * r.len, r.z); }
-      const d = V2.copy(HB).sub(HA), L = d.length(), m = 12; d.normalize(); Q.setFromUnitVectors(UP, d);
-      for (let s = 0; s < m; s++) { V.copy(HA).addScaledVector(d, (s + 0.5) * (L / m)); M4.compose(V, Q, SC.set(1, L / m, 1)); S.ropeMesh.setMatrixAt(k++, M4); }
+      const holder = W.pl.find((p) => p.st === 5 && p.rope?.i === i), R = S.ropes[i]; if (!R) return;
+      if (!holder && Math.random() < dt * 0.4) R.pts[R.n - 1].x += (Math.random() - 0.5) * 0.04; // souffle léger : la liane libre ondule
+      stepRopeSim(R, holder, Math.min(dt, 1 / 30));
+      for (let s = 0; s < R.n - 1; s++) { const a = R.pts[s], b = R.pts[s + 1]; HA.set(a.x, a.y, a.z); HB.set(b.x, b.y, b.z); const d = V2.copy(HB).sub(HA), L = d.length() || 1e-3; d.normalize(); Q.setFromUnitVectors(UP, d); V.copy(HA).addScaledVector(d, L / 2); M4.compose(V, Q, SC.set(1, L, 1)); S.ropeMesh.setMatrixAt(k++, M4); }
     });
     S.ropeMesh.count = k; S.ropeMesh.instanceMatrix.needsUpdate = true; SC.set(1, 1, 1);
   }

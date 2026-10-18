@@ -1,5 +1,6 @@
 // Mécanismes du parcours « La Grande Horloge » (core/biomes/mech.js) : tapis roulants et levier minuté, vapeur, monte-charge, porte à deux plaques,
 // instantané réseau. Joués sur le VRAI parcours avec la vraie physique.
+import './botmode.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, stepWorld, layChain, snapWorld, applySnap, ST, IDLE, DT } from './sim.js';

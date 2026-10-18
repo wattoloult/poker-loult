@@ -2,6 +2,7 @@
 // Un robot part de la plateforme A (élan pris depuis l'intérieur), court vers B, saute au bord, s'accroche / escalade / se hisse.
 // Les étapes marquées `coop` (exigent la chaîne ou la courte échelle) sont listées à part. Plateformes mobiles : plusieurs départs.
 //   node tools/route.mjs            -> tableau complet ;  node tools/route.mjs 12   -> détail de l'étape vers le corps n°12
+import '../core/botmode.js';
 import { createWorld, stepWorld, groundBelow, poseAt, windAt, ST, DT, IDLE } from '../core/sim.js';
 import { getCourse } from '../core/worlds.js';
 

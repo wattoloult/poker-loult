@@ -277,7 +277,7 @@ export function linkRow(mesh, i0, a, b, phase = 0) {
 }
 
 /* ------------------------------ niveau (voir levelview.js) ------------------------------ */
-export async function buildLevel(W) { S.building = true; try { await LV.loadPack(W.level.world || 'medieval'); if (Mechs.needs(W.level)) await Mechs.load(); await (await import('./totems.js')).load(W.level.world || 'medieval'); await (await import('./scatter.js')).load(W.level.world || 'medieval'); LV.build(W); } finally { S.building = false; } }
+export async function buildLevel(W) { S.building = true; try { await LV.loadPack(W.level.world || 'medieval'); if (Mechs.needs(W.level)) await Mechs.load(); await (await import('./totems.js')).load(W.level.world || 'medieval'); await (await import('./scatter.js')).load(W.level.world || 'medieval'); LV.build(W); collectLights(); } finally { S.building = false; } }
 // préchauffage : envoie TOUT le niveau au GPU avant le départ (textures + géométries de toute la montagne, même hors champ), compile les shaders
 export async function warm(report) {
   const r = S.renderer; if (!r || !S.scene) return;
@@ -300,7 +300,7 @@ export function homeChain(t, on) {
     const im = new THREE.InstancedMesh(geo, mat, 160); im.frustumCulled = false; im.castShadow = false;
     const g = new THREE.Group(); g.add(im);
     const L1 = new THREE.PointLight(0xffd7a0, 22, 24, 1.3); L1.position.set(-3, 2.5, 5); g.add(L1);
-    const L2 = new THREE.PointLight(0x8fb0ff, 9, 24, 1.3); L2.position.set(4, -2, 4); g.add(L2);
+    const L2 = new THREE.PointLight(0x8fb0ff, 9, 24, 1.3); L2.position.set(4, -2, 4); g.add(L2); L1.userData.keep = L2.userData.keep = true;
     S.scene.add(g); HC = { g, im, f: new THREE.Vector3(), m: new THREE.Matrix4(), q: new THREE.Quaternion(), q2: new THREE.Quaternion(), p: new THREE.Vector3(), one: new THREE.Vector3(1, 1, 1), ax: new THREE.Vector3(1, 0, 0), az: new THREE.Vector3(0, 0, 1) };
   }
   HC.g.visible = !!on; if (!on) return;
@@ -342,9 +342,11 @@ function poseClimber(c, p, mate, W, dt, rp) {
   c.g.position.set(rp.x, rp.y, rp.z);
   let dy = p.yaw - c.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); c.yaw += dy * Math.min(1, dt * 16);
   c.g.rotation.y = c.yaw;
+  if (p.st !== ST.ROPE && c.root.rotation.x) c.root.rotation.x *= Math.max(0, 1 - dt * 10); // fin du balancement de liane
   // poses procédurales : bras vers le bord, le mur ou la chaîne
   c.root.updateMatrixWorld(true);
-  const fwd = V3.set(Math.sin(c.yaw), 0, Math.cos(c.yaw)), right = new THREE.Vector3(-fwd.z, 0, fwd.x).negate();
+  // droite DU GRIMPEUR (face à fwd) : sans ce bon sens, la main gauche visait la droite (bras et jambes croisés à l'escalade)
+  const fwd = V3.set(Math.sin(c.yaw), 0, Math.cos(c.yaw)), right = new THREE.Vector3(-fwd.z, 0, fwd.x);
   const at = (dx, dy2, dz) => new THREE.Vector3(rp.x + fwd.x * dz + right.x * dx, rp.y + dy2, rp.z + fwd.z * dz + right.z * dx);
   if (p.st === ST.HANG) {
     const sh = Math.sin(c.phase += dt * 6 * Math.abs(p.lat || 0)) * 0.12;
@@ -355,6 +357,13 @@ function poseClimber(c, p, mate, W, dt, rp) {
     const s = Math.sin(c.phase), s2 = Math.cos(c.phase);
     armTo(c, 'l', at(-0.32, 1.75 + s * 0.28, 0.32)); armTo(c, 'r', at(0.32, 1.75 - s * 0.28, 0.32));
     legTo(c, 'l', at(-0.2, 0.25 - s * 0.22, 0.36 + s2 * 0.05), 0.8); legTo(c, 'r', at(0.2, 0.25 + s * 0.22, 0.36 - s2 * 0.05), 0.8);
+  } else if (p.st === ST.ROPE && p.rope) { // liane : les deux mains serrent la corde au-dessus de la tête, jambes serrées, le corps suit le balancement
+    const r = W.level.ropes[p.rope.i], d = new THREE.Vector3(r.x - rp.x, r.y - (rp.y + 1.1), r.z - rp.z).normalize();
+    const w = new THREE.Vector3(rp.x, rp.y + 1.1, rp.z);
+    armTo(c, 'l', w.clone().addScaledVector(d, 1.05).addScaledVector(right, -0.04), 0.95); armTo(c, 'r', w.clone().addScaledVector(d, 0.82).addScaledVector(right, 0.04), 0.95);
+    legTo(c, 'l', at(-0.08, -0.05, 0.1), 0.8); legTo(c, 'r', at(0.08, -0.02, 0.16), 0.8);
+    const tilt = Math.max(-0.6, Math.min(0.6, Math.atan2(-(r.x - rp.x) * fwd.x - (r.z - rp.z) * fwd.z, r.y - rp.y)));
+    c.root.rotation.x += (tilt - c.root.rotation.x) * Math.min(1, dt * 8);
   } else if (p.st === ST.MANTLE) {
     const k = Math.min(1, (p.mantle?.t || 0) / P.MANTLE_T);
     armTo(c, 'l', at(-0.3, 2.0 - k * 1.2, 0.35 + k * 0.1)); armTo(c, 'r', at(0.3, 2.0 - k * 1.2, 0.35 + k * 0.1));
@@ -436,6 +445,10 @@ function camZone(L, x, y, z) {
   return null;
 }
 export const camYaw = () => CAM.yaw;
+// direction des commandes d'un grimpeur : l'angle VISÉ par le cadrage (pas l'angle en cours de rotation), et FIGÉ tant qu'il n'est pas
+// au sol — un saut part droit et reste droit même si la caméra tourne pendant le vol (sinon « tout droit » dérive en diagonale)
+CAM.ctrl = [0, 0];
+export function controlYaw(k, p) { if (!p || p.st === 0) CAM.ctrl[k] = (CAM.nomYaw ?? CAM.yaw); return CAM.ctrl[k]; }
 function camera(W, rp, me, dt) {
   const [a, b] = rp, wMe = me == null ? 0.5 : me === 0 ? 0.68 : 0.32;
   const sep = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -449,8 +462,13 @@ function camera(W, rp, me, dt) {
   CAM.vel.x += (dx * kx - CAM.vel.x * 2 * Math.sqrt(kx)) * dt; CAM.vel.y += (dyy * ky - CAM.vel.y * 2 * Math.sqrt(ky)) * dt; CAM.vel.z += (dz * kx - CAM.vel.z * 2 * Math.sqrt(kx)) * dt;
   CAM.tgt.addScaledVector(CAM.vel, dt);
   // cadrage de la zone où se trouve la cordée
-  const zc = camZone(W.level, tx, ty - 2.2, tz), md = MODES[zc?.mode || 'side'] || MODES.side; CAM.mode = zc?.mode || 'side';
-  const k = Math.min(1, dt * 1.4);
+  // la zone ne change qu'après 0,4 s passées dans la nouvelle (pas de bascule d'avant en arrière à la limite de deux zones)
+  const cand = camZone(W.level, CAM.tgt.x, CAM.tgt.y - 2.2, CAM.tgt.z);
+  if (cand !== CAM.zone) { if (cand === CAM.cand) CAM.candT += dt; else { CAM.cand = cand; CAM.candT = 0; } if (CAM.candT > 0.4 || !CAM.seen) CAM.zone = cand; }
+  CAM.seen = true;
+  const zc = CAM.zone, md = MODES[zc?.mode || 'side'] || MODES.side; CAM.mode = zc?.mode || 'side';
+  const k = Math.min(1, dt * 0.9);
+  CAM.nomYaw = (zc?.yaw ?? md.yaw) + CAM.uyaw;
   CAM.zyaw += ((zc?.yaw ?? md.yaw) - CAM.zyaw) * k; CAM.zpitch += ((zc?.pitch ?? md.pitch) - CAM.zpitch) * k; CAM.zdist += ((md.dist + (zc?.dist || 0) * (zc?.mode === 'far' ? 1 : 0)) - CAM.zdist) * k;
   if (performance.now() - (CAM.lastUser || 0) > 4000) { CAM.uyaw *= 1 - dt * 0.4; CAM.upitch *= 1 - dt * 0.4; } // le cadrage revient au réglage de la zone
   CAM.yaw = CAM.zyaw + CAM.uyaw; CAM.pitch = Math.max(-0.15, Math.min(0.85, CAM.zpitch + CAM.upitch));
@@ -472,11 +490,40 @@ function camera(W, rp, me, dt) {
   S.sun.position.set(CAM.tgt.x + S.sunDir.x * 60, CAM.tgt.y + S.sunDir.y * 60, CAM.tgt.z + S.sunDir.z * 60); S.sun.target.position.copy(CAM.tgt);
 }
 
+/* ------------------------------ performances ------------------------------ */
+// 1) lumières ponctuelles : chaque lumière alourdit le calcul de TOUS les pixels ; on n'allume que les PL_MAX plus proches de la cordée
+//    (nombre constant d'une image à l'autre : pas de recompilation des shaders). 2) qualité adaptative : si la moyenne passe sous 45 puis
+//    35 images/s, on baisse la résolution interne, puis les ombres. 3) compteur d'images/s (S.fps) affiché par le HUD.
+let PL = [], plT = 0, PL_MAX = 4;
+const PV = new THREE.Vector3();
+export function collectLights() { PL = []; S.scene.traverse((o) => { if (o.isPointLight && !o.userData.keep) PL.push(o); }); plT = 0; }
+const QP = { t: 0, n: 0, lvl: 0, hold: 0 };
+function perf(dt) {
+  if ((plT -= dt) <= 0 && PL.length) {
+    plT = 0.25; const c = CAM.tgt;
+    for (const l of PL) { l.getWorldPosition(PV); l.userData.d = PV.distanceToSquared(c); }
+    PL.sort((a, b) => a.userData.d - b.userData.d);
+    PL.forEach((l, i) => { l.visible = i < PL_MAX; });
+  }
+  QP.t += dt; QP.n++;
+  if (QP.t >= 1) {
+    S.fps = Math.round(QP.n / QP.t); QP.t = 0; QP.n = 0;
+    if (S.fps < (QP.lvl === 0 ? 45 : 35) && QP.lvl < 3) { if (++QP.hold >= 3) { QP.hold = 0; lower(++QP.lvl); } } else QP.hold = 0;
+  }
+}
+function lower(lvl) { // paliers : résolution, puis ombres plus petites, puis moins de lumières et ombres coupées
+  const r = S.renderer;
+  if (lvl === 1) { r.setPixelRatio(Math.min(1, devicePixelRatio || 1)); resize(); }
+  if (lvl === 2) { r.setPixelRatio(0.8); resize(); S.sun.shadow.mapSize.set(1024, 1024); S.sun.shadow.map?.dispose(); S.sun.shadow.map = null; PL_MAX = 2; plT = 0; }
+  if (lvl === 3) { S.sun.castShadow = false; PL_MAX = 1; plT = 0; }
+  console.info('[perf] qualité réduite, palier', lvl, '(', S.fps, 'images/s )');
+}
+
 /* ------------------------------ image ------------------------------ */
 export function setRoster(n = 2) {
   for (const c of S.cl || []) { S.scene.remove(c.g); S.scene.remove(c.ring); S.scene.remove(c.mark); }
   S.cl = [makeClimber(0), makeClimber(1)];
-  CAM.init = false;
+  CAM.init = false; CAM.seen = false; CAM.zone = null;
 }
 const PO = { x: 0, y: 0, z: 0, yaw: 0 }, HA = new THREE.Vector3(), HB = new THREE.Vector3();
 export function frame(W, dt, view = {}) {
@@ -516,6 +563,7 @@ export function frame(W, dt, view = {}) {
   }
   stepFx(dt);
   camera(W, rp, view.me, dt);
+  perf(dt);
   S.renderer.render(S.scene, S.cam);
 }
 // recalage doux : écart entre l'état prédit et l'état corrigé, absorbé visuellement

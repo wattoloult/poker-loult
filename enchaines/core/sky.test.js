@@ -1,4 +1,5 @@
 // Tests du monde « sky » (parcours Les Îles du Vent) : nuages-ressorts, ballons-ascenseurs (solo et à deux), balance à contrepoids, herse du temple à deux plaques.
+import './botmode.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, stepWorld, snapWorld, applySnap, layChain, groundBelow, ST, IDLE } from './sim.js';
