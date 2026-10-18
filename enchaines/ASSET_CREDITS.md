@@ -3,6 +3,7 @@
 | Asset | Contenu | Auteur | Source | Licence |
 |---|---|---|---|---|
 | `assets/chars/ranger_m.glb`, `ranger_f.glb` | rôdeurs (tenue « Ranger » + corps de base, seule la tête est affichée) | Quaternius — Modular Character Outfits – Fantasy + Universal Base Characters (versions Standard gratuites) | https://quaternius.com | CC0 1.0 |
+| `assets/chars/combat1.glb` | coups de poing (Punch_Jab, Punch_Cross), garde (Punch_Enter), coup encaissé (Hit_Head) — extraits par tools/import-combat.mjs | Quaternius — Universal Animation Library (Standard) | https://opengameart.org/content/universal-animation-library | CC0 1.0 |
 | `assets/chars/anims1.glb`, `anims2.glb` | clips d'animation (course, saut, réception, accroupi, danse…) | Quaternius — Universal Animation Library 1 et 2 | https://opengameart.org/content/universal-animation-library | CC0 1.0 |
 | `assets/props/props.glb` | lanternes, bannières, torches, caisses, tonneaux, chaîne enroulée, lierre, briques, arche | Quaternius — Fantasy Props MegaKit + Medieval Village MegaKit (Standard) | https://quaternius.com | CC0 1.0 |
 | `assets/tex/*` | textures de pierre, brique, bois, métal | Quaternius — Medieval Village MegaKit / Fantasy Props MegaKit | https://quaternius.com | CC0 1.0 |

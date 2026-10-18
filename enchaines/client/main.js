@@ -44,21 +44,21 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
 // touches du grimpeur 1 (réglables : clavier ou boutons de souris « Mouse0..4 ») ; défauts : E = tirer la chaîne, Z / X = tourner la caméra
-const KEYDEF = { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space'], brace: ['ShiftLeft'], pull: ['KeyE'], cup: ['KeyG'], punch: ['KeyV'], drop: ['KeyC'], use: ['KeyF'], reset: ['KeyR'], camL: ['KeyZ'], camR: ['KeyX'] };
+const KEYDEF = { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space'], brace: ['ShiftLeft'], pull: ['KeyE'], cup: ['KeyG'], punch: ['Mouse0'], kick: ['KeyQ'], drop: ['KeyC'], use: ['KeyF'], reset: ['KeyR'], camL: ['KeyZ'], camR: ['KeyX'] };
 const BIND = {}; const rebuildBind = () => { for (const a in KEYDEF) BIND[a] = CFG.keys?.[a] ?? KEYDEF[a]; };
 rebuildBind();
 const SCHEMES = {
   k1: BIND,
-  k2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], jump: ['Numpad0', 'ControlRight', 'Enter'], brace: ['ShiftRight', 'Numpad1'], pull: ['Numpad4', 'Slash'], cup: ['Numpad6', 'Quote'], punch: ['Numpad7', 'Semicolon'], drop: ['Numpad2', 'End'], use: ['Numpad5', 'Period'], reset: ['Numpad3', 'Backspace'] },
+  k2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], jump: ['Numpad0', 'ControlRight', 'Enter'], brace: ['ShiftRight', 'Numpad1'], pull: ['Numpad4', 'Slash'], cup: ['Numpad6', 'Quote'], punch: ['Numpad7', 'Semicolon'], kick: ['Numpad9', 'BracketRight'], drop: ['Numpad2', 'End'], use: ['Numpad5', 'Period'], reset: ['Numpad3', 'Backspace'] },
 };
 const anyKey = (l) => l.some((k) => keys.has(k)), anyPress = (l) => l.some((k) => pressed.has(k));
 const slot = [{ jc: 0, dc: 0, uc: 0 }, { jc: 0, dc: 0, uc: 0 }];
 function readInput(k, schemes, pads) {
-  let ax = 0, ay = 0, jump = false, brace = false, pull = false, cup = false, punch = false, reset = false, jp = false, dp = false, up = false;
+  let ax = 0, ay = 0, jump = false, brace = false, pull = false, cup = false, punch = false, kick = false, reset = false, jp = false, dp = false, up = false;
   for (const s of schemes) {
     const S = SCHEMES[s];
     ax += (anyKey(S.right) ? 1 : 0) - (anyKey(S.left) ? 1 : 0); ay += (anyKey(S.up) ? 1 : 0) - (anyKey(S.down) ? 1 : 0);
-    jump ||= anyKey(S.jump); brace ||= anyKey(S.brace); pull ||= anyKey(S.pull); cup ||= anyKey(S.cup || []); punch ||= anyKey(S.punch || []); reset ||= anyKey(S.reset); jp ||= anyPress(S.jump); dp ||= anyPress(S.drop); up ||= anyPress(S.use);
+    jump ||= anyKey(S.jump); brace ||= anyKey(S.brace); pull ||= anyKey(S.pull); cup ||= anyKey(S.cup || []); punch ||= anyKey(S.punch || []); kick ||= anyKey(S.kick || []); reset ||= anyKey(S.reset); jp ||= anyPress(S.jump); dp ||= anyPress(S.drop); up ||= anyPress(S.use);
   }
   for (const i of pads) {
     const gp = safe(() => navigator.getGamepads()[i], null); if (!gp) continue;
@@ -67,14 +67,14 @@ function readInput(k, schemes, pads) {
     const b = (n) => !!gp.buttons[n]?.pressed;
     const st = (G.padPrev ||= {})[i] ||= {};
     if (b(0) && !st.a) jp = true; if (b(1) && !st.b) dp = true; if (b(2) && !st.x) up = true; st.a = b(0); st.b = b(1); st.x = b(2);
-    jump ||= b(0); brace ||= b(5) || b(7) || b(4); pull ||= b(6); reset ||= b(3); cup ||= b(12); punch ||= b(14); // gâchette gauche = tirer, croix haut = courte échelle, croix gauche = coup de poing
+    jump ||= b(0); brace ||= b(5) || b(7) || b(4); pull ||= b(6); reset ||= b(3); cup ||= b(12); punch ||= b(14); kick ||= b(15); // gâchette gauche = tirer, croix haut = courte échelle, croix gauche / droite = poing / pied
     const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0; if (Math.abs(rx) > 0.2 || Math.abs(ry) > 0.2) Scene.camInput(-rx * 0.04 * CFG.sens, ry * 0.025, 0);
   }
   if (jp) slot[k].jc++; if (dp) slot[k].dc++; if (up) slot[k].uc++;
   const l = Math.hypot(ax, ay); if (l > 1) { ax /= l; ay /= l; }
   // déplacement relatif à la caméra
   const yaw = Scene.controlYaw(k, G.W?.pl[G.mode === 'online' ? G.me ?? 0 : k], l > 0.2), c = Math.cos(yaw), s = Math.sin(yaw);
-  return { mx: ax * c - ay * s, mz: -ax * s - ay * c, jump, brace, pull, cup, punch, reset, jc: slot[k].jc, dc: slot[k].dc, uc: slot[k].uc };
+  return { mx: ax * c - ay * s, mz: -ax * s - ay * c, jump, brace, pull, cup, punch, kick, reset, jc: slot[k].jc, dc: slot[k].dc, uc: slot[k].uc };
 }
 // souris : glisser = tourner la caméra, molette = recul
 let drag = null;
@@ -82,7 +82,8 @@ addEventListener('pointerdown', (e) => {
   Music.unlock(); Snd.unlock(); Sfx.load();
   if (G.capturing && G.capturing.armed) { e.preventDefault(); endCapture('Mouse' + e.button); return; }
   if (e.button === 1 && e.target.id === 'gl' && G.mode && G.W && !Object.values(BIND).some((l) => l.includes('Mouse1'))) { e.preventDefault(); pingDown(e); return; } // molette : pings (sauf si une action y est réglée)
-  if (e.target.id === 'gl') { drag = { x: e.clientX, y: e.clientY }; const k = 'Mouse' + e.button; if (!keys.has(k)) pressed.add(k); keys.add(k); }
+  if (e.target.id === 'gl') { if (!Object.values(BIND).some((l) => l.includes('Mouse' + e.button))) drag = { x: e.clientX, y: e.clientY }; // caméra : un bouton qui n'est pas une action (clic droit par défaut)
+    const k = 'Mouse' + e.button; if (!keys.has(k)) pressed.add(k); keys.add(k); }
 });
 addEventListener('mousedown', (e) => { if (e.button > 0 && (e.target.id === 'gl' || G.capturing)) e.preventDefault(); }); // clic molette / boutons latéraux : pas de défilement ni de navigation
 addEventListener('pointerup', (e) => { keys.delete('Mouse' + e.button); if (e.button === 1 && PW.down) pingUp(e); });
@@ -396,8 +397,8 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 // la liste des salons ouverts se met à jour toute seule tant qu'on est sur l'écran « Jouer en ligne » (avant : une seule demande à l'ouverture, un salon créé ensuite n'apparaissait qu'après avoir cliqué sur ↻)
 setInterval(() => { if (document.body.dataset.screen === 'online' && net?.up) net.send({ t: 'list' }); }, 2500);
 let net = null;
-const encIn = (ct, I) => [ct, Math.round(I.mx * 100) / 100, Math.round(I.mz * 100) / 100, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0) | (I.cup ? 16 : 0) | (I.punch ? 32 : 0), I.jc, I.dc, I.uc || 0];
-const decIn = (a) => (a ? { mx: a[1], mz: a[2], jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), punch: !!(a[3] & 32), jc: a[4], dc: a[5], uc: a[6] || 0 } : IDLE);
+const encIn = (ct, I) => [ct, Math.round(I.mx * 100) / 100, Math.round(I.mz * 100) / 100, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0) | (I.cup ? 16 : 0) | (I.punch ? 32 : 0) | (I.kick ? 64 : 0), I.jc, I.dc, I.uc || 0];
+const decIn = (a) => (a ? { mx: a[1], mz: a[2], jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), punch: !!(a[3] & 32), kick: !!(a[3] & 64), jc: a[4], dc: a[5], uc: a[6] || 0 } : IDLE);
 function getNet() {
   if (net) return net;
   net = createNet(() => CFG.name || 'Grimpeur');
@@ -567,7 +568,7 @@ safe(() => navigator.mediaDevices.addEventListener('devicechange', () => { if ($
 let LAYOUT = null; safe(() => navigator.keyboard?.getLayoutMap?.().then((l) => { LAYOUT = l; refreshKeys(); }));
 const SPECIAL = { Space: 'Espace', ShiftLeft: 'Maj gauche', ShiftRight: 'Maj droit', ControlLeft: 'Ctrl gauche', ControlRight: 'Ctrl droit', Enter: 'Entrée', Escape: 'Échap', Mouse0: 'Clic gauche', Mouse1: 'Clic molette', Mouse2: 'Clic droit', Mouse3: 'Souris 4', Mouse4: 'Souris 5', Tab: 'Tab', Backquote: '²' };
 const keyLabel = (code) => !code ? tr('non assignée') : SPECIAL[code] ? tr(SPECIAL[code]) : /^Key[A-Z]$/.test(code) ? (LAYOUT?.get(code) || code.slice(3)).toUpperCase() : /^Digit\d$/.test(code) ? code.slice(5) : LAYOUT?.get(code)?.toUpperCase() || code.replace('Numpad', 'Pavé ').replace('Arrow', 'Flèche ');
-const KEYROWS = [['up', 'Haut'], ['down', 'Bas'], ['left', 'Gauche'], ['right', 'Droite'], ['jump', 'Sauter'], ['brace', "S'arc-bouter"], ['pull', 'Tirer la chaîne'], ['cup', 'Courte échelle'], ['punch', 'Coup de poing'], ['drop', 'Lâcher la prise'], ['use', 'Interagir'], ['reset', 'Retour au point de passage'], ['camL', 'Caméra gauche'], ['camR', 'Caméra droite']];
+const KEYROWS = [['up', 'Haut'], ['down', 'Bas'], ['left', 'Gauche'], ['right', 'Droite'], ['jump', 'Sauter'], ['brace', "S'arc-bouter"], ['pull', 'Tirer la chaîne'], ['cup', 'Courte échelle'], ['punch', 'Coup de poing'], ['kick', 'Coup de pied'], ['drop', 'Lâcher la prise'], ['use', 'Interagir'], ['reset', 'Retour au point de passage'], ['camL', 'Caméra gauche'], ['camR', 'Caméra droite']];
 function refreshKeys() {
   for (const el of $$('[data-bind]')) el.textContent = keyLabel(BIND[el.dataset.bind]?.[0]);
   const box = $('#s-keys'); if (!box) return;

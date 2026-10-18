@@ -17,7 +17,7 @@ export const P = {
   WJ_OUT: 5.6, WJ_UP: 8.2,                      // saut depuis un mur ou un rebord
   STA_CLIMB: 1 / 7, STA_HANG: 1 / 16, STA_LOAD: 1 / 5, STA_ROPE: 1 / 6, STA_REGEN: 0.6,
   PULL_V: 2.6, DRAG_V: 0.9, TOW_V: 3.2, HAUL_MOVE: 0.3, HAUL_SLIP: 0.45, STA_HAUL: 1 / 4.5, // tirer la chaîne : petits pas, on glisse vers le partenaire (HAUL_SLIP x charge), ça épuise                     // au sol avec un partenaire suspendu : vitesse en le hissant / glissade si on ne s'arc-boute pas
-  KNOCK: 7, PUNCH_R: 1.45, PUNCH_HIT: 0.13, PUNCH_CD: 0.75, PUNCH_V: 8.5, PUNCH_VY: 6.2, DOWN_T: 1.5, // coup de poing : portée, instant de l'impact, recharge, éjection, temps au sol
+  KNOCK: 7, PUNCH_R: 1.35, PUNCH_CD: 0.75, PUNCH_V: 8.5, PUNCH_VY: 6.2, KICK_R: 1.75, KICK_HIT: 0.3, KICK_CD: 1.1, KICK_V: 11, KICK_VY: 7, DOWN_T: 1.5, // coups : portée, recharge, éjection ; temps au sol
   CUP_V: 12.6, CUP_R: 1.25, // courte échelle : élan donné par les mains jointes (apex ~3,4 m, comme debout sur la tête puis sauter), portée
   ROPE_REACH: 0.7, ROPE_PUMP: 22, ROPE_VMAX: 9, ROPE_CLIMB: 1.6, ROPE_JUMP: 6, ROPE_STA: 1 / 22, BAR_FWD: 5.8, BAR_UP: 7.4, USE_R: 1.9,
 };
@@ -378,14 +378,24 @@ function stepPlayer(W, p, I, mate) {
   // ÉJECTÉ par un coup de poing : on vole sans contrôle (knock) ; à la réception, on reste au sol DOWN_T s, puis on se relève
   if (p.ko && p.st !== ST.AIR) { p.ko = false; if (p.st === ST.GROUND) { p.downT = P.DOWN_T; p.knock = 0; ev(W, 'down', { p: p.id, x: p.x, y: p.y, z: p.z }); } }
   if (p.downT > 0) { p.downT = Math.max(0, p.downT - dt); wx = wz = wl = 0; p.buf = 0; p.cup = false; p.brace = false; if (!p.downT) ev(W, 'getup', { p: p.id }); }
-  // COUP DE POING (action dédiée, bit 32 des entrées) : main gauche ou droite au hasard (tirage déterministe : même résultat chez tous), on se
-  // tourne vers le partenaire proche ; à PUNCH_HIT s, s'il est à portée devant soi, il est éjecté (vitesse + vrille + chute au sol)
-  const pPress = !!I.punch && !p.pHeld; p.pHeld = !!I.punch; p.pCd = Math.max(0, (p.pCd || 0) - dt);
-  if (p.pT != null) { const t0 = p.pT; p.pT += dt; if (t0 < P.PUNCH_HIT && p.pT >= P.PUNCH_HIT) punchHit(W, p, mate); if (p.pT > 0.5) p.pT = null; }
-  if (pPress && p.pCd <= 0 && !p.downT && !p.ko && (p.st === ST.GROUND || p.st === ST.AIR) && !p.cup && !p.haul) {
-    p.pT = 0; p.pCd = P.PUNCH_CD; p.pSide = (Math.imul(W.tick + 7 * p.id + 13, 2654435761) >>> 16) & 1; // 0 = gauche, 1 = droite
-    if (mate && !W.alone && !W.solo && Math.hypot(mate.x - p.x, mate.z - p.z) < 2.6) p.yaw = Math.atan2(mate.x - p.x, mate.z - p.z);
-    ev(W, 'swing', { p: p.id, side: p.pSide, x: p.x, y: p.y + 1.4, z: p.z });
+  // COUPS (actions dédiées, bits 32 = poing, 64 = pied) : poing = jab du bras gauche ou cross du bras droit au hasard (tirage déterministe :
+  // même résultat chez tous), calé sur les vraies animations (impact à 0,20 s / 0,26 s) ; pied = coup de pied de face (impact à 0,30 s).
+  // On se tourne vers le partenaire et on fait un PAS vers lui pendant l'armé (le coup touche le visage / le torse au lieu de frapper dans le vide).
+  const pPress = !!I.punch && !p.pHeld, kPress = !!I.kick && !p.kHeld; p.pHeld = !!I.punch; p.kHeld = !!I.kick; p.pCd = Math.max(0, (p.pCd || 0) - dt);
+  if (p.pT != null) {
+    const t0 = p.pT, H = atkHit(p); p.pT += dt;
+    if (p.pT <= H && p.lunge > 0 && (p.st === ST.GROUND || p.st === ST.AIR)) { const s = Math.min(p.lunge, (p.lunge / Math.max(dt, H - t0)) * dt); const nx = p.x + Math.sin(p.yaw) * s, nz = p.z + Math.cos(p.yaw) * s; if (!inside(W, nx, p.y + 0.9, nz, P.R)) { p.x = nx; p.z = nz; } p.lunge -= s; }
+    if (p.pT < H + 0.12) wx = wz = wl = 0; // pendant le coup, on ne court pas
+    if (t0 < H && p.pT >= H) punchHit(W, p, mate);
+    if (p.pT > (p.pK ? 0.75 : 0.55)) p.pT = null;
+  }
+  if ((pPress || kPress) && p.pCd <= 0 && !p.downT && !p.ko && (p.st === ST.GROUND || p.st === ST.AIR) && !p.cup && !p.haul) {
+    p.pT = 0; p.pK = kPress && !pPress ? 1 : 0; p.pCd = p.pK ? P.KICK_CD : P.PUNCH_CD; p.lunge = 0;
+    p.pSide = p.pK ? 1 : (Math.imul(W.tick + 7 * p.id + 13, 2654435761) >>> 16) & 1; // poing : 0 = jab (gauche), 1 = cross (droite)
+    if (mate && !W.alone && !W.solo) { const h = Math.hypot(mate.x - p.x, mate.z - p.z), want = p.pK ? 1.3 : 1.0;
+      if (h < 2.6) p.yaw = Math.atan2(mate.x - p.x, mate.z - p.z);
+      if (h > want && h < (p.pK ? P.KICK_R : P.PUNCH_R) + 0.7 && Math.abs(mate.y - p.y) < 1) p.lunge = h - want; }
+    ev(W, 'swing', { p: p.id, side: p.pSide, kick: p.pK, x: p.x, y: p.y + 1.4, z: p.z });
   }
   p.ropeUp = false;
   if (p.st !== ST.AIR) { p.dj = false; p.cupUsed = false; } // second saut (mode solo) rendu dès qu'on touche quelque chose
@@ -573,15 +583,16 @@ function turnCorner(W, p, b, fi, lat) {
 function uStep(b, f, fi, d) { const ax = FACE[f][0] ? b.s : b.c, az = FACE[f][0] ? b.c : -b.s; return d * (fi.nz * ax - fi.nx * az); }
 // place pour se hisser au-dessus du bord ?
 function roomAbove(W, b, f, u) { facePoint(b, f, u, -0.4, b.py + b.hh + 1.0, FP); return !inside(W, FP.x, FP.y, FP.z); }
+const atkHit = (p) => (p.pK ? P.KICK_HIT : p.pSide ? 0.26 : 0.2); // instant de l'impact du coup en cours
 function punchHit(W, p, m) {
   if (!m || W.alone || W.solo || m.ko || m.downT > 0) return;
   if (m.st !== ST.GROUND && m.st !== ST.AIR) return; // accroché, en paroi, en liane : on ne le décroche pas d'un coup
   const dx = m.x - p.x, dz = m.z - p.z, h = Math.hypot(dx, dz), fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
-  if (h > P.PUNCH_R || Math.abs(m.y - p.y) > 1.3 || (h > 0.2 && (dx * fx + dz * fz) / h < 0.35)) return;
+  if (h > (p.pK ? P.KICK_R : P.PUNCH_R) || Math.abs(m.y - p.y) > 1.3 || (h > 0.2 && (dx * fx + dz * fz) / h < 0.35)) return;
   const ux = h > 0.2 ? dx / h : fx, uz = h > 0.2 ? dz / h : fz;
-  m.vx = ux * P.PUNCH_V + p.vx * 0.3; m.vz = uz * P.PUNCH_V + p.vz * 0.3; m.vy = P.PUNCH_VY; toAir(m); m.coy = 0; m.noCut = true;
+  const V = p.pK ? P.KICK_V : P.PUNCH_V; m.vx = ux * V + p.vx * 0.3; m.vz = uz * V + p.vz * 0.3; m.vy = p.pK ? P.KICK_VY : P.PUNCH_VY; toAir(m); m.coy = 0; m.noCut = true;
   m.knock = 0.9; m.ko = true; m.grabCd = 0.6; m.hang = m.climb = m.mantle = null; m.cup = false; m.pT = null;
-  ev(W, 'punch', { p: p.id, v: m.id, side: p.pSide, x: m.x, y: m.y + 1.55, z: m.z, ux, uz });
+  ev(W, 'punch', { p: p.id, v: m.id, side: p.pSide, kick: p.pK, x: m.x, y: m.y + (p.pK ? 1.15 : 1.55), z: m.z, ux, uz });
 }
 // le grimpeur p saute dans les mains jointes de son partenaire (mains depuis au moins 0,15 s, à portée, pieds à hauteur du sol ou des mains)
 function cupBoost(W, p, m) {

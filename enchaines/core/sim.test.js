@@ -259,3 +259,17 @@ test("points d'apparition : sur tous les parcours, chaque grimpeur réapparaît 
   }
   assert.deepEqual(bad, []);
 });
+
+test("coups : on fait un pas vers le partenaire pour le toucher (poing à 1,8 m), le coup de pied porte plus loin et éjecte plus fort", () => {
+  const throwDist = (gap, input) => {
+    const W = createWorld(); run(W, 30); const [A, B] = W.pl; Object.assign(A, { x: B.x - gap, z: B.z }); layChain(W); run(W, 30);
+    const ax = A.x, bx = B.x; let hit = false;
+    for (let i = 0; i < 120 * 3; i++) { stepWorld(W, [{ ...IDLE, ...(i < 6 ? input : {}) }, IDLE]); if (W.ev.some((e) => e.k === 'punch')) hit = true; }
+    return { hit, step: A.x - ax, fly: B.x - bx };
+  };
+  const p = throwDist(1.8, { punch: true }), k = throwDist(2.2, { kick: true }), far = throwDist(3.2, { punch: true });
+  assert.ok(p.hit && p.step > 0.5, 'poing à 1,8 m : pas en avant ' + p.step.toFixed(2) + ' m puis touché');
+  assert.ok(k.hit, 'coup de pied à 2,2 m : touché');
+  assert.ok(k.fly > p.fly + 0.5, 'le pied éjecte plus loin : ' + k.fly.toFixed(1) + ' m contre ' + p.fly.toFixed(1) + ' m');
+  assert.ok(!far.hit && far.step < 0.05, 'à 3,2 m : ni pas ni touche');
+});

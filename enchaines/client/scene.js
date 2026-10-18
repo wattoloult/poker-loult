@@ -9,6 +9,7 @@ import * as Mechs from './mechs.js';
 import * as Sfx from './sfx.js';
 
 export const S = { ready: false };
+export const _clips = () => CLIPS; // outils de mise au point (console)
 export const LIB = {}, TEX = {};
 const CLIPS = {};
 const V = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3(), Q = new THREE.Quaternion(), Q2 = new THREE.Quaternion();
@@ -100,6 +101,7 @@ export async function load(onProgress) {
   jobs.push(step(L.loadAsync(new URL('chars/ranger_m.glb', base).href)).then((g) => { LIB.m = g; }));
   jobs.push(step(L.loadAsync(new URL('chars/ranger_f.glb', base).href)).then((g) => { LIB.f = g; }));
   jobs.push(step(L.loadAsync(new URL('chars/anims1.glb', base).href)).then((g) => { for (const c of g.animations) { fixClip(c, true); CLIPS[c.name] = c; } }));
+  jobs.push(step(L.loadAsync(new URL('chars/combat1.glb', base).href)).then((g) => { for (const c of g.animations) { fixClip(c, true); CLIPS[c.name] = c; } })); // coups : UAL 1 (CC0), tools/import-combat.mjs
   jobs.push(step(L.loadAsync(new URL('chars/anims2.glb', base).href)).then((g) => { for (const c of g.animations) { fixClip(c, false); CLIPS[c.name] = c; } }));
   jobs.push(step(L.loadAsync(new URL('props/props.glb', base).href)).then((g) => { for (const s of g.scenes) for (const o of s.children) LIB[o.name] = o; }));
   await Promise.all(jobs);
@@ -195,7 +197,7 @@ function headOnly(mesh) {
   const out = []; for (let t = 0; t < idx.count; t += 3) { const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2); if (ok[a] && ok[b] && ok[c]) out.push(a, b, c); }
   const ng = g.clone(); ng.setIndex(out); ng.clearGroups(); mesh.geometry = ng;
 }
-const ANIMS = ['Idle_Loop', 'Walk_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Jump_Start', 'Jump_Loop', 'Jump_Land', 'Crouch_Idle_Loop', 'NinjaJump_Idle_Loop', 'Hit_Knockback', 'Dance_Loop', 'Yes', 'Roll', 'Death01', 'LayToIdle'];
+const ANIMS = ['Idle_Loop', 'Walk_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Jump_Start', 'Jump_Loop', 'Jump_Land', 'Crouch_Idle_Loop', 'NinjaJump_Idle_Loop', 'Hit_Knockback', 'Dance_Loop', 'Yes', 'Roll', 'Death01', 'LayToIdle', 'Punch_Jab', 'Punch_Cross', 'Punch_Enter', 'Hit_Head', 'Hit_Chest'];
 function makeClimber(k) {
   const root = cloneSkinned(S.tpl[k ? 'f' : 'm']);
   const tint = new THREE.Color(k ? 0xc4dcff : 0xffe2c4), glow = new THREE.Color(k ? 0x06213f : 0x3a1800);
@@ -207,7 +209,7 @@ function makeClimber(k) {
   const g = new THREE.Group(); g.add(root);
   const mixer = new THREE.AnimationMixer(root), acts = {};
   for (const n of ANIMS) if (CLIPS[n]) { const a = mixer.clipAction(CLIPS[n]); a.enabled = true; a.setEffectiveWeight(0); a.play(); acts[n] = a; }
-  for (const n of ['Jump_Start', 'Jump_Land', 'Hit_Knockback', 'Yes', 'Roll', 'Death01', 'LayToIdle']) if (acts[n]) { acts[n].setLoop(THREE.LoopOnce, 1); acts[n].clampWhenFinished = true; }
+  for (const n of ['Jump_Start', 'Jump_Land', 'Hit_Knockback', 'Yes', 'Roll', 'Death01', 'LayToIdle', 'Punch_Jab', 'Punch_Cross', 'Punch_Enter', 'Hit_Head', 'Hit_Chest']) if (acts[n]) { acts[n].setLoop(THREE.LoopOnce, 1); acts[n].clampWhenFinished = true; }
   const bones = {}; root.traverse((o) => { if (o.isBone) bones[o.name] = o; });
   // repère de couleur au sol + marqueur de réception
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.55, 40), new THREE.MeshBasicMaterial({ color: COL[k], transparent: true, opacity: 0.85, depthWrite: false }));
@@ -244,6 +246,20 @@ function armTo(c, side, target, k = 1) {
   const up = b['upperarm_' + s], lo = b['lowerarm_' + s], ha = b['hand_' + s];
   if (!up || !lo || !ha) return;
   aim(up, lo, target, k); aim(lo, ha, target, k);
+}
+// jambe en deux points : la cuisse vise le genou, le tibia vise le pied (genou plié, contrairement à legTo qui tend la jambe)
+function leg2(c, side, knee, foot, k = 1) {
+  const b = c.bones, s = side === 'l' ? 'l' : 'r', th = b['thigh_' + s], ca = b['calf_' + s], fo = b['foot_' + s];
+  if (!th || !ca || !fo) return;
+  aim(th, ca, knee, k); aim(ca, fo, foot, k);
+}
+// coup de pied : poses clés (genou, pied) dans le repère du grimpeur (droite, hauteur, avant) ; impact à 0,30 s (P.KICK_HIT)
+const KICK = [[0, [0.12, 0.52, 0.03], [0.12, 0.06, 0.0], 0], [0.17, [0.1, 1.08, 0.42], [0.1, 0.58, 0.16], 0.12], [0.3, [0.08, 1.08, 0.55], [0.06, 1.22, 1.06], 0.24],
+  [0.4, [0.08, 1.08, 0.55], [0.06, 1.2, 1.02], 0.22], [0.56, [0.1, 1.0, 0.4], [0.1, 0.5, 0.15], 0.1], [0.78, [0.12, 0.52, 0.04], [0.12, 0.06, 0.02], 0]];
+function kickPose(t) {
+  let i = 0; while (i < KICK.length - 2 && t > KICK[i + 1][0]) i++;
+  const [t0, k0, f0, l0] = KICK[i], [t1, k1, f1, l1] = KICK[i + 1], u = Math.max(0, Math.min(1, (t - t0) / (t1 - t0))), e = u * u * (3 - 2 * u), m = (a, b) => a.map((v, j) => v + (b[j] - v) * e);
+  return { knee: m(k0, k1), foot: m(f0, f1), lean: -(l0 + (l1 - l0) * e), w: Math.min(1, t / 0.05, (0.78 - t) / 0.12), ext: t > 0.22 && t < 0.48 ? 1 : 0 };
 }
 function legTo(c, side, target, k = 1) {
   const b = c.bones, s = side === 'l' ? 'l' : 'r';
@@ -332,7 +348,17 @@ function poseClimber(c, p, mate, W, dt, rp) {
   let a = ST_ANIM(p, spd);
   if (p.st === ST.AIR && p.dangling) a = 'NinjaJump_Idle_Loop';
   if (W.done) a = c.k ? 'Dance_Loop' : 'Yes';
-  if (p.downT > 0) {
+  // COUPS : début d'un coup = la simulation remet pT à zéro. Poing = vraie animation (jab du bras gauche / cross du bras droit, UAL Quaternius),
+  // jouée d'un bout à l'autre ; pied = garde (Punch_Enter) + jambe posée image par image plus bas. Coup encaissé : Hit_Head / Hit_Chest bref.
+  if (p.pT != null && (c.lastPT == null || p.pT < c.lastPT)) {
+    const clip = p.pK ? 'Punch_Enter' : p.pSide ? 'Punch_Cross' : 'Punch_Jab';
+    setAnim(c, clip, 0.06, true); c.atk = { kick: !!p.pK, t: 0, dur: p.pK ? 0.78 : CLIPS[clip]?.duration || 0.9 };
+  }
+  c.lastPT = p.pT;
+  if (c.atk) { c.atk.t += S.hitstop > 0 ? dt * 0.08 : dt; if (c.atk.t > c.atk.dur - 0.12 || p.ko || p.downT > 0 || (p.st !== ST.GROUND && p.st !== ST.AIR)) c.atk = null; }
+  if (c.hit) { c.hit.t += dt; if (c.hit.t > 0.2) c.hit = null; }
+  if (c.hit || c.atk) { /* l'animation du coup / de l'impact continue */ }
+  else if (p.downT > 0) {
     const want = p.downT > 0.95 ? 'Death01' : 'LayToIdle';
     if (c.cur !== want) { setAnim(c, want, 0.1, true); const ac = c.acts[want]; if (ac) { if (want === 'Death01') { ac.time = 1.45; ac.timeScale = 1.5; } else ac.timeScale = 1.53 / 0.95; } }
   } else if (p.land > 0.15 && c.lastSt === ST.AIR && p.st === ST.GROUND && c.lastVy < -11) setAnim(c, 'Jump_Land', 0.06, true);
@@ -346,19 +372,10 @@ function poseClimber(c, p, mate, W, dt, rp) {
   const koFly = p.ko && p.st === ST.AIR && Math.hypot(p.vx, p.vz) > 1;
   const wantYaw = koFly ? Math.atan2(-p.vx, -p.vz) : p.downT > 0 ? c.yaw : p.yaw;
   let dy = wantYaw - c.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); c.yaw += dy * Math.min(1, dt * (koFly ? 30 : 16));
-  // COUP DE POING : armé (bras ramené en arrière, buste qui pivote à l'opposé), frappe (bras tendu vers le visage, buste qui tourne
-  // dans le coup, pas en avant), tenue, retour. sd = +1 main droite, -1 main gauche (tirée au hasard par la simulation)
-  let twist = 0, lunge = 0; const pt = p.pT;
-  if (pt != null) {
-    const sd = p.pSide ? 1 : -1, sm = (x) => x * x * (3 - 2 * x);
-    if (pt < 0.09) { const k = sm(pt / 0.09); twist = -sd * 0.42 * k; lunge = -0.06 * k; }
-    else if (pt < 0.16) { const k = sm((pt - 0.09) / 0.07); twist = sd * (-0.42 + 0.8 * k); lunge = -0.06 + 0.32 * k; }
-    else if (pt < 0.26) { twist = sd * 0.38; lunge = 0.26; }
-    else { const k = sm(Math.min(1, (pt - 0.26) / 0.24)); twist = sd * 0.38 * (1 - k); lunge = 0.26 * (1 - k); }
-  }
-  c.g.rotation.y = c.yaw + twist;
-  c.g.position.x += Math.sin(c.yaw) * lunge; c.g.position.z += Math.cos(c.yaw) * lunge;
-  if (koFly) c.root.rotation.x = Math.max(-1.5, c.root.rotation.x - dt * 7.5 * (S.hitstop > 0 ? 0.1 : 1)); // vrille vers l'arrière, jusqu'à l'horizontale
+  c.g.rotation.y = c.yaw;
+  const kick = c.atk?.kick ? kickPose(c.atk.t) : null;
+  if (kick) c.root.rotation.x = kick.lean; // buste qui part en arrière pour équilibrer la jambe tendue
+  else if (koFly) c.root.rotation.x = Math.max(-1.5, c.root.rotation.x - dt * 7.5 * (S.hitstop > 0 ? 0.1 : 1)); // vrille vers l'arrière, jusqu'à l'horizontale
   else if (p.st !== ST.ROPE && c.root.rotation.x) c.root.rotation.x *= Math.max(0, 1 - dt * 10); // fin du balancement de liane / de la vrille
   { const a = c.root.rotation.x, h = 0.95; if (p.st !== ST.ROPE && a) c.root.position.set(0, h - h * Math.cos(a), -h * Math.sin(a)); else c.root.position.set(0, 0, 0); }
   // poses procédurales : bras vers le bord, le mur ou la chaîne
@@ -396,11 +413,9 @@ function poseClimber(c, p, mate, W, dt, rp) {
     const n = W.ch[p.id ? W.ch.length - 2 : 1]; const tgt = new THREE.Vector3(n.x, n.y, n.z);
     armTo(c, 'l', tgt, 0.8); armTo(c, 'r', tgt, 0.8);
   }
-  if (pt != null && pt < 0.5 && (p.st === ST.GROUND || p.st === ST.AIR)) {
-    const sd = p.pSide ? 1 : -1, s = sd > 0 ? 'r' : 'l', o = sd > 0 ? 'l' : 'r';
-    const fist = pt < 0.09 ? at(sd * 0.34, 1.2, -0.32) : pt < 0.26 ? at(sd * 0.05, 1.5, 1.0) : at(sd * 0.3, 1.25 - (pt - 0.26), 0.25);
-    const k = pt < 0.26 ? 1 : Math.max(0, 1 - (pt - 0.26) / 0.24);
-    armTo(c, s, fist, k); armTo(c, o, at(-sd * 0.14, 1.45, 0.32), 0.8 * k); // l'autre poing en garde devant le menton
+  if (kick) { // coup de pied de face : genou armé haut, jambe qui se détend à hauteur du torse, genou qui revient, pied qui se repose
+    leg2(c, 'r', at(...kick.knee), at(...kick.foot), kick.w);
+    armTo(c, 'r', at(0.28, 1.05 - 0.1 * kick.ext, -0.12 - 0.12 * kick.ext), 0.55 * kick.w); // le bras du côté de la jambe recule (équilibre)
   }
   // repère au sol et marqueur de réception (là où l'on va retomber)
   const gr = groundBelow(W, p.x, p.y + 0.05, p.z, 60);
@@ -439,7 +454,7 @@ export function onEvent(W, e) {
   else if (e.k === 'jerk') { sparks(e.x, e.y, e.z, Math.min(18, 4 + e.v * 1.5)); shake(Math.min(0.35, e.v * 0.03)); }
   else if (e.k === 'grab' && p) sparks(p.x, p.y + 2, p.z, 3);
   else if (e.k === 'hit' && p) { sparks(e.x, e.y, e.z, 14); shake(0.3); }
-  else if (e.k === 'punch') { S.hitstop = 0.085; shake(0.55); impact(e.x, e.y, e.z, e.ux, e.uz); sparks(e.x, e.y, e.z, 10); }
+  else if (e.k === 'punch') { const v = S.cl?.[e.v]; if (v) { v.hit = { t: 0 }; v.atk = null; setAnim(v, e.kick ? 'Hit_Chest' : 'Hit_Head', 0.03, true); } S.hitstop = e.kick ? 0.11 : 0.085; shake(0.55); impact(e.x, e.y, e.z, e.ux, e.uz); sparks(e.x, e.y, e.z, 10); }
   else if (e.k === 'down' && p) { puff(e.x, e.y, e.z, 12, 0xd8c3a5, 0.55, 0.6); shake(0.18); stars(e.p); }
   else if (e.k === 'collapse') { const m = S.bodyMesh[e.b]; if (m) dropDebris(m); puff(e.x, e.y, e.z, 10, 0xb08a66, 0.6, -0.5); }
   else if (e.k === 'checkpoint') { const c = S.cps[e.cp]; if (c) { c.on = true; c.flash = 1.2; } puff(e.x, e.y, e.z, 16, 0xffd27a, 0.6, 2); }
