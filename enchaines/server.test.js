@@ -57,3 +57,32 @@ test('salon à deux, départ, entrées, instantanés identiques', async () => {
   assert.ok(pb().ack >= 1 && pb().ack < 50, 'après reprise, ses entrées (ct repart de 1) sont acceptées, ack=' + pb().ack);
   a.ws.close(); b2.ws.close(); stop();
 });
+// speedrun solo : le serveur rejoue la partie (même physique) ; il refuse ce qui n'atteint pas le sommet
+test('speedrun solo : rejeu identique au jeu, arrivée chronométrée, partie incomplète refusée', async () => {
+  const { replayRun } = await import('./core/replay.js');
+  const { createWorld, stepWorld, IDLE } = await import('./core/sim.js');
+  const { COURSES } = await import('./core/worlds.js');
+  const c0 = COURSES.tour.checkpoints[0];
+  COURSES.__t = { ...COURSES.tour, id: '__t', checkpoints: [c0, { ...c0, x: c0.x + 4, finish: true, r: 1.5 }] }; // arrivée à 4 m du départ
+  const run = [[30, 0, 0, 0, 0, 0, 0], [240, 1, 0, 0, 0, 0, 0]];
+  const W = createWorld({ course: '__t' }); W.alone = true;
+  for (const [n, mx, mz] of run) for (let k = 0; k < n && !W.done; k++) stepWorld(W, [{ ...IDLE, mx, mz }, IDLE]);
+  const r = replayRun('__t', run);
+  assert.ok(W.done && r.ok, 'arrivée atteinte : ' + JSON.stringify(r));
+  assert.equal(r.time, Math.round(W.time * 100) / 100, 'même temps que la partie jouée');
+  assert.equal(replayRun('tour', run).ok, false, 'sur la vraie tour : sommet non atteint');
+  assert.equal(replayRun('tour', [[1, 'x']]).why, 'format');
+  // classement : un seul temps par pseudo (le meilleur), trié
+  const { soloRun } = await import('./server.js'); COURSES.__t.published = true;
+  const slow = [[60, 0, 1, 0, 0, 0, 0], [60, 0, -1, 0, 0, 0, 0], ...run]; // détour (le chrono part au premier mouvement)
+  assert.equal((await soloRun({ course: '__t', name: 'Lent', run: slow }, replayRun)).rank, 0);
+  const f = await soloRun({ course: '__t', name: 'Rapide', run }, replayRun); assert.equal(f.rank, 0, 'le plus rapide passe devant');
+  const again = await soloRun({ course: '__t', name: 'rapide', run: slow }, replayRun); assert.equal(again.kept, 1, 'un temps moins bon ne remplace pas le record du joueur');
+  assert.deepEqual(again.board.map((x) => x.names[0]), ['Rapide', 'Lent']);
+  delete COURSES.__t;
+  const post = (o) => fetch('http://127.0.0.1:18807/enchaines-ws/solo', { method: 'POST', body: JSON.stringify(o) }).then((x) => x.json());
+  const { server } = await import('./server.js'); if (!server.listening) server.listen(18807); await wait(100);
+  assert.equal((await post({ course: 'tour', name: 'Tricheur', run })).ok, false, 'le serveur rejette une partie qui ne finit pas');
+  assert.equal((await post({ course: 'inconnu', run })).why, 'parcours');
+  server.close();
+});

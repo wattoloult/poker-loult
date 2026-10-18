@@ -11,6 +11,7 @@ const LEVEL = getCourse(process.env.COURSE || 'tour');
 const route = LEVEL.bodies.map((b, i) => ({ ...b, i })).filter((b) => !b.hit && !b.cliff && !b.deco && !b.bar && !b.lever && !b.door && !b.herse && !b.plate && !b.ghost && !b.alt && !(b.dbseg && b.dbseg.k));
 // barres entre deux étapes : celles du tableau des corps situées entre A et B
 const barsBetween = (A, B) => LEVEL.bodies.map((b, i) => ({ ...b, i })).filter((b) => b.bar && b.i > A.i && b.i < B.i).map((b) => b.i);
+const ALONE = !!process.env.ALONE; // ALONE=1 : vrai mode solo (speedrun) : un seul grimpeur, second saut, étapes coop comprises
 const only = process.argv[2] != null ? +process.argv[2] : null;
 
 function rectClosest(b, pose, x, z, inset) { // point du dessus de b le plus proche de (x, z), rentré de `inset`
@@ -21,8 +22,8 @@ function rectClosest(b, pose, x, z, inset) { // point du dessus de b le plus pro
   return { x: pose.x + c * lx + s * lz, z: pose.z - s * lx + c * lz };
 }
 const PO = { x: 0, y: 0, z: 0, yaw: 0 };
-function attempt(A, B, t0, verbose) {
-  const W = createWorld({ course: LEVEL.id }); W.solo = true; W.tick = Math.round(t0 / DT);
+function attempt(A, B, t0, verbose, dj) {
+  const W = createWorld({ course: LEVEL.id }); if (ALONE) W.alone = true; else W.solo = true; W.tick = Math.round(t0 / DT);
   if (process.env.NOHIT) for (const b of W.bodies) if (b.hit) b.ghost = true; // NOHIT=1 : sans les obstacles qui frappent (géométrie seule)
   const p = W.pl[0], bA = W.bodies[A.i], bB = W.bodies[B.i];
   W.pl[1].x = 999; W.pl[1].y = -999;
@@ -84,6 +85,7 @@ function attempt(A, B, t0, verbose) {
       const e = rectClosest(B, { x: bB.px, y: bB.py, z: bB.pz, yaw: bB.yaw }, p.x, p.z, 0), eg = Math.hypot(e.x - p.x, e.z - p.z);
       if (!ahead || (!over && !nextRope && topB() > p.y + 0.6 && eg < 1.6 && !bB.climb)) { jc++; hold = 0.45; jump = true; }
     }
+    if (dj && p.st === ST.AIR && !p.dj && p.vy < 0.5 && p.stT > 0.15 && topB() > p.y - 0.3 && p.gb !== B.i) { jc++; jump = true; hold = 0.3; } // second saut au sommet de la courbe
     if (gust) { mx = mz = 0; jump = false; }
     stepWorld(W, [{ ...IDLE, mx, mz, jc, jump, uc, brace: gust }, IDLE]);
     if (verbose && i % 6 === 0) log.push(`${(i * DT).toFixed(2)} st=${p.st} x=${p.x.toFixed(2)} y=${p.y.toFixed(2)} z=${p.z.toFixed(2)} v=${p.vx.toFixed(1)},${p.vy.toFixed(1)},${p.vz.toFixed(1)} gb=${p.gb}`);
@@ -97,10 +99,10 @@ for (let k = 1; k < route.length; k++) {
   const A = route[k - 1], B = route[k];
   if (only != null && B.i !== only) continue;
   const label = `#${B.i} z${B.zone} ${B.mat}${B.climb ? ' paroi' : ''}${B.move ? ' ' + B.move.k : ''}${B.crumble ? ' friable' : ''}${B.sink ? ' passerelle' : ''} top ${(B.y + B.h / 2).toFixed(1)}`;
-  if (B.coop && !process.env.FORCE) { coop++; console.log('COOP ', label); continue; }
+  if (B.coop && !process.env.FORCE && !ALONE) { coop++; console.log('COOP ', label); continue; }
   const T = B.move?.T || A.move?.T || 0, tries = T ? 8 : 1;
   let best = null;
-  for (let j = 0; j < tries && !best?.ok; j++) best = attempt(A, B, (T * j) / tries + 1, only != null);
+  for (let j = 0; j < tries && !best?.ok; j++) for (const dj of ALONE ? [false, true] : [false]) if (!best?.ok) best = attempt(A, B, (T * j) / tries + 1, only != null, dj); // solo : sans puis avec le second saut
   if (!best.ok) fails++;
   console.log(best.ok ? 'ok   ' : 'ECHEC', label, best.ok ? best.t.toFixed(2) + ' s' : best.why);
   if (only != null) console.log(best.log.join('\n'));

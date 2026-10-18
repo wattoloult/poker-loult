@@ -37,6 +37,15 @@ client/music.js    Musique + ambiance par monde, fondus de 2,5 s, chemins config
 playtest/playtest.js MODULE DE TEST PRIVÉ (jamais servi en fichier) : panneau F9, tous les parcours, points de passage, IA du partenaire,
                    Tab = échanger les grimpeurs, T téléporter le partenaire, J le faire sauter, K le figer arc-bouté, anti-chute, ralenti, infos.
 ```
+## Speedrun solo (menu « Speedrun solo »)
+- Un grimpeur sans chaîne (`W.alone` : second saut en l'air, une plaque suffit, contrepoids adaptés) ; chrono au premier mouvement ; Suppr = recommencer.
+- Le client enregistre chaque pas d'entrée (`G.run`, séries identiques, entrées arrondies comme en ligne) ; à l'arrivée, POST `/enchaines-ws/solo` :
+  le serveur REJOUE la partie dans un worker (`core/replay.js`, ~1 s pour 5 min) et ne classe que si le sommet est atteint (`best.json`, clé `solo:<id>`,
+  un temps par pseudo). Temps de passage par point de passage comparés au record de l'appareil (`ch-best-solo`). Records : case « Speedrun solo ».
+- `ALONE=1 COURSE=<id> node tools/route.mjs` : le robot joue en solo (étapes coop comprises, avec second saut). Échecs restants = mécanismes que le
+  robot ne sait pas actionner (plaques, ballons, fleurs-ressorts, dalles), couverts par les tests de chaque monde.
+- Tout ce qui change la physique hors entrées (téléportation, anti-chute du mode test) rend la montée invalide pour le serveur : normal.
+
 ## Ajouter un parcours
 1. `core/courses/<id>.js` avec `course({ id, world, name, short, diff, published: false, medals, backdrop })`, zones, `cp` (le dernier `finish: true`).
 2. L'importer dans `core/worlds.js`. 3. `COURSE=<id> node tools/route.mjs` jusqu'à 0 échec ; scénario dans `core/coop.test.js` pour chaque étape `coop`.

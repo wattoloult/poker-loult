@@ -2,12 +2,14 @@
 // et de la chaîne tourne ici (120 pas/s, core/sim.js) ; chaque client n'envoie que ses entrées et prédit en les rejouant.
 // Service : systemd `enchaines-mm`, Caddy route /enchaines-ws* -> PORT (8807). Classement : DATA_DIR/best.json (hors des fichiers servis), lu par le message `board`.
 // client -> serveur : hello {name, token} · list · board · create {L} · join {code} · leave · cfg {L} (hôte) · start (hôte) · restart (hôte) · cp · i {a:[[ct,mx,mz,bits,jc,dc],...]} · ping {n}
+// speedrun solo : POST /enchaines-ws/solo {course, name, run} -> le serveur rejoue la partie (core/replay.js, dans un worker) et la classe ; board {course, solo:1}
 // serveur -> client : hi {id} · rooms {list} · board {list} · room {...} · start {seat, names, L, s} · s {w, ack:[a0,a1], in:[i0,i1], e:[...]} (30/s) · end {board, rank} · left · err {m} · pong
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { Worker } from 'node:worker_threads';
 import { WebSocketServer } from 'ws';
 import { createWorld, stepWorld, snapWorld, DT, IDLE } from './core/sim.js';
 import { COURSES, DEFAULT_COURSE } from './core/worlds.js';
@@ -129,11 +131,35 @@ function record(r) { // classement par meilleur temps (le serveur a chronométr�
   cast(r, { t: 'end', course: r.cfg.course, board: board.slice(0, 10), rank: board.indexOf(e) < 10 ? board.indexOf(e) : null });
 }
 
+/* ------------------------------ speedrun solo : rejeu vérifié, un seul temps (le meilleur) par pseudo ------------------------------ */
+let worker = null, jobN = 0; const jobs = new Map();
+function replay(course, run) {
+  if (!worker) { worker = new Worker(new URL('./core/replay.js', import.meta.url)); worker.on('message', ({ id, r }) => { jobs.get(id)?.(r); jobs.delete(id); }); worker.on('error', (e) => { console.error('rejeu', e.message); for (const f of jobs.values()) f({ ok: false, why: 'rejeu' }); jobs.clear(); worker = null; }); worker.unref(); }
+  return new Promise((res) => { const id = ++jobN; jobs.set(id, res); worker.postMessage({ id, course, run }); });
+}
+async function soloRun(m, rp = replay) { // rp : rejoueur (tests : en direct, sans worker)
+  if (!m || !COURSES[m.course]?.published || !Array.isArray(m.run)) return { ok: false, why: 'parcours' };
+  if (jobs.size > 8) return { ok: false, why: 'serveur occupé, réessaie' };
+  const r = await rp(m.course, m.run); if (!r.ok) return r;
+  const name = clean(m.name, 16) || 'Grimpeur', key = 'solo:' + m.course, e = { names: [name], time: r.time, falls: r.falls, date: new Date().toISOString().slice(0, 10) };
+  let board = boardOf(key); const old = board.find((x) => x.names[0].toLowerCase() === name.toLowerCase());
+  if (old && old.time <= e.time) return { ok: true, time: r.time, rank: board.indexOf(old), board: board.slice(0, 10), kept: 1 };
+  board = board.filter((x) => x !== old); board.push(e); board.sort((a, b) => a.time - b.time); boards[key] = board = board.slice(0, 50);
+  try { fs.writeFileSync(BEST, JSON.stringify(boards)); } catch (err) { console.error('classement non écrit', err.message); }
+  return { ok: true, time: r.time, rank: board.indexOf(e), board: board.slice(0, 10) };
+}
+
 /* ------------------------------ HTTP (dev : fichiers ; prod : classement seul, le reste est servi par le hub) ------------------------------ */
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.glb': 'model/gltf-binary', '.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp3': 'audio/mpeg' };
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   if (u.pathname === '/stats') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ rooms: rooms.size, players: [...rooms.values()].reduce((s, r) => s + live(r).length, 0) })); }
+  if (u.pathname === '/enchaines-ws/solo' && req.method === 'POST') { // la partie entière (~20 octets par changement d'entrée), 4 Mo au plus
+    let body = '', len = 0;
+    req.on('data', (c) => { len += c.length; if (len > 4e6) { res.writeHead(413); res.end(); req.destroy(); } else body += c; });
+    req.on('end', async () => { if (res.writableEnded) return; let m = null; try { m = JSON.parse(body); } catch { } const r = await soloRun(m); res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(r)); });
+    return;
+  }
   if (!DEV) { res.writeHead(404); return res.end(); }
   let f = path.normalize(path.join(ROOT, decodeURIComponent(u.pathname)));
   if (!f.startsWith(ROOT) || /server\.js|node_modules|data[\\/]|playtest[\\/]/.test(f)) { res.writeHead(403); return res.end(); }
@@ -167,7 +193,7 @@ wss.on('connection', (ws) => {
         let code = ''; try { code = fs.readFileSync(PT_FILE, 'utf8'); } catch { send(ws, { t: 'pt', ok: 0, m: 'module absent' }); break; }
         ws.pt = true; send(ws, { t: 'pt', ok: 1, code }); break;
       }
-      case 'board': { const id = COURSES[m.course] ? m.course : DEFAULT_COURSE; send(ws, { t: 'board', course: id, list: boardOf(id).slice(0, 20) }); break; }
+      case 'board': { const id = COURSES[m.course] ? m.course : DEFAULT_COURSE; send(ws, { t: 'board', course: id, solo: m.solo ? 1 : 0, list: boardOf(m.solo ? 'solo:' + id : id).slice(0, 20) }); break; }
       case 'list': send(ws, { t: 'rooms', list: [...rooms.values()].filter((x) => x.phase === 'lobby' && live(x).length < 2).slice(0, 20).map((x) => ({ code: x.code, host: live(x)[0]?.name || '?', n: live(x).length })) }); break;
       case 'create': create(ws, m); break;
       case 'join': join(ws, m); break;
@@ -206,4 +232,4 @@ const timers = [
 ];
 server.listen(PORT, DEV ? '0.0.0.0' : '127.0.0.1', () => console.log(`enchaines-mm sur :${PORT}${DEV ? ' (DEV, sert aussi les fichiers)' : ''}`));
 export const stop = () => { timers.forEach(clearInterval); for (const ws of wss.clients) ws.terminate(); wss.close(); server.close(); };
-export { rooms, server };
+export { rooms, server, soloRun };

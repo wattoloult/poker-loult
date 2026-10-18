@@ -38,6 +38,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && G.mode) togglePause();
   if (e.code === 'F3' || (e.code === 'KeyB' && e.ctrlKey)) { e.preventDefault(); G.debug = !G.debug; }
   if (e.code === 'KeyH' && G.mode) $('#help').classList.toggle('show');
+  if (e.code === 'Delete' && G.solo && G.mode) restartFromStart(); // speedrun : recommencer d'une touche
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -134,14 +135,19 @@ async function startLocal() {
   await ensureScene();
   show('loading');
   G.prep = true; setLoad(0.05, 'Construction du décor…');
-  G.mode = 'local'; G.me = null; G.demo = null; G.W = createWorld({ L: G.L, course: G.course }); G.names = ['Grimpeur 1', 'Grimpeur 2'];
+  G.mode = 'local'; G.me = null; G.demo = null; G.W = freshWorld(); G.names = G.solo ? [CFG.name || tr('Toi'), ''] : ['Grimpeur 1', 'Grimpeur 2'];
   await Scene.buildLevel(G.W); Scene.setRoster(); G.acc = 0; G.done = false; Music.playWorld(G.W.level.world);
   await prepare(G.W); G.prep = false; G.last = performance.now();
   G.pt?.onStart?.();
   show(null); $('#hud').classList.add('on'); $('#help').classList.add('show'); setTimeout(() => $('#help').classList.remove('show'), 9000);
-  $('#hud').dataset.mode = 'local';
+  $('#hud').dataset.mode = G.solo ? 'solo' : 'local';
 }
-function stopGame() { if (G.mode) setTimeout(backdrop, 0); G.mode = null; G.W = null; $('#hud').classList.remove('on'); G.paused = false; $('#pause').classList.remove('on'); }
+// SPEEDRUN SOLO : un seul grimpeur sans chaîne (W.alone : second saut, une plaque suffit) ; chaque pas d'entrée est enregistré (G.run, par séries
+// identiques) pour que le serveur rejoue la partie et la chronomètre lui-même (core/replay.js) ; temps de passage comparés au record de l'appareil.
+function freshWorld() { const W = createWorld({ L: G.L, course: G.course }); if (G.solo) { W.alone = true; G.run = []; G.splits = []; G.forceReset = 0; } return W; }
+const quant = (I) => decIn(encIn(0, I)); // entrées arrondies comme celles envoyées au serveur : le rejeu est identique au pas près
+function recStep(I) { const e = encIn(0, I), l = G.run[G.run.length - 1]; if (l && l.every((v, k) => k === 0 || v === e[k])) l[0]++; else { e[0] = 1; G.run.push(e); } }
+function stopGame() { if (G.mode) setTimeout(backdrop, 0); G.mode = null; G.solo = false; G.W = null; $('#hud').classList.remove('on'); G.paused = false; $('#pause').classList.remove('on'); }
 function togglePause(v) {
   G.paused = v ?? !G.paused; $('#pause').classList.toggle('on', G.paused);
   $('#p-restart').style.display = G.mode === 'online' && G.room && G.room.host !== G.room.you ? 'none' : '';
@@ -157,12 +163,13 @@ function toNext() {
   }, 900);
 }
 function restartFromStart() {
-  if (G.mode === 'local') { const W = createWorld({ L: G.L, course: G.course }); G.W = W; Scene.buildLevel(W).then(() => Scene.setRoster()); G.done = false; $('#end').classList.remove('on'); }
+  if (G.mode === 'local') { const W = freshWorld(); G.W = W; Scene.buildLevel(W).then(() => Scene.setRoster()); G.done = false; $('#end').classList.remove('on'); }
   else net?.send({ t: 'restart' });
   togglePause(false);
 }
 function toCheckpoint() {
-  if (G.mode === 'local') { G.W.resets++; spawnAt(G.W, G.W.cp); Scene.onEvent(G.W, { k: 'respawn' }); Snd.play('respawn'); }
+  if (G.solo) G.forceReset = 125; // solo : comme maintenir R (une entrée enregistrée, donc rejouée par le serveur)
+  else if (G.mode === 'local') { G.W.resets++; spawnAt(G.W, G.W.cp); Scene.onEvent(G.W, { k: 'respawn' }); Snd.play('respawn'); }
   else net?.send({ t: 'cp' });
   togglePause(false);
 }
@@ -184,7 +191,8 @@ function handleEvents(W, list, fromServer) {
       case 'hit': Snd.play('hit', { pan }); break;
       case 'crack': Snd.play('crack'); break;
       case 'collapse': Snd.play('collapse'); break;
-      case 'checkpoint': Snd.play('checkpoint'); { const t = Scene.S.cps?.[e.cp]?.g.position; if (t) Sfx.one('totem_ignite', t.x, t.y + 2, t.z, { v: 0.9 }); } // le totem s'embrase toast('Point de passage : ' + (LV().checkpoints[e.cp].name || 'zone ' + e.cp)); flashZone(e.cp); break;
+      case 'checkpoint': Snd.play('checkpoint'); { const t = Scene.S.cps?.[e.cp]?.g.position; if (t) Sfx.one('totem_ignite', t.x, t.y + 2, t.z, { v: 0.9 }); } // le totem s'embrase
+        if (G.solo) splitToast(W, e.cp); else toast('Point de passage : ' + (LV().checkpoints[e.cp].name || 'zone ' + e.cp)); flashZone(e.cp); break;
       case 'save': Snd.play('save'); toast('Sauvetage !', 1500); break;
       case 'respawn': Snd.play('respawn'); break;
       case 'abyss': toast('Chute dans le vide… retour au point de passage', 2200); break;
@@ -195,7 +203,7 @@ function handleEvents(W, list, fromServer) {
 function panOf(p) { const s = Scene.project(p.x, p.y + 1, p.z); return Math.max(-0.8, Math.min(0.8, (s.x / innerWidth) * 2 - 1)); }
 // pas et cliquetis de la chaîne (déduits de l'état à l'écran)
 function footsteps(W, dt) {
-  for (let k = 0; k < 2; k++) {
+  for (let k = 0; k < (W.alone ? 1 : 2); k++) { // solo : l'ombre du partenaire ne fait pas de bruit de pas
     const p = W.pl[k]; if (p.st !== ST.GROUND) { G.stepT[k] = 0; continue; }
     const v = Math.hypot(p.vx - p.gvx, p.vz - p.gvz); if (v < 0.8) continue;
     G.stepT[k] += dt * (v / 6.2) * 3.4;
@@ -215,6 +223,12 @@ function footsteps(W, dt) {
 /* ------------------------------ boucle ------------------------------ */
 function stepLocal() {
   const W = G.W;
+  if (G.solo) { // un seul grimpeur : les deux côtés du clavier et toutes les manettes le pilotent
+    const I = quant({ ...readInput(0, ['k1', 'k2'], [0, 1, 2, 3]), ...(G.forceReset > 0 ? { reset: true } : {}) }); pressed.clear();
+    if (G.forceReset > 0) G.forceReset--;
+    if (!W.done) recStep(I);
+    stepWorld(W, [I, IDLE]); handleEvents(W, W.ev, false); return;
+  }
   let inA = readInput(0, ['k1'], [0]), inB = readInput(1, ['k2'], [1]);
   if (G.pt?.inputs) [inA, inB] = G.pt.inputs(G.W, inA, inB); // mode test : IA du partenaire, échange des commandes
   pressed.clear();
@@ -287,7 +301,7 @@ function hud(W, dt) {
   for (const h of LV().hints) for (const p of W.pl) if (Math.hypot(p.x - h.x, p.y - h.y, p.z - h.z) < 4.5) hint = hintKeys(tr(h.txt));
   const resetting = Math.max(...W.resetHold);
   if (resetting > 0.05) hint = tr('Retour au point de passage… {0}', Math.ceil((1 - resetting) * 10) / 10);
-  else if (Math.max(a.y, b.y) < LV().checkpoints[W.cp].y - 10 && a.st === ST.GROUND && b.st === ST.GROUND) hint = hintKeys(tr('Tombés bien bas ? Maintenez R pour revenir au point de passage'));
+  else if (Math.max(a.y, b.y) < LV().checkpoints[W.cp].y - 10 && a.st === ST.GROUND && b.st === ST.GROUND && !G.solo) hint = hintKeys(tr('Tombés bien bas ? Maintenez R pour revenir au point de passage'));
   $('#h-hint').textContent = hint; $('#h-hint').classList.toggle('on', !!hint);
   // débogage : états, tension, longueur
   if (G.debug) $('#dbg').textContent = W.pl.map((p, k) => `J${k + 1} ${['sol', 'air', 'rebord', 'paroi', 'hisse'][p.st]} y=${p.y.toFixed(2)} v=${Math.hypot(p.vx, p.vz).toFixed(1)}/${p.vy.toFixed(1)} end=${p.sta.toFixed(2)} ${p.brace ? 'ARC' : ''} ${p.dangling ? 'PEND' : ''}`).join('\n') + `\nchaîne ${W.Lc.toFixed(2)}/${W.L} tension ${W.ten.toFixed(2)}  tick ${W.tick}  ${G.mode === 'online' ? 'rtt ' + Math.round(net.rtt) + ' ms, en attente ' + G.pend.length : ''}`;
@@ -296,30 +310,46 @@ function hud(W, dt) {
 function flashZone(cp) { const el = $('#zonecard'); const c = LV().checkpoints[cp]; el.innerHTML = `<small>${tr("Zone {0}", c.zone)}</small><b>${esc(tr(c.name))}</b>`; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); }
 /* ------------------------------ records et médailles (par parcours, sur cet appareil) ------------------------------ */
 const BEST = safe(() => JSON.parse(localStorage.getItem('ch-best')), null) || {};
+const BEST_SOLO = safe(() => JSON.parse(localStorage.getItem('ch-best-solo')), null) || {}; // speedrun solo : { idParcours: { time, falls, medal, clean, splits: [temps à chaque point de passage] } }
+function splitToast(W, cp) {
+  G.splits[cp] = W.time; const ref = BEST_SOLO[W.level.id]?.splits?.[cp], el = $('#split'), d = ref == null ? null : W.time - ref;
+  el.innerHTML = `<b>${fmt(W.time)}</b>` + (d == null ? '' : `<i class="${d <= 0 ? 'ahead' : 'behind'}">${d <= 0 ? '−' : '+'}${Math.abs(d).toFixed(1)} s</i>`);
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+}
 function medalOf(c, time) { const m = c.medals || {}; return time <= m.gold ? 'gold' : time <= m.silver ? 'silver' : time <= m.bronze ? 'bronze' : null; }
 const MEDAL = { gold: 'Or', silver: 'Argent', bronze: 'Bronze' };
 function record(W) {
-  const c = W.level, prev = BEST[c.id], medal = medalOf(c, W.time), clean = W.falls === 0;
+  const BK = G.solo ? BEST_SOLO : BEST, c = W.level, prev = BK[c.id], medal = medalOf(c, W.time), clean = W.falls === 0;
   const rec = !prev || W.time < prev.time;
-  if (rec) BEST[c.id] = { time: W.time, falls: W.falls, medal: medal || prev?.medal || null, clean: clean || !!prev?.clean };
+  if (rec) BK[c.id] = { time: W.time, falls: W.falls, medal: medal || prev?.medal || null, clean: clean || !!prev?.clean, ...(G.solo ? { splits: G.splits } : {}) };
   else { if (medal && (!prev.medal || ['gold', 'silver', 'bronze'].indexOf(medal) < ['gold', 'silver', 'bronze'].indexOf(prev.medal))) prev.medal = medal; if (clean) prev.clean = true; }
-  safe(() => localStorage.setItem('ch-best', JSON.stringify(BEST)));
+  safe(() => localStorage.setItem(G.solo ? 'ch-best-solo' : 'ch-best', JSON.stringify(BK)));
   return { medal, clean, rec };
 }
 function showEnd(W) {
   const r = record(W);
   $('#e-medal').innerHTML = (r.medal ? `<i class="${r.medal}">${tr('Médaille {0}', tr(MEDAL[r.medal]))}</i>` : '') + (r.clean ? `<i class="clean">${tr('Sans chute')}</i>` : '') + (r.rec ? `<i class="rec">${tr('Record personnel')}</i>` : '');
   $('#e-time').textContent = fmt(W.time); $('#e-falls').textContent = W.falls; $('#e-saves').textContent = W.saves; $('#e-resets').textContent = W.resets;
-  $('#e-names').textContent = G.names.join(' & ');
+  $('#e-names').textContent = G.solo ? G.names[0] : G.names.join(' & ');
+  $('#e-saves').parentElement.style.display = G.solo ? 'none' : ''; $('#e-sub').style.display = 'none';
   $('#end').classList.add('on');
   const lead = G.mode === 'local' || (G.room && G.room.host === G.room.you), nx = nextCourse(G.course, !!G.pt);
   $('#e-again').style.display = lead ? '' : 'none';
   $('#e-next').style.display = lead && nx ? '' : 'none'; if (nx) $('#e-next').textContent = tr('Franchir le portail › ') + tr(nx.name);
-  if (G.mode === 'local') renderBoard(null);
+  if (G.solo) { if (W.level.published) submitRun(W); else renderBoard(null); }
+  else if (G.mode === 'local') renderBoard(null);
+}
+// classement solo : le serveur rejoue la partie ; il faut un pseudo (demandé sur l'écran de fin s'il n'y en a pas encore)
+async function submitRun(W) {
+  if (!CFG.name) { $('#e-sub').style.display = ''; $('#e-board').innerHTML = `<li class="muted">${tr('Choisis un pseudo pour entrer au classement')}</li>`; return; }
+  $('#e-board').innerHTML = `<li class="muted">${tr('Le serveur vérifie ta montée…')}</li>`;
+  let r = null; try { r = await (await fetch(new URL('/enchaines-ws/solo', location.origin), { method: 'POST', body: JSON.stringify({ course: W.level.id, name: CFG.name, run: G.run }) })).json(); } catch { }
+  if (!r?.ok) { $('#e-board').innerHTML = `<li class="muted">${tr('Montée non validée par le serveur')}${r?.why ? ' (' + esc(tr(r.why)) + ')' : ''}</li>`; return; }
+  renderBoard(r.board, r.rank < 10 ? r.rank : null);
 }
 function renderBoard(list, mine) {
   const el = $('#e-board');
-  if (!list) { el.innerHTML = `<li class="muted">${tr('Le classement est réservé aux parties en ligne.')}</li>`; return; }
+  if (!list) { el.innerHTML = `<li class="muted">${tr(G.solo ? 'Parcours en test : pas de classement.' : 'Le classement est réservé aux parties en ligne.')}</li>`; return; }
   el.innerHTML = list.length ? list.map((r, i) => `<li class="${mine === i ? 'me' : ''}"><span>${i + 1}</span><b>${esc(r.names.join(' & '))}</b><em>${fmt(r.time)}</em><small>${tr('{0} chutes', r.falls)}</small></li>`).join('') : `<li class="muted">${tr('Personne n\'a encore atteint le sommet.')}</li>`;
 }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -339,7 +369,7 @@ function getNet() {
   net.on('chat', (m) => chatAdd(m));
   net.on('rtc', (m) => Voice.onSignal(m.d));
   net.on('rooms', (m) => renderRooms(m.list));
-  net.on('hi', () => { if (G.pt?.key) net.send({ t: 'pt', key: G.pt.key }); if (document.body.dataset.screen === 'board') net.send({ t: 'board', course: $('#b-course').value }); if (document.body.dataset.screen === 'online') net.send({ t: 'list' }); });
+  net.on('hi', () => { if (G.pt?.key) net.send({ t: 'pt', key: G.pt.key }); if (document.body.dataset.screen === 'board') askBoard(); if (document.body.dataset.screen === 'online') net.send({ t: 'list' }); });
   net.on('err', (m) => { if (net.auto) { net.auto = false; net.setRoom(null); G.room = null; return; } toast(m.m); }); // reprise automatique sur un salon disparu : silence
   net.on('left', () => { net.setRoom(null); G.room = null; Voice.stop(); chatShow(false); stopGame(); show('online'); });
   net.on('start', async (m) => {
@@ -368,7 +398,7 @@ function getNet() {
     if (m.e?.length) handleEvents(W, m.e, true);
   });
   net.on('end', (m) => { renderBoard(m.board, m.rank); });
-  net.on('board', (m) => { $('#b-list').innerHTML = m.list.length ? m.list.map((r, i) => `<li><span>${i + 1}</span><b>${esc(r.names.join(' & '))}</b><em>${fmt(r.time)}</em><small>${tr("{0} chutes", r.falls)}</small></li>`).join('') : `<li class="muted">${tr('Personne n\'a encore atteint le sommet.')}</li>`; });
+  net.on('board', (m) => { if ((m.solo || 0) !== +$('#b-solo').checked) return; $('#b-list').innerHTML = m.list.length ? m.list.map((r, i) => `<li><span>${i + 1}</span><b>${esc(r.names.join(' & '))}</b><em>${fmt(r.time)}</em><small>${tr("{0} chutes", r.falls)}</small></li>`).join('') : `<li class="muted">${tr('Personne n\'a encore atteint le sommet.')}</li>`; });
   return net;
 }
 /* ------------------------------ chat texte et vocal du salon ------------------------------ */
@@ -409,14 +439,14 @@ function renderRooms(list) {
 const WCOL = { medieval: '#b0743c', jungle: '#3f8f4a', japan: '#c4486a', deep: '#3a4a7a', sky: '#3d8fe0', mech: '#8a6a3a', ice: '#5aa0d0', greek: '#2fa0b0', summit: '#6a5ab0' };
 const visible = () => courseList(!!G.pt); // en playtest : tous les parcours, sinon seulement ceux publiés
 function showCourses(mode) {
-  G.pick = mode; $('#c-mode').textContent = tr(mode === 'local' ? '· à deux sur ce clavier' : '· pour ton salon');
+  G.pick = mode; $('#c-mode').textContent = tr(mode === 'local' ? '· à deux sur ce clavier' : mode === 'solo' ? '· speedrun solo' : '· pour ton salon');
   const list = visible();
   // la tour des mondes : un étage par monde, le sommet en haut (column-reverse), une plaque par parcours
   let n = 0; // numéro de la plaque = rang du parcours (un monde peut en avoir plusieurs : Tour de Loult et Remparts sont tous deux à l'étage 1)
   $('#c-list').innerHTML = WORLDS.map((w, i) => {
     const cs = list.filter((c) => c.world === w.id);
     if (!cs.length) return `<div class="floor none" style="--wc:${WCOL[w.id]}"><span class="lvl">${++n}</span><span class="w"><small>${tr('Étage {0} · {1}', i + 1, esc(tr(w.name)))}</small><b>${tr('Bientôt…')}</b><i>${esc(tr(w.blurb))}</i></span></div>`;
-    return cs.map((c) => { const b = BEST[c.id], d = c.diff || 1;
+    return cs.map((c) => { const b = (mode === 'solo' ? BEST_SOLO : BEST)[c.id], d = c.diff || 1;
       return `<button class="floor${c.id === G.course ? ' sel' : ''}" data-course="${c.id}" style="--wc:${WCOL[w.id]}"><span class="lvl">${++n}</span>
         <span class="w"><small>${tr('Étage {0} · {1}', i + 1, esc(tr(w.name)))}</small><b>${esc(tr(c.name))}${c.published ? '' : '<span class="tag-pt">test</span>'}</b><i>${esc(tr(c.short || w.blurb))}</i></span>
         <span class="side"><span class="notch">${[1, 2, 3, 4, 5].map((k) => `<u class="${k <= d ? 'on' : ''}"></u>`).join('')}</span>
@@ -429,19 +459,22 @@ function fillCourseSelects() {
   $('#r-course').innerHTML = opts; $('#b-course').innerHTML = courseList(true).filter((c) => c.published || G.pt).map((c) => `<option value="${c.id}">${esc(tr(c.name))}</option>`).join('');
 }
 $('#r-course').addEventListener('change', (e) => net?.send({ t: 'cfg', course: e.target.value }));
-$('#b-course').addEventListener('change', (e) => { $('#b-list').innerHTML = `<li class="muted">${tr('Chargement…')}</li>`; getNet().send({ t: 'board', course: e.target.value }); });
+const askBoard = () => { $('#b-list').innerHTML = `<li class="muted">${tr('Chargement…')}</li>`; getNet().send({ t: 'board', course: $('#b-course').value, solo: $('#b-solo').checked ? 1 : 0 }); };
+$('#b-course').addEventListener('change', askBoard); $('#b-solo').addEventListener('change', askBoard);
 
 /* ------------------------------ boutons ------------------------------ */
 document.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return; Snd.unlock(); Snd.play('ui');
   const id = b.id;
   if (id === 'm-local') showCourses('local');
-  else if (b.dataset.course) { G.course = b.dataset.course; safe(() => localStorage.setItem('ch-course', G.course)); if (G.pick === 'local') startLocal(); }
+  else if (id === 'm-solo') showCourses('solo');
+  else if (b.dataset.course) { G.course = b.dataset.course; safe(() => localStorage.setItem('ch-course', G.course)); if (G.pick === 'local' || G.pick === 'solo') { G.solo = G.pick === 'solo'; startLocal(); } }
+  else if (id === 'e-send') { const n = $('#e-name').value.replace(/[<>]/g, '').trim().slice(0, 16); if (!n) return; CFG.name = n; saveCfg(); G.names[0] = n; $('#e-names').textContent = n; $('#e-sub').style.display = 'none'; submitRun(G.W); }
   else if (id === 'm-online') { show('online'); $('#o-name').value = CFG.name; getNet().send({ t: 'list' }); }
   else if (id === 'm-lang') setLang(LANG === 'en' ? 'fr' : 'en');
   else if (id === 'm-help' || id === 'p-help') $('#help').classList.add('show');
   else if (id === 'help-close') $('#help').classList.remove('show');
-  else if (id === 'm-board') { fillCourseSelects(); show('board'); $('#b-course').value = G.course; $('#b-list').innerHTML = '<li class="muted">Chargement…</li>'; getNet().send({ t: 'board', course: $('#b-course').value }); }
+  else if (id === 'm-board') { fillCourseSelects(); show('board'); $('#b-course').value = G.course; askBoard(); }
   else if (id === 'back' || b.classList.contains('back')) show('home');
   else if (id === 'o-create') { if (!nameOk()) return; getNet().send({ t: 'create', L: G.L, course: G.course }); }
   else if (id === 'o-join') { if (!nameOk()) return; const c = $('#o-code').value.trim().toUpperCase(); if (c) getNet().send({ t: 'join', code: c }); }
