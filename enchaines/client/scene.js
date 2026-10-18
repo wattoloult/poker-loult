@@ -448,7 +448,13 @@ export const camYaw = () => CAM.yaw;
 // direction des commandes d'un grimpeur : l'angle VISÉ par le cadrage (pas l'angle en cours de rotation), et FIGÉ tant qu'il n'est pas
 // au sol — un saut part droit et reste droit même si la caméra tourne pendant le vol (sinon « tout droit » dérive en diagonale)
 CAM.ctrl = [0, 0];
-export function controlYaw(k, p) { if (!p || p.st === 0) CAM.ctrl[k] = (CAM.nomYaw ?? CAM.yaw); return CAM.ctrl[k]; }
+// … et figé aussi tant qu'on TIENT une direction : la caméra qui bascule seule (zone, retour du cadrage) ne dévie plus une course « tout droit »
+// (on suit la caméra si le joueur la tourne lui-même) ; à moins de 0,3 rad du cadrage de la zone, on prend l'axe exact (2,2 m de pont = aucune dérive permise).
+export function controlYaw(k, p, held) {
+  const user = performance.now() - (CAM.lastUser || 0) < 300;
+  if ((!p || p.st === 0) && (!held || user)) { let y = CAM.nomYaw ?? CAM.yaw; const b = CAM.baseYaw ?? 0; if (Math.abs(Math.atan2(Math.sin(y - b), Math.cos(y - b))) < 0.3) y = b; CAM.ctrl[k] = y; }
+  return CAM.ctrl[k];
+}
 function camera(W, rp, me, dt) {
   const [a, b] = rp, wMe = me == null ? 0.5 : me === 0 ? 0.68 : 0.32;
   const sep = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -468,7 +474,7 @@ function camera(W, rp, me, dt) {
   CAM.seen = true;
   const zc = CAM.zone, md = MODES[zc?.mode || 'side'] || MODES.side; CAM.mode = zc?.mode || 'side';
   const k = Math.min(1, dt * 0.9);
-  CAM.nomYaw = (zc?.yaw ?? md.yaw) + CAM.uyaw;
+  CAM.baseYaw = zc?.yaw ?? md.yaw; CAM.nomYaw = CAM.baseYaw + CAM.uyaw;
   CAM.zyaw += ((zc?.yaw ?? md.yaw) - CAM.zyaw) * k; CAM.zpitch += ((zc?.pitch ?? md.pitch) - CAM.zpitch) * k; CAM.zdist += ((md.dist + (zc?.dist || 0) * (zc?.mode === 'far' ? 1 : 0)) - CAM.zdist) * k;
   if (performance.now() - (CAM.lastUser || 0) > 4000) { CAM.uyaw *= 1 - dt * 0.4; CAM.upitch *= 1 - dt * 0.4; } // le cadrage revient au réglage de la zone
   CAM.yaw = CAM.zyaw + CAM.uyaw; CAM.pitch = Math.max(-0.15, Math.min(0.85, CAM.zpitch + CAM.upitch));

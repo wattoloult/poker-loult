@@ -72,7 +72,7 @@ function readInput(k, schemes, pads) {
   if (jp) slot[k].jc++; if (dp) slot[k].dc++; if (up) slot[k].uc++;
   const l = Math.hypot(ax, ay); if (l > 1) { ax /= l; ay /= l; }
   // déplacement relatif à la caméra
-  const yaw = Scene.controlYaw(k, G.W?.pl[G.mode === 'online' ? G.me ?? 0 : k]), c = Math.cos(yaw), s = Math.sin(yaw);
+  const yaw = Scene.controlYaw(k, G.W?.pl[G.mode === 'online' ? G.me ?? 0 : k], l > 0.2), c = Math.cos(yaw), s = Math.sin(yaw);
   return { mx: ax * c - ay * s, mz: -ax * s - ay * c, jump, brace, pull, reset, jc: slot[k].jc, dc: slot[k].dc, uc: slot[k].uc };
 }
 // souris : glisser = tourner la caméra, molette = recul
