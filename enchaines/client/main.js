@@ -88,6 +88,9 @@ addEventListener('pointerdown', (e) => {
     const k = 'Mouse' + e.button; if (!keys.has(k)) pressed.add(k); keys.add(k); }
 });
 addEventListener('mousedown', (e) => { if (e.button > 0 && (e.target.id === 'gl' || G.capturing)) e.preventDefault(); }); // clic molette / boutons latéraux : pas de défilement ni de navigation
+// boutons latéraux de la souris (précédent / suivant) : le navigateur navigue au RELÂCHEMENT (et à auxclick), pas seulement à l'appui. On bloque les quatre événements
+// tant qu'on joue, dans le jeu ou pendant le réglage d'une touche ; ils restent utilisables comme actions (« Souris 4 / 5 » dans les réglages).
+for (const ev of ['mousedown', 'mouseup', 'auxclick', 'click']) addEventListener(ev, (e) => { if ((e.button === 3 || e.button === 4) && (e.target.id === 'gl' || G.mode || G.capturing)) { e.preventDefault(); e.stopPropagation(); } }, true);
 addEventListener('pointerup', (e) => { keys.delete('Mouse' + e.button); if (e.button === 1 && PW.down) pingUp(e); });
 addEventListener('pointercancel', () => { for (let b = 0; b < 5; b++) keys.delete('Mouse' + b); });
 addEventListener('pointermove', (e) => { if (PW.open) wheelHover(e); if (document.pointerLockElement) { Scene.camInput(-e.movementX * 0.0032 * CFG.sens, e.movementY * 0.0022 * (CFG.invert ? -1 : 1), 0); return; } if (!drag) return; Scene.camInput(-(e.clientX - drag.x) * 0.006 * CFG.sens, (e.clientY - drag.y) * 0.004 * (CFG.invert ? -1 : 1), 0); drag = { x: e.clientX, y: e.clientY }; });
