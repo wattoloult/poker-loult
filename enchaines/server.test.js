@@ -83,6 +83,10 @@ test('speedrun solo : rejeu identique au jeu, arrivée chronométrée, partie in
   const f = await soloRun({ course: '__t', name: 'Rapide', run }, replayRun); assert.equal(f.rank, 0, 'le plus rapide passe devant');
   const again = await soloRun({ course: '__t', name: 'rapide', run: slow }, replayRun); assert.equal(again.kept, 1, 'un temps moins bon ne remplace pas le record du joueur');
   assert.deepEqual(again.board.map((x) => x.names[0]), ['Rapide', 'Lent']);
+  // top 5 : au-delà, ni classement ni replay gardé
+  let last = null; for (let i = 1; i <= 5; i++) last = await soloRun({ course: '__t', name: 'S' + i, run: [[60, 0, 1, 0, 0, 0, 0], [60, 0, -1, 0, 0, 0, 0], ...Array.from({ length: i }, () => [[40, 0, 1, 0, 0, 0, 0], [40, 0, -1, 0, 0, 0, 0]]).flat(), ...run] }, replayRun); // i détours de plus = i fois plus lent
+  assert.equal(last.board.length, 5, 'top 5 seulement'); assert.equal(last.rank, -1, 'le plus lent est hors du top 5'); assert.deepEqual(last.board.map((x) => x.names[0]), ['Rapide', 'Lent', 'S1', 'S2', 'S3']);
+  const again2 = await soloRun({ course: '__t', name: 'rapide', run: slow }, replayRun); assert.equal(again2.board[0].names[0], 'Rapide');
   // replay : chaque record garde sa partie, rejouable à l'identique ; l'ancien replay d'un joueur qui s'améliore disparaît
   const rid = again.board[0].rid; assert.match(rid, /^[0-9a-f]{16}$/);
   const { server: srv } = await import('./server.js'); if (!srv.listening) srv.listen(18807); await wait(100);

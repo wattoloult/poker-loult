@@ -10,7 +10,7 @@ export const EN = {
   "Commandes": "Controls", "Records": "Records", "La tour des mondes": "The Tower of Worlds", "Retour": "Back",
   "Jouer en ligne": "Play online", "Ton pseudo": "Your nickname", "Pseudo": "Nickname", "Créer un salon": "Create a room", "Rejoindre": "Join",
   "Salons ouverts": "Open rooms", "Aucun salon ouvert pour l'instant.": "No open rooms right now.", "Salon": "Room", "Copier le lien": "Copy link",
-  "Parcours": "Course", "Lancer l'ascension": "Start the climb", "Quitter le salon": "Leave room", "Meilleurs temps": "Best times",
+  "Parcours": "Course", "Lancer l'ascension": "Start the climb", "Quitter le salon": "Leave room", "Top 5 · meilleurs temps": "Top 5 · best times",
   "On s'encorde…": "Roping up…", "1. Le Pied de la tour": "1. The Foot of the Tower", "Chutes": "Falls", "Sauvetages": "Rescues", "Point de passage": "Checkpoint",
   "Entrée pour écrire à ton partenaire": "Press Enter to write to your partner",
   "Grimpeur 1 (ou en ligne)": "Climber 1 (or online)", "se déplacer": "move", "Espace": "Space", "sauter (maintenir = plus haut)": "jump (hold = higher)",

@@ -147,9 +147,9 @@ function record(r) { // classement par meilleur temps (le serveur a chronométr�
     try { fs.writeFileSync(path.join(REPLAYS, e.rid + '.json'), JSON.stringify({ coop: 1, course: r.cfg.course, L: r.cfg.L, names, time: e.time, falls: e.falls, saves: e.saves, date: e.date, v: SIM_V, run: r.run })); } catch (err) { delete e.rid; console.error('replay non écrit', err.message); }
   }
   let board = boardOf(r.cfg.course); board.push(e); board.sort((a, b) => a.time - b.time);
-  for (const x of board.slice(50)) dropReplay(x); boards[r.cfg.course] = board = board.slice(0, 50);
+  for (const x of board.slice(TOP)) dropReplay(x); boards[r.cfg.course] = board = board.slice(0, TOP);
   try { fs.writeFileSync(BEST, JSON.stringify(boards)); } catch (err) { console.error('classement non écrit', err.message); }
-  cast(r, { t: 'end', course: r.cfg.course, board: board.slice(0, 10), rank: board.indexOf(e) < 10 ? board.indexOf(e) : null });
+  cast(r, { t: 'end', course: r.cfg.course, board, rank: board.indexOf(e) >= 0 ? board.indexOf(e) : null });
 }
 
 /* ------------------------------ speedrun solo : rejeu vérifié, un seul temps (le meilleur) par pseudo ------------------------------ */
@@ -162,20 +162,23 @@ function replay(course, run) {
 // physique. SIM_V = empreinte des fichiers de physique : un replay enregistré avec une autre version peut diverger (le client le signale).
 const REPLAYS = path.join(DATA, 'replays'); fs.mkdirSync(REPLAYS, { recursive: true });
 const SIM_V = crypto.createHash('md5').update(['core/sim.js', 'core/kit.js', 'core/worlds.js', ...['courses', 'biomes'].flatMap((d) => fs.readdirSync(path.join(ROOT, 'core', d)).filter((f) => f.endsWith('.js')).sort().map((f) => `core/${d}/${f}`))].map((f) => fs.readFileSync(path.join(ROOT, f))).join('|')).digest('hex').slice(0, 10);
+// TOP 5 par parcours (à deux et solo séparément) : seuls ces cinq records gardent leur replay (au-delà, on libère le disque)
+const TOP = 5;
 const dropReplay = (e) => { if (e?.rid) fs.rm(path.join(REPLAYS, e.rid + '.json'), { force: true }, () => {}); };
+for (const k of Object.keys(boards)) { for (const x of boards[k].slice(TOP)) dropReplay(x); boards[k] = boards[k].slice(0, TOP); }
 async function soloRun(m, rp = replay) { // rp : rejoueur (tests : en direct, sans worker)
   if (!m || !COURSES[m.course]?.published || !Array.isArray(m.run)) return { ok: false, why: 'parcours' };
   if (jobs.size > 8) return { ok: false, why: 'serveur occupé, réessaie' };
   const r = await rp(m.course, m.run); if (!r.ok) return r;
   const name = clean(m.name, 16) || 'Grimpeur', key = 'solo:' + m.course, e = { names: [name], time: r.time, falls: r.falls, date: new Date().toISOString().slice(0, 10) };
   let board = boardOf(key); const old = board.find((x) => x.names[0].toLowerCase() === name.toLowerCase());
-  if (old && old.time <= e.time) return { ok: true, time: r.time, rank: board.indexOf(old), board: board.slice(0, 10), kept: 1 };
+  if (old && old.time <= e.time) return { ok: true, time: r.time, rank: board.indexOf(old), board: board.slice(0, TOP), kept: 1 };
   e.rid = crypto.randomBytes(8).toString('hex'); e.v = SIM_V;
   try { fs.writeFileSync(path.join(REPLAYS, e.rid + '.json'), JSON.stringify({ course: m.course, name, time: r.time, falls: r.falls, date: e.date, v: SIM_V, run: m.run })); } catch (err) { delete e.rid; console.error('replay non écrit', err.message); }
   dropReplay(old); board = board.filter((x) => x !== old); board.push(e); board.sort((a, b) => a.time - b.time);
-  for (const x of board.slice(50)) dropReplay(x); boards[key] = board = board.slice(0, 50);
+  for (const x of board.slice(TOP)) dropReplay(x); boards[key] = board = board.slice(0, TOP);
   try { fs.writeFileSync(BEST, JSON.stringify(boards)); } catch (err) { console.error('classement non écrit', err.message); }
-  return { ok: true, time: r.time, rank: board.indexOf(e), board: board.slice(0, 10) };
+  return { ok: true, time: r.time, rank: board.indexOf(e), board }; // rank -1 : hors du top
 }
 
 /* ------------------------------ HTTP (dev : fichiers ; prod : classement seul, le reste est servi par le hub) ------------------------------ */
@@ -231,7 +234,7 @@ wss.on('connection', (ws) => {
         let code = ''; try { code = fs.readFileSync(PT_FILE, 'utf8'); } catch { send(ws, { t: 'pt', ok: 0, m: 'module absent' }); break; }
         ws.pt = true; send(ws, { t: 'pt', ok: 1, code }); break;
       }
-      case 'board': { const id = COURSES[m.course] ? m.course : DEFAULT_COURSE; send(ws, { t: 'board', course: id, solo: m.solo ? 1 : 0, simV: SIM_V, list: boardOf(m.solo ? 'solo:' + id : id).slice(0, 20) }); break; }
+      case 'board': { const id = COURSES[m.course] ? m.course : DEFAULT_COURSE; send(ws, { t: 'board', course: id, solo: m.solo ? 1 : 0, simV: SIM_V, list: boardOf(m.solo ? 'solo:' + id : id).slice(0, TOP) }); break; }
       case 'list': send(ws, { t: 'rooms', list: [...rooms.values()].filter((x) => x.phase === 'lobby' && live(x).length < 2).slice(0, 20).map((x) => ({ code: x.code, host: live(x)[0]?.name || '?', n: live(x).length })) }); break;
       case 'create': create(ws, m); break;
       case 'join': join(ws, m); break;

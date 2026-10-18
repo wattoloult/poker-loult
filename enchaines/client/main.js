@@ -409,7 +409,7 @@ async function submitRun(W) {
   $('#e-board').innerHTML = `<li class="muted">${tr('Le serveur vérifie ta montée…')}</li>`;
   let r = null; try { r = await (await fetch(new URL('/enchaines-ws/solo', location.origin), { method: 'POST', body: JSON.stringify({ course: W.level.id, name: CFG.name, run: G.run }) })).json(); } catch { }
   if (!r?.ok) { $('#e-board').innerHTML = `<li class="muted">${tr('Montée non validée par le serveur')}${r?.why ? ' (' + esc(tr(r.why)) + ')' : ''}</li>`; return; }
-  renderBoard(r.board, r.rank < 10 ? r.rank : null);
+  renderBoard(r.board, r.rank >= 0 && r.rank < 5 ? r.rank : null);
 }
 function renderBoard(list, mine) {
   const el = $('#e-board');
