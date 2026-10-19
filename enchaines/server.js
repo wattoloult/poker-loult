@@ -32,7 +32,7 @@ function iceServers(id) {
   return list;
 }
 const VOTE_MS = +process.env.ENCH_VOTE_MS || 10000; // mode libre : durée du vote de la carte suivante
-const MAXP = { coop: 2, free: 4 }; // sièges par mode : coop = deux grimpeurs reliés par la chaîne ; free = « mode libre », jusqu'à 4 grimpeurs, SANS chaîne, premier au sommet
+const MAXP = { coop: 2, free: 4, crazy: 4 }; // sièges par mode : coop = deux grimpeurs reliés par la chaîne ; free = « mode libre », jusqu'à 4 grimpeurs, SANS chaîne, premier au sommet
 const SNAP_EVERY = 4, GRACE = 60, MAX_Q = 36, LENS = [4.5, 6.5, 9];
 fs.mkdirSync(DATA, { recursive: true });
 // classement par parcours : { idParcours: [ ... ] } (ancien format = liste de la Tour)
@@ -41,7 +41,9 @@ const boardOf = (id) => (boards[id] ||= []);
 
 const rooms = new Map();
 // parcours autorisé : publié, ou n'importe lequel pour un client authentifié en playtest (clé serveur)
-const okCourse = (ws, id) => (COURSES[id] && (COURSES[id].published || ws.pt) ? id : DEFAULT_COURSE);
+const okCourse = (ws, id, mode = 'coop') => (mode === 'crazy' ? (COURSES[id]?.crazy ? id : 'depot') : COURSES[id] && !COURSES[id].crazy && (COURSES[id].published || ws.pt) ? id : DEFAULT_COURSE);
+// modes sans chaîne (libre, crazy) : jusqu'à 4 joueurs, chacun pour soi, sièges contigus
+const solo = (r) => r.cfg.mode === 'free' || r.cfg.mode === 'crazy';
 let nextId = 1;
 const clean = (s, n) => String(s ?? '').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, n);
 const send = (ws, o) => { if (ws && ws.readyState === 1) ws.send(typeof o === 'string' ? o : JSON.stringify(o)); };
@@ -50,8 +52,8 @@ const live = (r) => r.people.filter((p) => !p.gone);
 function newCode() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; for (;;) { let c = ''; for (let i = 0; i < 4; i++) c += A[crypto.randomInt(A.length)]; if (!rooms.has(c)) return c; } }
 const num = (v, a, b) => (Number.isFinite(+v) ? Math.max(a, Math.min(b, +v)) : 0);
 const cnt = (v) => (Number.isInteger(v) && v >= 0 && v < 1e9 ? v : 0);
-const decIn = (a) => ({ mx: num(a[1], -1, 1), mz: num(a[2], -1, 1), jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), punch: !!(a[3] & 32), kick: !!(a[3] & 64), slide: !!(a[3] & 128), jc: cnt(a[4]), dc: cnt(a[5]), uc: cnt(a[6]) });
-const encIn = (I) => (I ? [0, I.mx, I.mz, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0) | (I.cup ? 16 : 0) | (I.punch ? 32 : 0) | (I.kick ? 64 : 0) | (I.slide ? 128 : 0), I.jc, I.dc, I.uc || 0] : null);
+const decIn = (a) => ({ mx: num(a[1], -1, 1), mz: num(a[2], -1, 1), jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), punch: !!(a[3] & 32), kick: !!(a[3] & 64), slide: !!(a[3] & 128), fire: !!(a[3] & 256), scope: !!(a[3] & 512), reload: !!(a[3] & 1024), ay: num(a[7], -64, 64), ap: num(a[8], -1.5, 1.5), jc: cnt(a[4]), dc: cnt(a[5]), uc: cnt(a[6]) });
+const encIn = (I) => (I ? [0, I.mx, I.mz, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0) | (I.cup ? 16 : 0) | (I.punch ? 32 : 0) | (I.kick ? 64 : 0) | (I.slide ? 128 : 0) | (I.fire ? 256 : 0) | (I.scope ? 512 : 0) | (I.reload ? 1024 : 0), I.jc, I.dc, I.uc || 0, I.ay || 0, I.ap || 0] : null);
 
 /* ------------------------------ salons ------------------------------ */
 function roomView(r, you) {
@@ -60,11 +62,10 @@ function roomView(r, you) {
 }
 function pushRoom(r) { for (const p of r.people) send(p.ws, roomView(r, p.seat)); for (const ws of r.spect) send(ws, roomView(r, null)); }
 function seatFree(r) { const used = new Set(live(r).map((p) => p.seat)); for (let s = 0; s < r.max; s++) if (!used.has(s)) return s; }
-const canStart = (r) => (r.cfg.mode === 'free' ? live(r).length >= 2 && live(r).length <= 4 : live(r).length === 2);
+const canStart = (r) => (solo(r) ? live(r).length >= 2 && live(r).length <= 4 : live(r).length === 2);
 function create(ws, m) {
   leave(ws);
-  const L = LENS.includes(+m.L) ? +m.L : 6.5, course = okCourse(ws, m.course);
-  const mode = m.mode === 'free' ? 'free' : 'coop';
+  const L = LENS.includes(+m.L) ? +m.L : 6.5, mode = m.mode === 'free' || m.mode === 'crazy' ? m.mode : 'coop', course = okCourse(ws, m.course, mode);
   const r = { code: newCode(), phase: 'lobby', mode, max: MAXP[mode], cfg: { L, course, mode, max: MAXP[mode] }, people: [], spect: new Set(), host: ws.id, empty: 0, W: null, acc: 0, k: 0, ev: [] };
   rooms.set(r.code, r); seatIn(r, ws); pushRoom(r);
 }
@@ -96,22 +97,22 @@ function leave(ws) {
   p.gone = true; p.ws = null;
   r.people = r.people.filter((x) => !x.gone);
   if (r.host === ws.id) r.host = r.people[0]?.sid ?? null;
-  if (r.phase === 'play' && r.people.length < (r.cfg.mode === 'free' ? 1 : 2)) { r.phase = 'lobby'; r.W = null; cast(r, { t: 'room', ...roomView(r, null), phase: 'lobby' }); }
+  if (r.phase === 'play' && r.people.length < (solo(r) ? 1 : 2)) { r.phase = 'lobby'; r.W = null; cast(r, { t: 'room', ...roomView(r, null), phase: 'lobby' }); }
   if (!r.people.length && !r.spect.size) return closeRoom(r);
   pushRoom(r); send(ws, { t: 'left' });
 }
 function closeRoom(r) { rooms.delete(r.code); for (const ws of r.spect) ws.room = null; }
 function startMsg(r, seat) { return { t: 'start', seat, mode: r.cfg.mode, course: r.cfg.course, names: r.W.pl.map((_, s) => r.people.find((p) => p.seat === s)?.name || 'Grimpeur ' + (s + 1)), L: r.cfg.L, s: snapWorld(r.W) }; }
 function startGame(r) {
-  const free = r.cfg.mode === 'free'; r.firstT = null; r.vote = null;
+  const free = solo(r), crazy = r.cfg.mode === 'crazy'; r.firstT = null; r.vote = null;
   if (free) live(r).forEach((p, i) => { p.seat = i; }); // sièges contigus 0..n-1 (un grimpeur de la sim par siège)
-  r.W = createWorld({ L: r.cfg.L, course: r.cfg.course, free, players: free ? live(r).length : undefined }); r.phase = 'play'; r.acc = 0; r.k = 0; r.ev = []; r.saved = false; r.run = free ? null : []; // r.run : les entrées des deux grimpeurs pas à pas (replay des records)
+  r.W = createWorld({ L: r.cfg.L, course: r.cfg.course, free: free && !crazy, crazy, players: free ? live(r).length : undefined }); r.phase = 'play'; r.acc = 0; r.k = 0; r.ev = []; r.saved = false; r.run = free ? null : []; // r.run : les entrées des deux grimpeurs pas à pas (replay des records)
   for (const p of r.people) { p.q = []; p.last = null; p.ack = 0; p.fresh = true; }
   for (const p of r.people) send(p.ws, startMsg(r, p.seat));
   for (const ws of r.spect) send(ws, startMsg(r, null));
   pushRoom(r);
 }
-const KEEP = new Set(['lost', 'punch', 'tackle', 'down', 'checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
+const KEEP = new Set(['hit', 'kill', 'spawn', 'shot', 'bolt', 'casing', 'reload', 'dry', 'lost', 'punch', 'tackle', 'down', 'checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
 function update(r, dt) {
   if (r.phase !== 'play' || !r.W) return;
   r.acc += dt; let n = 0;
@@ -123,7 +124,7 @@ function update(r, dt) {
       if (p.q.length > MAX_Q) p.q.splice(0, p.q.length - 8);
       const e = p.q.shift();
       if (e) { p.last = decIn(e); p.ack = e[0]; }
-      if (p.offline) p.last = { ...(p.last || IDLE), mx: 0, mz: 0, jump: false };
+      if (p.offline) p.last = { ...(p.last || IDLE), mx: 0, mz: 0, jump: false, fire: false, scope: false, reload: false };
       if (p.rstT > 0) { p.rstT -= DT; p.last = { ...(p.last || IDLE), reset: true }; } // retour au point de passage demandé depuis le menu (mode libre)
       if (p.seat < ins.length) ins[p.seat] = p.last || IDLE;
     }
@@ -131,7 +132,7 @@ function update(r, dt) {
     for (const e of r.W.ev) if (KEEP.has(e.k)) r.ev.push(e);
     if (++r.k % SNAP_EVERY === 0) snap(r, ins);
     if (r.cfg.mode === 'free' && !r.W.done && r.W.rank.length) { if (r.firstT == null) r.firstT = r.W.time; else if (r.W.time - r.firstT > 120) r.W.done = true; } // 2 minutes de grâce après le premier arrivé
-    if (r.W.done && !r.saved) { r.saved = true; if (r.cfg.mode === 'free') endFree(r); else record(r); }
+    if (r.W.done && !r.saved) { r.saved = true; if (r.cfg.mode === 'crazy') endCrazy(r); else if (r.cfg.mode === 'free') endFree(r); else record(r); }
   }
 }
 // enregistre le pas : séries d'entrées identiques regroupées (voir core/coop-run.js) ; au-delà de 300 000 séries on abandonne l'enregistrement
@@ -148,6 +149,11 @@ function snap(r, ins) {
   for (const p of r.people) send(p.ws, msg); for (const ws of r.spect) send(ws, msg);
 }
 // mode libre : classement de la course (pas de record enregistré)
+function endCrazy(r) {
+  const rank = r.W.rank.map((seat) => ({ seat, name: r.people.find((p) => p.seat === seat)?.name || 'Tireur ' + (seat + 1), kills: r.W.pl[seat].kills, deaths: r.W.pl[seat].deaths }));
+  cast(r, { t: 'end', free: 1, crazy: 1, course: r.cfg.course, rank });
+  startVote(r);
+}
 function endFree(r) {
   const rank = r.W.rank.map((seat) => ({ seat, name: r.people.find((p) => p.seat === seat)?.name || 'Grimpeur ' + (seat + 1), time: Math.round((r.W.pl[seat]?.finishT || 0) * 100) / 100 }));
   cast(r, { t: 'end', free: 1, course: r.cfg.course, rank });
@@ -156,7 +162,7 @@ function endFree(r) {
 // VOTE de la carte suivante (mode libre) : toutes les cartes publiées, 10 s ; la plus votée gagne ; égalité ou aucun vote : tirage au sort parmi les ex æquo (ou toutes)
 const voteMsg = (r, done = null) => ({ t: 'vote', list: r.vote.list, votes: r.vote.votes, left: Math.max(0, r.vote.endsAt - Date.now()), done });
 function startVote(r) {
-  r.vote = { list: Object.keys(COURSES).filter((id) => COURSES[id].published), votes: {}, endsAt: Date.now() + VOTE_MS };
+  r.vote = { list: Object.keys(COURSES).filter((id) => COURSES[id].published && !!COURSES[id].crazy === (r.cfg.mode === 'crazy')), votes: {}, endsAt: Date.now() + VOTE_MS };
   cast(r, voteMsg(r));
 }
 function resolveVote(r) {
@@ -269,15 +275,15 @@ wss.on('connection', (ws) => {
       case 'create': create(ws, m); break;
       case 'join': join(ws, m); break;
       case 'leave': leave(ws); break;
-      case 'cfg': if (r && r.host === ws.id && r.phase === 'lobby') { if (LENS.includes(+m.L)) r.cfg.L = +m.L; if (m.course) r.cfg.course = okCourse(ws, m.course); if ((m.mode === 'free' || m.mode === 'coop') && live(r).length <= MAXP[m.mode]) { r.cfg.mode = m.mode; r.cfg.max = r.max = MAXP[m.mode]; } pushRoom(r); } break;
+      case 'cfg': if (r && r.host === ws.id && r.phase === 'lobby') { if (LENS.includes(+m.L)) r.cfg.L = +m.L; if (m.course) r.cfg.course = okCourse(ws, m.course, r.cfg.mode); if ((m.mode === 'free' || m.mode === 'coop' || m.mode === 'crazy') && live(r).length <= MAXP[m.mode]) { r.cfg.mode = m.mode; r.cfg.max = r.max = MAXP[m.mode]; r.cfg.course = okCourse(ws, r.cfg.course, m.mode); } pushRoom(r); } break;
       case 'start': if (r && r.host === ws.id && canStart(r)) startGame(r); break;
       case 'next': if (r && r.host === ws.id && r.phase === 'play' && canStart(r)) { r.cfg.course = okCourse(ws, m.course); startGame(r); pushRoom(r); } break; // portail de fin : parcours suivant
       case 'restart': if (r && r.host === ws.id && r.phase === 'play') startGame(r); break;
       case 'vote': if (r && p && r.vote && r.vote.list.includes(m.course)) { r.vote.votes[p.seat] = m.course; cast(r, voteMsg(r)); } break;
-      case 'cp': if (r && p && r.W) { if (r.cfg.mode === 'free') p.rstT = 0.7; else { r.W.resetHold[p.seat] = 1.01; r.run?.push(['cp', p.seat]); } } break; // retour au point de passage demandé depuis le menu
+      case 'cp': if (r && p && r.W) { if (r.cfg.mode === 'crazy') break; else if (r.cfg.mode === 'free') p.rstT = 0.7; else { r.W.resetHold[p.seat] = 1.01; r.run?.push(['cp', p.seat]); } } break; // retour au point de passage demandé depuis le menu
       case 'i': {
         if (!p || !r.W || !Array.isArray(m.a)) break;
-        for (const e of m.a.slice(0, 12)) if (Array.isArray(e) && e.length >= 6 && e.length <= 7 && Number.isInteger(e[0]) && e[0] > p.ack) { if (p.fresh) { p.fresh = false; p.q = []; } p.q.push(e); }
+        for (const e of m.a.slice(0, 12)) if (Array.isArray(e) && e.length >= 6 && e.length <= 9 && Number.isInteger(e[0]) && e[0] > p.ack) { if (p.fresh) { p.fresh = false; p.q = []; } p.q.push(e); }
         break;
       }
     }
@@ -296,7 +302,7 @@ const timers = [
   setInterval(() => {
     const now = process.hrtime.bigint(), dt = Math.min(0.1, Number(now - lastTick) / 1e9); lastTick = now;
     for (const r of rooms.values()) {
-      for (const p of [...r.people]) if (p.offline && (p.offT += dt) > GRACE) { p.gone = true; r.people = r.people.filter((x) => x !== p); if (r.phase === 'play' && r.people.length < (r.cfg.mode === 'free' ? 1 : 2)) { r.phase = 'lobby'; r.W = null; } if (r.host === p.oldSid) r.host = r.people[0]?.sid ?? null; pushRoom(r); }
+      for (const p of [...r.people]) if (p.offline && (p.offT += dt) > GRACE) { p.gone = true; r.people = r.people.filter((x) => x !== p); if (r.phase === 'play' && r.people.length < (solo(r) ? 1 : 2)) { r.phase = 'lobby'; r.W = null; } if (r.host === p.oldSid) r.host = r.people[0]?.sid ?? null; pushRoom(r); }
       if (!r.people.some((p) => p.ws) && !r.spect.size) { if ((r.empty += dt) > 30) { closeRoom(r); continue; } } else r.empty = 0;
       update(r, dt);
       if (r.vote && Date.now() >= r.vote.endsAt) resolveVote(r);
