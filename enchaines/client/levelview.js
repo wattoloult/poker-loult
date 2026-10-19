@@ -155,9 +155,9 @@ export async function loadEnv(L) {
 function addEnv(L, grp) {
   const e = ENV[L.id]; if (!e) return;
   const root = e.g.scene; root.traverse((o) => { if (!o.isMesh) return; o.castShadow = o.receiveShadow = true; for (const m of [].concat(o.material)) for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) if (m[k]) m[k].anisotropy = 8; });
-  grp.add(root);
+  root.userData.noSway = true; grp.add(root); // jamais « au vent » : le nœud « Street » contient « tree », et c'est la racine de TOUTE l'arène qui tanguait (±2°, bug réel)
   // toile de fond peinte du pack (montagnes et ciel), très loin derrière l'arène ; sans brume, sans ombre
-  if (e.bg) { const b = e.bg.scene; b.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = false; for (const m of [].concat(o.material)) { m.fog = false; m.side = THREE.DoubleSide; } } }); grp.add(b); }
+  if (e.bg) { const b = e.bg.scene; b.userData.noSway = true; b.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = false; for (const m of [].concat(o.material)) { m.fog = false; m.side = THREE.DoubleSide; } } }); grp.add(b); }
   // au-delà de l'enceinte : un sol sombre, pour que l'arène ne flotte pas dans le vide
   const g = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x55574f, roughness: 1 })); g.rotation.x = -Math.PI / 2; g.position.set(0, -0.06, -12); g.receiveShadow = true; grp.add(g);
 }
@@ -194,7 +194,8 @@ export function build(W) {
   ropes(L, grp, world);
   // arbres et plantes vivants : ils ploient doucement au vent (chacun son rythme)
   S.sway = []; const RX = /tree|palm|bamboo|leaf|bush|fern|plant|pine|birch|maple|willow|grass|flower|vine|reed|sakura|cherry/i, seen = new Set();
-  grp.traverse((o) => { if (!RX.test(o.name || '')) return; let g = o; while (g.parent && g.parent !== grp && !g.userData.placed) g = g.parent; const t = o.parent && o.parent !== grp ? o.parent : o; if (seen.has(t)) return; seen.add(t); S.sway.push({ o: t, rx: t.rotation.x, rz: t.rotation.z, ph: Math.random() * 6, a: 0.025 + Math.random() * 0.02 }); });
+  const still = (o) => { for (let q = o; q && q !== grp; q = q.parent) if (q.userData.noSway) return true; return false; };
+  grp.traverse((o) => { if (!RX.test(o.name || '') || still(o)) return; let g = o; while (g.parent && g.parent !== grp && !g.userData.placed) g = g.parent; const t = o.parent && o.parent !== grp ? o.parent : o; if (seen.has(t)) return; seen.add(t); S.sway.push({ o: t, rx: t.rotation.x, rz: t.rotation.z, ph: Math.random() * 6, a: 0.025 + Math.random() * 0.02 }); });
   winds(L, grp, th);
   checkpoints(L, grp, world);
   particles(th);
@@ -317,7 +318,8 @@ function mechVisual(world, th, b, o) {
 }
 function checkpoints(L, grp, world) {
   // totems propres à chaque monde, qui s'allument à l'arrivée de la cordée (client/totems.js)
-  S.cps = L.checkpoints.map((c, i) => Totems.make(world, c, i, grp, PACK[world]));
+  // arènes crazy : les points de passage ne sont que des places d'apparition ; pas de totem (sans collision, on le traversait et les balles aussi, posé en pleine ruelle)
+  S.cps = L.crazy ? [] : L.checkpoints.map((c, i) => Totems.make(world, c, i, grp, PACK[world]));
 }
 
 /* ------------------------------ lianes, vent, cascades ------------------------------ */
