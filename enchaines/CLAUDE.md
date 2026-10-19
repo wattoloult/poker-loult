@@ -96,3 +96,20 @@ playtest/playtest.js MODULE DE TEST PRIVÉ (jamais servi en fichier) : panneau F
 - Parcours non publiés (7) : à jouer par le propriétaire en mode test, puis `published: true`.
 - Durées : les parcours font 20 à 38 étapes (≈ 4 à 10 min estimées), en dessous des 8-15 min visées : à allonger après retours de jeu.
 - Musiques/ambiances choisies sans écoute ; bruitages encore synthétisés ; commandes tactiles absentes ; IA du partenaire basique (suit, saute, tient).
+
+## Mode CRAZY (tir à la troisième personne, jusqu'à 4, fusil à verrou Kar98k)
+- Salon `mode: 'crazy'` (menu « Crazy · tir à 4 ») : `createWorld({ crazy: true, players })` (`W.crazy`, `W.free`, `W.alone`), `stepCrazy` dans `core/sim.js`. Chacun pour soi, 15 éliminations ou 5 min (`CZ.LIMIT`, `CZ.TIME`), réapparition
+  après 3 s protégée 2 s, vote de l'arène suivante parmi les arènes crazy (`courseList(all, true)`). Arènes : `core/courses/arena.js` (Dépôt, Toits) et `core/courses/cour.js` (Cour du Dragon, décor = pack « Combat Fight Arena PSX »,
+  `envGlb` ; collisions en boîtes invisibles `noMesh` mesurées sur le GLB ; escalier = 20 ressauts de 10 cm car le grimpeur n'enjambe pas). Les `cp` d'une arène sont ses places d'apparition (la plus éloignée des adversaires est choisie).
+- Entrées en plus : bits 256 tir, 512 visée, 1024 recharger, `ay`/`ap` (cap et hauteur de visée, tableau `[…, ay, ap]`). Le tir part du RAYON DE LA CAMÉRA (épaule `CZ.SHOULDER` à droite, `CZ.CAMUP` au-dessus des yeux) : on trouve le point visé,
+  la balle part du fusil (`CZ.BORE`) vers ce point → ce qui est sous le réticule est touché à toute distance. Clic droit maintenu `CZ.ZOOM_T` s = lunette (`p.zm`) : le rayon part de l'axe de la lunette.
+- Fusil (`core/weapon.js` : balistique pure ; `KAR` : 5 cartouches, cycle de culasse 0,92 s, rechargement 2,7 s, dégâts tête 100 / corps 60 / jambes 40). Événements : `shot bolt casing reload dry dmg kill spawn end` (+ `jump {wall}`) ; ceux du joueur
+  local sont joués par la prédiction, ceux des autres viennent du serveur (`CZ_LOCAL` / `CZ_SERVER` dans main.js). Saut mural : `wallJump`, 3 par envol (`CZ.WJ_MAX`). Tacle et coups désactivés.
+- Serveur : la manche ne démarre qu'une fois TOUS les joueurs chargés (`ready`, au plus `ENCH_HOLD_MS` = 90 s) ; `ENCH_CRAZY_TIME` règle la durée (tests).
+- Client `client/crazy.js` : visée souris (pointer lock), caméra (`CAM` : distance 5,6 m, FOV 60, visée 2,1 m / 32°, lunette 15°), HUD, fusil (vrai modèle `assets/weapons/kar98k_web.glb` : culasse `Kar98k_Bolt_2` + poignée, percuteur `Bolt_1`, détente ; repli : fusil
+  dessiné en code), mains en IK à deux segments (`ik2`, orientation par la géométrie des doigts, doigts refermés), douilles physiques, balles traçantes, sang (gouttes instanciées, brume, taches sur les murs, flaques), sons synthétisés (`client/audio.js` `gun()`).
+  Buste : cap ABSOLU mesuré sur la ligne des épaules (visée tournée de `STANCE`), bassin = direction du déplacement (±75°) ; toute rotation relative est défaite à l'image suivante (`czPost`) — sans cela un clip qui ne réécrit pas un os la cumulait (buste qui tourne en boucle).
+- Personnages (`client/chars.js`) : GLB riggés de `assets/characters` (versions `*_web.glb` : textures 2048 WebP, `tools/lighten_glb.py` ; originaux intacts), chargés à la demande, animations du jeu reciblées sur leurs squelettes (direction des os + torsion,
+  bassin à l'échelle des jambes). Attribués par siège : anime, deadlock, cyber, anime. `?nochars` = rôdeurs d'origine.
+- Tests : `core/crazy.test.js` (tir, culasse, rechargement, mort, saut mural, lunette, escalier, 4 tireurs aléatoires dans chaque arène), `server.test.js` (salon crazy, gate de chargement, vote). Captures navigateur : `PWROOT=… node` avec Playwright (voir l'historique).
+- À savoir : sons synthétisés (pas d'enregistrements) ; pas de compensation de latence ; le Kar98k d'origine (53 Mo) n'est pas déployé (`tools/deploy.sh`), seule la version allégée l'est ; vérifier la licence du modèle du Kar98k et des personnages avant mise en ligne publique.

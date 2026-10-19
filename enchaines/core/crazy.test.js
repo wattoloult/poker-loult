@@ -132,3 +132,12 @@ test('fuzz : quatre tireurs aux entrées aléatoires restent dans chaque arène 
     }
   }
 });
+
+test('lunette : au bout de 0,3 s de visée le rayon part de l\'axe de la lunette, et le tir touche toujours ce qui est sous le réticule', () => {
+  const { W, a, b } = duel(); Object.assign(b, { x: -15 - CZ.BORE, y: 0, z: 17 });
+  run(W, [{ ...IDLE, ay: 0, ap: 0, scope: true }, IDLE], 0.15); assert.ok(a.scope && !a.zm, 'viseur à l\'épaule d\'abord');
+  run(W, [{ ...IDLE, ay: 0, ap: 0, scope: true }, IDLE], 0.25); assert.ok(a.zm, 'puis lunette');
+  const ev = run(W, [fire({ ...IDLE, ay: 0, ap: Math.atan2(1.0 - (1.5 + CZ.SCOPE_UP), 20), scope: true }), IDLE], 0.05);
+  assert.ok(ev.some((e) => e.k === 'dmg' && e.v === 1), 'touché');
+  run(W, [IDLE, IDLE], 0.1); assert.ok(!a.zm && a.scT === 0, 'relâché : retour au viseur normal');
+});

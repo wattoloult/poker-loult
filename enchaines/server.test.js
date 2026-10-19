@@ -149,8 +149,8 @@ test('mode libre : 3 grimpeurs sans chaîne, entrées de chacun, arrivée class�
 test('mode crazy : tir sur un adversaire, mort annoncée à tous, vote entre arènes uniquement', async () => {
   const { server: srv } = await import('./server.js'); if (!srv.listening) srv.listen(18807); await wait(100);
   const a = client('Ana'), b = client('Ben'); await a.ready; await b.ready;
-  a.send({ t: 'create', L: 6.5, mode: 'crazy' }); await wait(150);
-  const code = a.last.room.code; assert.equal(a.last.room.cfg.mode, 'crazy'); assert.equal(a.last.room.cfg.max, 4); assert.equal(rooms.get(code).cfg.course, 'depot');
+  a.send({ t: 'create', L: 6.5, mode: 'crazy', course: 'depot' }); await wait(150);
+  const code = a.last.room.code; assert.equal(a.last.room.cfg.mode, 'crazy'); assert.equal(a.last.room.cfg.max, 4); assert.equal(rooms.get(code).cfg.course, 'depot'); { const t = client('Tmp'); await t.ready; t.send({ t: 'create', mode: 'crazy' }); await wait(150); assert.equal(t.last.room.cfg.course, 'cour', 'arène par défaut : la Cour du Dragon'); t.ws.close(); await wait(100); }
   b.send({ t: 'join', code }); await wait(150); a.send({ t: 'start' }); await wait(250);
   assert.equal(a.last.start.mode, 'crazy'); const W0 = rooms.get(code).W, t0 = W0.tick; await wait(300); assert.equal(W0.tick, t0, 'la manche attend la fin du chargement des joueurs'); a.send({ t: 'ready' }); b.send({ t: 'ready' }); await wait(200); assert.ok(W0.tick > t0, 'puis démarre'); assert.equal(a.last.start.s.pl.length, 2); assert.equal(a.last.start.s.ch.length, 0);
   const W = rooms.get(code).W; assert.ok(W.crazy);

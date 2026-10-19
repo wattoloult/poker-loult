@@ -42,7 +42,7 @@ const boardOf = (id) => (boards[id] ||= []);
 
 const rooms = new Map();
 // parcours autorisé : publié, ou n'importe lequel pour un client authentifié en playtest (clé serveur)
-const okCourse = (ws, id, mode = 'coop') => (mode === 'crazy' ? (COURSES[id]?.crazy ? id : 'depot') : COURSES[id] && !COURSES[id].crazy && (COURSES[id].published || ws.pt) ? id : DEFAULT_COURSE);
+const okCourse = (ws, id, mode = 'coop') => (mode === 'crazy' ? (COURSES[id]?.crazy ? id : 'cour') : COURSES[id] && !COURSES[id].crazy && (COURSES[id].published || ws.pt) ? id : DEFAULT_COURSE);
 // modes sans chaîne (libre, crazy) : jusqu'à 4 joueurs, chacun pour soi, sièges contigus
 const solo = (r) => r.cfg.mode === 'free' || r.cfg.mode === 'crazy';
 let nextId = 1;
@@ -103,11 +103,11 @@ function leave(ws) {
   pushRoom(r); send(ws, { t: 'left' });
 }
 function closeRoom(r) { rooms.delete(r.code); for (const ws of r.spect) ws.room = null; }
-function startMsg(r, seat) { return { t: 'start', seat, mode: r.cfg.mode, course: r.cfg.course, names: r.W.pl.map((_, s) => r.people.find((p) => p.seat === s)?.name || 'Grimpeur ' + (s + 1)), L: r.cfg.L, s: snapWorld(r.W) }; }
+function startMsg(r, seat) { return { t: 'start', seat, mode: r.cfg.mode, course: r.cfg.course, names: r.W.pl.map((_, s) => r.people.find((p) => p.seat === s)?.name || 'Grimpeur ' + (s + 1)), L: r.cfg.L, tmax: r.W.tmax, s: snapWorld(r.W) }; }
 function startGame(r) {
   const free = solo(r), crazy = r.cfg.mode === 'crazy'; r.firstT = null; r.vote = null;
   if (free) live(r).forEach((p, i) => { p.seat = i; }); // sièges contigus 0..n-1 (un grimpeur de la sim par siège)
-  r.W = createWorld({ L: r.cfg.L, course: r.cfg.course, free: free && !crazy, crazy, players: free ? live(r).length : undefined }); r.phase = 'play'; r.acc = 0; r.k = 0; r.ev = []; r.saved = false; r.run = free ? null : []; // r.run : les entrées des deux grimpeurs pas à pas (replay des records)
+  r.W = createWorld({ L: r.cfg.L, course: r.cfg.course, free: free && !crazy, crazy, tmax: process.env.ENCH_CRAZY_TIME, players: free ? live(r).length : undefined }); r.phase = 'play'; r.acc = 0; r.k = 0; r.ev = []; r.saved = false; r.run = free ? null : []; // r.run : les entrées des deux grimpeurs pas à pas (replay des records)
   for (const p of r.people) { p.q = []; p.last = null; p.ack = 0; p.fresh = true; p.ready = false; }
   r.hold = crazy ? { t: 0 } : null; // crazy : la manche ne démarre qu'une fois TOUS les joueurs chargés (textures du fusil, décor) ; au plus HOLD_MS
   for (const p of r.people) send(p.ws, startMsg(r, p.seat));
