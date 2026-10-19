@@ -101,3 +101,17 @@ test('saut tapé juste avant le sol : part DEPUIS le sol et laisse le double sau
   step(true);
   assert.deepEqual(jumps, ['sol', 'sol', 'dj'], 'et il part bien en l\'air : ' + jumps);
 });
+
+test('mode libre : poing et coup de pied touchent le grimpeur en face, pas les autres', () => {
+  for (const kind of ['punch', 'kick']) {
+    const W = createWorld({ level: testCourse(() => {}), free: true, players: 3 }); run(W, 60);
+    // 0 regarde +z ; 1 est à 1 m devant lui ; 2 est derrière
+    Object.assign(W.pl[0], { x: -3, z: -8, yaw: 0 }); Object.assign(W.pl[1], { x: -3, z: -7, yaw: Math.PI }); Object.assign(W.pl[2], { x: -3, z: -11, yaw: 0 });
+    run(W, 20);
+    const hits = []; let swung = false;
+    run(W, 90, (i) => { for (const e of W.ev) { if (e.k === 'punch') hits.push(e.v); if (e.k === 'swing') swung = true; } return [{ ...IDLE, [kind]: i === 2 }, IDLE, IDLE]; });
+    assert.ok(swung, kind + ' : le geste part');
+    assert.deepEqual(hits, [1], kind + ' : seul le grimpeur en face est touché : ' + hits);
+    assert.ok(W.pl[1].downT > 0 || W.pl[1].ko || W.pl[1].knock > 0 || W.pl[1].z > -6.5, kind + ' : il est projeté');
+  }
+});
