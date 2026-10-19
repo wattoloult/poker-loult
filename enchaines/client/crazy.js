@@ -69,7 +69,11 @@ const RIFLE_GLB = { org: 0.52, butt: -0.555, muzzle: 0.555, slideMax: 0.08, hand
 let GLB = null; const BORE_CM = { x: 0.17, y: 3.8 };
 export async function load() { // appelé AVANT le départ (écran de chargement) : 53 Mo de textures PBR (3 × 4096² + 3 × 2048²), mises en cache par le navigateur
   if (GLB || GLB === false) return GLB;
-  try { const g = await new GLTFLoader().loadAsync(new URL('../assets/weapons/kar98k.glb', import.meta.url).href); GLB = g.scene; Object.assign(RIFLE, RIFLE_GLB); } catch (e) { console.warn('Kar98k.glb indisponible, fusil provisoire', e); GLB = false; }
+  // kar98k_web.glb = le même modèle (mêmes 9 767 triangles, mêmes pièces, mêmes matériaux PBR) dont les textures 4096² sont en 2048² WebP (3 Mo au lieu de 53) — tools/lighten_glb.py ; l'original reste dans assets/weapons/kar98k.glb
+  for (const f of ['kar98k_web.glb', 'kar98k.glb']) {
+    try { const g = await new GLTFLoader().loadAsync(new URL('../assets/weapons/' + f, import.meta.url).href); GLB = g.scene; Object.assign(RIFLE, RIFLE_GLB); break; } catch (e) { console.warn(f + ' indisponible', e); }
+  }
+  if (!GLB) GLB = false;
   return GLB;
 }
 let MAT = null;

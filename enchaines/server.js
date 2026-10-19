@@ -33,6 +33,7 @@ function iceServers(id) {
 }
 const VOTE_MS = +process.env.ENCH_VOTE_MS || 10000; // mode libre : durée du vote de la carte suivante
 const MAXP = { coop: 2, free: 4, crazy: 4 }; // sièges par mode : coop = deux grimpeurs reliés par la chaîne ; free = « mode libre », jusqu'à 4 grimpeurs, SANS chaîne, premier au sommet
+const HOLD_MS = +process.env.ENCH_HOLD_MS || 90000;
 const SNAP_EVERY = 4, GRACE = 60, MAX_Q = 36, LENS = [4.5, 6.5, 9];
 fs.mkdirSync(DATA, { recursive: true });
 // classement par parcours : { idParcours: [ ... ] } (ancien format = liste de la Tour)
@@ -107,7 +108,8 @@ function startGame(r) {
   const free = solo(r), crazy = r.cfg.mode === 'crazy'; r.firstT = null; r.vote = null;
   if (free) live(r).forEach((p, i) => { p.seat = i; }); // sièges contigus 0..n-1 (un grimpeur de la sim par siège)
   r.W = createWorld({ L: r.cfg.L, course: r.cfg.course, free: free && !crazy, crazy, players: free ? live(r).length : undefined }); r.phase = 'play'; r.acc = 0; r.k = 0; r.ev = []; r.saved = false; r.run = free ? null : []; // r.run : les entrées des deux grimpeurs pas à pas (replay des records)
-  for (const p of r.people) { p.q = []; p.last = null; p.ack = 0; p.fresh = true; }
+  for (const p of r.people) { p.q = []; p.last = null; p.ack = 0; p.fresh = true; p.ready = false; }
+  r.hold = crazy ? { t: 0 } : null; // crazy : la manche ne démarre qu'une fois TOUS les joueurs chargés (textures du fusil, décor) ; au plus HOLD_MS
   for (const p of r.people) send(p.ws, startMsg(r, p.seat));
   for (const ws of r.spect) send(ws, startMsg(r, null));
   pushRoom(r);
@@ -115,6 +117,7 @@ function startGame(r) {
 const KEEP = new Set(['dmg', 'kill', 'spawn', 'shot', 'bolt', 'casing', 'reload', 'dry', 'lost', 'punch', 'tackle', 'down', 'checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
 function update(r, dt) {
   if (r.phase !== 'play' || !r.W) return;
+  if (r.hold) { r.hold.t += dt; if (r.hold.t > HOLD_MS / 1000 || live(r).every((p) => p.ready || p.offline)) r.hold = null; else return; }
   r.acc += dt; let n = 0;
   while (r.acc >= DT && n++ < 30) {
     r.acc -= DT;
@@ -281,6 +284,7 @@ wss.on('connection', (ws) => {
       case 'restart': if (r && r.host === ws.id && r.phase === 'play') startGame(r); break;
       case 'vote': if (r && p && r.vote && r.vote.list.includes(m.course)) { r.vote.votes[p.seat] = m.course; cast(r, voteMsg(r)); } break;
       case 'cp': if (r && p && r.W) { if (r.cfg.mode === 'crazy') break; else if (r.cfg.mode === 'free') p.rstT = 0.7; else { r.W.resetHold[p.seat] = 1.01; r.run?.push(['cp', p.seat]); } } break; // retour au point de passage demandé depuis le menu
+      case 'ready': if (p) p.ready = true; break; // fin de chargement du client (mode crazy)
       case 'i': {
         if (!p || !r.W || !Array.isArray(m.a)) break;
         for (const e of m.a.slice(0, 12)) if (Array.isArray(e) && e.length >= 6 && e.length <= 9 && Number.isInteger(e[0]) && e[0] > p.ack) { if (p.fresh) { p.fresh = false; p.q = []; } p.q.push(e); }
