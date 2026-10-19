@@ -12,6 +12,7 @@ import * as Mechs from './mechs.js';
 import * as Portal from './portal.js';
 import * as Totems from './totems.js';
 import * as Decor from './decor.js';
+import * as Quarter from './quarter.js';
 import { VIEWS } from './worlds/index.js';
 import * as Sfx from './sfx.js';
 import { HP } from '../core/sim.js';
@@ -155,10 +156,12 @@ export async function loadEnv(L) {
 function addEnv(L, grp) {
   const e = ENV[L.id]; if (!e) return;
   const root = e.g.scene; root.traverse((o) => { if (!o.isMesh) return; o.castShadow = o.receiveShadow = true; for (const m of [].concat(o.material)) for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) if (m[k]) m[k].anisotropy = 8; });
-  root.userData.noSway = true; grp.add(root); // jamais « au vent » : le nœud « Street » contient « tree », et c'est la racine de TOUTE l'arène qui tanguait (±2°, bug réel)
+  root.userData.noSway = true; // jamais « au vent » : le nœud « Street » contient « tree », et c'est la racine de TOUTE l'arène qui tanguait (±2°, bug réel)
+  if (L.env) Quarter.build(L, grp, root); else grp.add(root); // arène réagencée (L.env) : les nœuds du pack sont posés un par un ; sinon le modèle tel quel
   // toile de fond peinte du pack (montagnes et ciel), très loin derrière l'arène ; sans brume, sans ombre
   if (e.bg) { const b = e.bg.scene; b.userData.noSway = true; b.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = false; for (const m of [].concat(o.material)) { m.fog = false; m.side = THREE.DoubleSide; } } }); grp.add(b); }
-  // au-delà de l'enceinte : un sol sombre, pour que l'arène ne flotte pas dans le vide
+  // au-delà de l'enceinte : un sol sombre, pour que l'arène ne flotte pas dans le vide (L.env : posé par quarter.js)
+  if (L.env) return;
   const g = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x55574f, roughness: 1 })); g.rotation.x = -Math.PI / 2; g.position.set(0, -0.06, -12); g.receiveShadow = true; grp.add(g);
 }
 

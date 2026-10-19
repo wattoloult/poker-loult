@@ -336,7 +336,7 @@ function findLedge(W, p, wx, wz) {
   let best = null, bd = 1e9;
   for (const b of W.bodies) {
     if (!b.on || b.ghost || b.nograb || b.hit) continue;
-    const top = b.py + b.hh, rel = top - p.y;
+    const top = b.py + b.hh, rel = grabY(b) - p.y; // lip : on saisit le bord d'un plancher de balcon, on se hisse ensuite par-dessus son garde-corps (dessus de la boîte)
     if (rel < P.GRAB_LO || rel > P.GRAB_HI) continue;
     if (p.vy > 0 && p.y + (p.vy * p.vy) / (2 * P.G_UP) > top + 0.05) continue; // on passera au-dessus : on atterrira dessus plutôt que s'y pendre
     if (Math.abs(p.x - b.px) > b.ex + 1 || Math.abs(p.z - b.pz) > b.ez + 1) continue;
@@ -352,20 +352,22 @@ function findLedge(W, p, wx, wz) {
     for (let f = 0; f < 4; f++) {
       const [fx, fz] = FACE[f], fi = faceInfo(b, f);
       const dist = fx ? fx * L.lx - fi.out : fz * L.lz - fi.out, u = fx ? L.lz : L.lx;
-      if (dist < P.R - 0.05 || dist > P.R + P.GRAB_REACH || Math.abs(u) > fi.half - 0.12) continue;
+      if (dist < P.R - 0.05 - (b.eave || 0) || dist > P.R + P.GRAB_REACH || Math.abs(u) > fi.half - 0.12) continue; // eave : rebord d'un toit qui déborde du mur, saisi depuis le pied du mur
       const push = -(wx * fi.nx + wz * fi.nz), into = -(p.vx * fi.nx + p.vz * fi.nz);
       if (push < 0.35 && into < 1.2) continue;
       // la main tombe sur un vrai bord : rien au-dessus du bord ni juste devant
       facePoint(b, f, u, 0.12, top + 0.15, FP); if (inside(W, FP.x, FP.y, FP.z)) continue;
-      facePoint(b, f, u, -0.25, top + 0.15, FP); if (inside(W, FP.x, FP.y, FP.z)) continue;
-      if (dist < bd) { bd = dist; best = { b: b.i, f, u }; }
+      if (!b.edge) { facePoint(b, f, u, -0.25, top + 0.15, FP); if (inside(W, FP.x, FP.y, FP.z)) continue; } // edge : rebord certifié (toit raide : la pente commence juste derrière)
+      const m = b.eave ? P.R + Math.abs(dist - P.R) : dist; // (sans débord : le bord le plus proche, comme avant)
+      if (m < bd) { bd = m; best = { b: b.i, f, u, ...(b.eave ? { o: clamp(dist, P.R + 0.03 - b.eave, P.R + 0.03) } : {}) }; }
     }
   }
   return best;
 }
+const grabY = (b) => (b.lip !== undefined ? b.py - b.hh + b.lip : b.py + b.hh); // hauteur des mains quand on pend à ce rebord
 function hangPose(W, p) { // position du corps suspendu à partir du bord (suit la boîte si elle bouge)
-  const b = W.bodies[p.hang.b], top = b.py + b.hh, fi = faceInfo(b, p.hang.f);
-  facePoint(b, p.hang.f, p.hang.u, b.bar ? -fi.out : P.R + 0.03, top - P.HANG_DROP, FP); // sous une barre : centré dessous
+  const b = W.bodies[p.hang.b], top = grabY(b), fi = faceInfo(b, p.hang.f);
+  facePoint(b, p.hang.f, p.hang.u, b.bar ? -fi.out : p.hang.o ?? P.R + 0.03, top - P.HANG_DROP, FP); // sous une barre : centré dessous ; sous un débord de toit : contre le mur (o)
   p.x = FP.x; p.y = FP.y; p.z = FP.z; p.yaw = Math.atan2(-fi.nx, -fi.nz);
   return fi;
 }
