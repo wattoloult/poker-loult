@@ -220,7 +220,7 @@ function makeClimber(k, charId) {
   const mark = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.44, 32), new THREE.MeshBasicMaterial({ color: COL[k], transparent: true, opacity: 0.0, depthWrite: false, depthTest: false }));
   mark.rotation.x = -Math.PI / 2; mark.renderOrder = 4; S.scene.add(mark);
   S.scene.add(g);
-  const c = { k, g, root, mixer, acts, bones, charId: ch ? charId : null, cur: null, w: {}, ring, mark, lastSt: -1, phase: 0, sm: new THREE.Vector3(), yaw: 0, err: new THREE.Vector3(), scale: 1 };
+  const c = { k, g, root, mixer, acts, bones, charId: ch ? charId : null, restQ: ch ? ch.rest : null, cur: null, w: {}, ring, mark, lastSt: -1, phase: 0, sm: new THREE.Vector3(), yaw: 0, err: new THREE.Vector3(), scale: 1 };
   // échelle : les rôdeurs mesurent ~1,8 m comme la capsule
   setAnim(c, 'Idle_Loop', 0);
   return c;

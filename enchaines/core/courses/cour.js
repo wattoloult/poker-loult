@@ -22,6 +22,9 @@ block(-5.0, 0, 10.45, -11.4, 5.0 - M + 0.1, 12.2 - 2 * M, solid); block(5.0, 0, 
 block(0, 0, 10.45, -12.9, 5.0, 9.2, solid);
 // escalier : 2 m de haut sur 2 m de profondeur. Le grimpeur n'enjambe pas de marche : on le remplace par 20 petits ressauts de 10 cm (le dessous de la capsule glisse dessus), qui se montent en marchant
 for (let k = 0; k < 20; k++) block(0, 0, 0.1 * (k + 1), -6.05 - 0.1 * k, 4.66, 0.1, { noMesh: 1 });
+// liseré surélevé de 12 cm qui entoure le carré central (x ±7, z −6…5) : sans collision, on marchait « dans » le dallage en le traversant (pieds enfoncés de 12 cm)
+const RIM = { noMesh: 1 };
+block(0, 0, 0.12, 4.5, 14, 1, RIM); block(-6.5, 0, 0.12, -0.5, 1, 9, RIM); block(6.5, 0, 0.12, -0.5, 1, 9, RIM); block(-4.665, 0, 0.12, -5.5, 4.67, 1, RIM); block(4.665, 0, 0.12, -5.5, 4.67, 1, RIM);
 // places d'apparition : la cour, les ruelles, le pied de l'escalier
 const spawns = [[-5, 3.5, Math.PI], [5, 3.5, Math.PI], [-5, -2.5, 0], [5, -2.5, 0], [0, -4.5, 0], [-14, -4.4, -Math.PI / 2], [14, -4.4, Math.PI / 2], [-8.4, -11, -Math.PI / 2], [8.4, -11, Math.PI / 2], [0, -18.5, Math.PI], [-14, -18.5, 0], [14, -18.5, 0]];
 for (const [x, z, yaw] of spawns) cp(x, 0, z, { name: 'Cour', yaw });

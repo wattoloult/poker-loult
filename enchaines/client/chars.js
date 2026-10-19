@@ -68,11 +68,13 @@ export async function load(id) {
   if (def.skinnedOnly) { const drop = []; scene.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh) drop.push(o); }); for (const o of drop) o.parent?.remove(o); }
   scene.updateMatrixWorld(true);
   // hauteur réelle du corps (centiles des sommets déformés, pour ignorer d'éventuels éléments égarés) -> échelle et décalage pour que les pieds touchent le sol
-  const ys = []; scene.traverse((o) => { if (o.isSkinnedMesh) { const p = o.geometry.attributes.position, v = new THREE.Vector3(); for (let i = 0; i < p.count; i += 3) { o.getVertexPosition(i, v).applyMatrix4(o.matrixWorld); ys.push(v.y); } } });
+  const ys = [], xs = [], zs = []; scene.traverse((o) => { if (o.isSkinnedMesh) { const p = o.geometry.attributes.position, v = new THREE.Vector3(); for (let i = 0; i < p.count; i += 3) { o.getVertexPosition(i, v).applyMatrix4(o.matrixWorld); ys.push(v.y); xs.push(v.x); zs.push(v.z); } } });
+  // certains fichiers (Deadlock : nœud du squelette à 355 m de l'origine) posent le corps loin de l'origine : on le recentre en x/z (sinon le joueur est invisible, à des centaines de mètres de sa capsule)
+  const med = (a) => { a.sort((p, q) => p - q); return a[a.length >> 1]; }; let cx = med(xs), cz = med(zs); if (Math.hypot(cx, cz) < 2) { cx = 0; cz = 0; }
   ys.sort((a, b) => a - b); const lo = ys[Math.floor(ys.length * 0.0005)], hi = ys[Math.floor(ys.length * 0.9995)];
   const scale = HEIGHT / (hi - lo);
   scene.traverse((o) => { if (o.isSkinnedMesh) { o.frustumCulled = false; o.castShadow = true; o.receiveShadow = false; for (const m of [].concat(o.material)) for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap']) if (m[k]) m[k].anisotropy = 8; } });
-  return (LOADED[id] = { def, scene, scale, dy: -lo * scale, clips: {}, ready: false });
+  return (LOADED[id] = { def, scene, scale, cx, cz, dy: -lo * scale, clips: {}, ready: false });
 }
 
 // recible les clips (CLIPS) du squelette du jeu (tpl = modèle de référence) sur le personnage ; names = clips voulus
@@ -137,11 +139,12 @@ export function retarget(id, tpl, CLIPS, names) {
 // une instance par joueur : { root (groupe animé par le jeu), model, bones (alias canoniques), clips }
 export function instance(id) {
   const L = LOADED[id]; if (!L || !L.ready) return null;
-  const model = cloneSkinned(L.scene); model.scale.setScalar(L.scale); model.position.y = L.dy;
+  const model = cloneSkinned(L.scene); model.scale.setScalar(L.scale); model.position.set(-L.cx * L.scale, L.dy, -L.cz * L.scale);
   const root = new THREE.Group(); root.add(model); root.updateMatrixWorld(true);
   const tgt = bonesOf(model, L.def.map), bones = { ...tgt };
   // alias des noms que le code de pose attend : Head / head, pelvis…
   bones.head = tgt.Head;
-  return { root, model, bones, clips: L.clips, def: L.def };
+  const rest = {}; for (const n of ['neck_01', 'Head']) if (tgt[n]) rest[n] = tgt[n].quaternion.clone(); // pose de repos (tête et cou) : le mode crazy y ramène la tête, la foulée de course ne la balance plus
+  return { root, model, bones, clips: L.clips, def: L.def, rest };
 }
 export const ids = () => CHARS.map((c) => c.id);

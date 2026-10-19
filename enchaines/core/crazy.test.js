@@ -120,6 +120,14 @@ test('la Cour du Dragon : on monte l\'escalier de 2 m en marchant et les pavillo
   assert.ok(p.x < 21, 'bloqué par l\'enceinte : ' + p.x);
 });
 
+test('la Cour du Dragon : le liseré de 12 cm autour du carré central est solide (on marche dessus, pas dedans)', () => {
+  const W = createWorld({ crazy: true, course: 'cour', players: 1 }), p = W.pl[0];
+  Object.assign(p, { x: -4, y: 0, z: 2, vx: 0, vz: 0, prot: 0, st: ST.GROUND }); let on = 0;
+  for (let i = 0; i < 360; i++) { stepWorld(W, [{ ...IDLE, mz: 1, ay: 0, ap: 0 }]); if (p.z > 4.2 && p.z < 4.8) on = Math.max(on, p.y); }
+  assert.ok(on > 0.11 && on < 0.13, 'sur le liseré, les pieds à 12 cm : ' + on);
+  assert.ok(p.y < 0.01, 'redescendu de l\'autre côté : ' + p.y);
+});
+
 test('fuzz : quatre tireurs aux entrées aléatoires restent dans chaque arène (jamais sous le sol, jamais de valeur absurde)', () => {
   for (const c of courseList(true, true)) {
     const W = createWorld({ crazy: true, course: c.id, players: 4 }); let seed = 12345; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
