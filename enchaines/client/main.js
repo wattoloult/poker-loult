@@ -509,7 +509,9 @@ function getNet() {
     G.course = m.course || DEFAULT_COURSE; setTimeout(() => $('#fade').classList.remove('on'), 400);
     G.W = applySnap(createWorld({ L: m.L, course: G.course, free: G.free && !G.crazy, crazy: G.crazy, players: G.free ? m.names.length : undefined }), m.s); G.ct = 0; G.pend = []; G.out = []; G.partnerIn = IDLE; G.done = false; slot[0].jc = slot[0].dc = slot[0].uc = 0;
     const W = G.W; await Scene.buildLevel(W); if (G.W !== W) return; Scene.setRoster(W.pl.length); Music.playWorld(W.level.world); // partie quittée pendant le chargement : on s'arrête là
+    if (G.crazy) { setLoad(0.3, 'Le fusil…'); await Crazy.load(); if (G.W !== W) return; }
     await prepare(W); if (G.W !== W) return; G.prep = false; G.last = performance.now(); G.acc = 0;
+    net.send({ t: 'ready' });
     show(null); $('#hud').classList.add('on'); $('#hud').dataset.mode = G.free ? 'free' : 'online'; $('#end').classList.remove('on');
     if (G.crazy) Crazy.begin(G); else { $('#help').classList.add('show'); setTimeout(() => $('#help').classList.remove('show'), 9000); }
   });

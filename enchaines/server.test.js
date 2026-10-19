@@ -150,9 +150,9 @@ test('mode crazy : tir sur un adversaire, mort annoncée à tous, vote entre ar�
   const { server: srv } = await import('./server.js'); if (!srv.listening) srv.listen(18807); await wait(100);
   const a = client('Ana'), b = client('Ben'); await a.ready; await b.ready;
   a.send({ t: 'create', L: 6.5, mode: 'crazy' }); await wait(150);
-  const code = a.last.room.code; assert.equal(a.last.room.cfg.mode, 'crazy'); assert.equal(a.last.room.cfg.max, 4); assert.ok(rooms.get(code).cfg.course === 'depot' || rooms.get(code).cfg.course === 'toits');
+  const code = a.last.room.code; assert.equal(a.last.room.cfg.mode, 'crazy'); assert.equal(a.last.room.cfg.max, 4); assert.equal(rooms.get(code).cfg.course, 'depot');
   b.send({ t: 'join', code }); await wait(150); a.send({ t: 'start' }); await wait(250);
-  assert.equal(a.last.start.mode, 'crazy'); assert.equal(a.last.start.s.pl.length, 2); assert.equal(a.last.start.s.ch.length, 0);
+  assert.equal(a.last.start.mode, 'crazy'); const W0 = rooms.get(code).W, t0 = W0.tick; await wait(300); assert.equal(W0.tick, t0, 'la manche attend la fin du chargement des joueurs'); a.send({ t: 'ready' }); b.send({ t: 'ready' }); await wait(200); assert.ok(W0.tick > t0, 'puis démarre'); assert.equal(a.last.start.s.pl.length, 2); assert.equal(a.last.start.s.ch.length, 0);
   const W = rooms.get(code).W; assert.ok(W.crazy);
   // Ana en (0, ., -20) vise Ben posé à 12 m : tête (hauteur 1,68 m ; la caméra est décalée de 0,75 m à droite)
   Object.assign(W.pl[0], { x: -20, y: 0, z: -2, prot: 0, ay: 0 }); Object.assign(W.pl[1], { x: -20 - 0.75, y: 0, z: 10, prot: 0 });
@@ -166,6 +166,6 @@ test('mode crazy : tir sur un adversaire, mort annoncée à tous, vote entre ar�
   assert.ok(b.msgs.some((m) => m.t === 's' && m.e.some((e) => e.k === 'kill')), 'Ben le reçoit aussi');
   W.pl[0].kills = W.limit; await wait(300);
   const end = a.last.end; assert.ok(end && end.crazy && end.rank[0].name === 'Ana' && end.rank[0].kills >= 15, 'classement');
-  await wait(100); assert.ok(a.last.vote.list.length >= 2 && a.last.vote.list.every((id) => ['depot', 'toits'].includes(id)), 'le vote ne propose que des arènes');
+  await wait(100); assert.ok(a.last.vote.list.length >= 2 && a.last.vote.list.every((id) => ['depot', 'toits', 'cour'].includes(id)), 'le vote ne propose que des arènes');
   for (const x of [a, b]) x.ws.close(); stop();
 });
