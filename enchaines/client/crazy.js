@@ -582,8 +582,13 @@ export function pose(cl, W, dt, rp, me) {
     const axisR = new THREE.Vector3(Rv.x, 0, Rv.z).normalize();
     for (const [bn, kf] of [['spine_01', 0.12], ['spine_02', 0.2], ['spine_03', 0.22], ['neck_01', 0.15], ['Head', 0.25]]) { const b = c.bones[bn]; if (b) rotWorld(b, axisR, a.pitch * kf - rec * 0.05); }
     { // torsion du buste = écart entre le bassin (c.yaw, racine rendue) et la visée, répartie sur trois vertèbres
-      const twist = clamp(wrap(a.yaw - STANCE - c.yaw), -1.5, 1.25), Y = _e.set(0, 1, 0); // STANCE : posture de tir, buste tourné vers la droite (épaule gauche en avant) comme tout tireur — c'est elle qui permet à la main gauche d'atteindre le garde-main
+      const Y = _e.set(0, 1, 0), uL = c.bones.upperarm_l, uR = c.bones.upperarm_r;
+      // cap voulu du buste = visée tournée de STANCE, jamais à plus de 80° du bassin ; cap actuel mesuré sur la ligne des épaules (l'animation de course tord elle-même le buste : on corrige l'écart réel, on n'ajoute pas une torsion fixe)
+      const want = c.yaw + clamp(wrap(a.yaw - STANCE - c.yaw), -1.4, 1.4); let cur = want;
+      if (uL && uR) { const pl = wpos(uL, new THREE.Vector3()), pr = wpos(uR, new THREE.Vector3()); cur = Math.atan2(pr.z - pl.z, -(pr.x - pl.x)); }
+      const twist = clamp(wrap(want - cur), -1.6, 1.6);
       for (const [bn, kf] of [['spine_01', 0.25], ['spine_02', 0.4], ['spine_03', 0.35]]) { const b = c.bones[bn]; if (b) rotWorld(b, Y, twist * kf); }
+      { const dh = clamp(wrap(a.yaw - want), -0.9, 0.9); for (const [bn, kf] of [['neck_01', 0.35], ['Head', 0.45]]) { const b = c.bones[bn]; if (b) rotWorld(b, Y, dh * kf); } } // la tête regarde la visée
     }
     c.root.updateMatrixWorld(true);
     // mains
