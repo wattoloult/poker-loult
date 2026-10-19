@@ -14,7 +14,7 @@ export const P = {
   COYOTE: 0.12, BUFFER: 0.14,
   GRAB_LO: 0.8, GRAB_HI: 2.4, GRAB_REACH: 0.5, GRAB_VY: 9, GRAB_CD: 0.3, // fenêtre d'accroche des rebords (hauteur du bord au-dessus des pieds)
   HANG_DROP: 2.0, SHIMMY: 1.9, MANTLE_T: 0.36, CLIMB_V: 2.5, CLIMB_LAT: 2.2,
-  SLIDE_T: 0.62, SLIDE_MIN: 0.22, SLIDE_BOOST: 1.28, SLIDE_DECEL: 7.5, SLIDE_TURN: 2.4, SLIDE_CD: 0.3, SLIDE_JUMP: 1.14, // glissade : durée, durée mini avant de pouvoir la couper, élan, freinage, virage, recharge, bonus de saut glissé
+  SLIDE_T: 0.85, SLIDE_MIN: 0.22, SLIDE_BOOST: 1.45, SLIDE_DECEL: 6.0, SLIDE_TURN: 1.0, SLIDE_CD: 0.9, SLIDE_JUMP: 1.14, HS: 0.95, SLIDE_REC: 0.35, CRAWL: 2.2, TACKLE_R: 1.15, TACKLE_V: 9.5, TACKLE_VY: 4.2, TACKLE_CD: 1.2, // glissade : durée, durée mini avant de pouvoir la couper, élan, freinage, virage, recharge, bonus de saut glissé
   WJ_OUT: 5.6, WJ_UP: 8.2,                      // saut depuis un mur ou un rebord
   STA_CLIMB: 1 / 7, STA_HANG: 1 / 16, STA_LOAD: 1 / 5, STA_ROPE: 1 / 6, STA_REGEN: 0.6,
   PULL_V: 2.6, DRAG_V: 0.9, TOW_V: 3.2, HAUL_MOVE: 0.3, HAUL_SLIP: 0.45, STA_HAUL: 1 / 4.5, // tirer la chaîne : petits pas, on glisse vers le partenaire (HAUL_SLIP x charge), ça épuise                     // au sol avec un partenaire suspendu : vitesse en le hissant / glissade si on ne s'arc-boute pas
@@ -145,10 +145,13 @@ export function createWorld(opts = {}) {
   const W = { tick: 0, level, bodies: buildBodies(level), L: clamp(+opts.L || CH.L, 3, 12), cp: 0, cpMax: 0, pl: [], ch: null, Lc: 0,
     cr: {}, sk: {}, dr: {}, cw: {}, sw: {}, gt: {}, gtp: {}, hs: {}, db: {}, ten: 0, taut: 0, ev: [], time: 0, started: false, done: false, falls: 0, saves: 0, resets: 0, resetHold: [0, 0], best: 0 };
   W.Lc = W.L;
+  // MODE LIBRE (jusqu'à 4 grimpeurs, SANS chaîne, chacun pour soi, premier au sommet) : règles « solo » (une plaque suffit, second saut) mais coups et tacles entre grimpeurs
+  if (opts.free) { W.free = true; W.alone = true; W.rank = []; W.nPl = clamp(Math.round(+opts.players || 2), 1, 4); }
   spawnAt(W, 0);
   return W;
 }
 export function spawnAt(W, cpIndex) {
+  if (W.free) return spawnFree(W);
   const cp = W.level.checkpoints[cpIndex];
   const dx = Math.min(1.6, W.L * 0.3);
   W.pl = [newPlayer(0, cp.x - dx, cp.y, cp.z), newPlayer(1, cp.x + dx, cp.y, cp.z)];
@@ -185,6 +188,30 @@ function safeSpots(W, cp, dx) {
     taken.push(p);
   }
   if (moved) layChain(W);
+}
+// mode libre : un emplacement libre au pied du point de passage, au plus près de l'emplacement souhaité (px, pz), à 0,75 m des autres
+function placeNear(W, cp, px, pz, taken) {
+  let best = null;
+  for (const ox of [0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0]) for (const oz of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8]) {
+    const x = px + ox, z = pz + oz, y = spotOk(W, x, cp.y, z);
+    if (y == null || taken.some((q) => Math.hypot(q.x - x, q.z - z) < 0.75)) continue;
+    const d = Math.hypot(ox, oz); if (!best || d < best.d) best = { x, y, z, d };
+  }
+  return best || { x: px, y: cp.y, z: pz };
+}
+function spawnFree(W) {
+  const cp = W.level.checkpoints[0], n = W.nPl; W.pl = []; W.ch = []; W.rank = []; W.rLock = []; W.done = false;
+  for (let i = 0; i < n; i++) {
+    const at = placeNear(W, cp, cp.x + (i - (n - 1) / 2) * 1.1, cp.z, W.pl);
+    const p = newPlayer(i, at.x, at.y, at.z); p.yaw = cp.yaw ?? Math.PI; p.peakY = at.y; p.cp = 0; p.done = false; W.pl.push(p);
+  }
+  resetMechanisms(W); W.ten = 0; W.taut = 0; W.cp = 0;
+}
+// mode libre : retour d'UN grimpeur à son dernier point de passage (les autres continuent)
+export function respawnPlayer(W, p) {
+  const cp = W.level.checkpoints[p.cp] || W.level.checkpoints[0], at = placeNear(W, cp, cp.x + (p.id - 1.5) * 0.5, cp.z, W.pl.filter((q) => q !== p));
+  Object.assign(p, { x: at.x, y: at.y, z: at.z, vx: 0, vy: 0, vz: 0, st: ST.GROUND, stT: 0, gb: -1, gvx: 0, gvy: 0, gvz: 0, hang: null, climb: null, mantle: null, rope: null, brace: false, knock: 0, ko: false, downT: 0, pT: null,
+    slideT: 0, crawl: false, recT: 0, sta: 1, yaw: cp.yaw ?? Math.PI, peakY: at.y, onMate: false, fell: false });
 }
 // remise en état des mécanismes (départ, réapparition) : planches, passerelles, portes, contrepoids, leviers et plaques
 export function resetMechanisms(W) {
@@ -226,6 +253,16 @@ function capsuleBox(b, x, y, z, r, h) {
   CN.x = b.c * nx + b.s * nz; CN.z = -b.s * nx + b.c * nz; CN.y = ny; CN.d = pen;
   return true;
 }
+// place pour se relever ? (sous un plafond bas, la glissade devient une reptation au lieu de se relever dans le plafond)
+function canStand(W, p) {
+  for (const b of W.bodies) {
+    if (!b.on || b.ghost || (p.thruT > 0 && b.i === p.thru) || b.hit) continue;
+    if (Math.abs(p.x - b.px) > b.ex + P.R + 0.05 || Math.abs(p.z - b.pz) > b.ez + P.R + 0.05) continue;
+    if (p.y > b.py + b.hh + 0.05 || p.y + P.H < b.py - b.hh - 0.05) continue;
+    if (capsuleBox(b, p.x, p.y + 0.02, p.z, P.R, P.H) && CN.y < -0.3) return false;
+  }
+  return true;
+}
 function collidePlayer(W, p, groundOk = true) {
   let ground = null, gn = 0;
   for (let it = 0; it < 3; it++) {
@@ -233,8 +270,9 @@ function collidePlayer(W, p, groundOk = true) {
     for (const b of W.bodies) {
       if (!b.on || b.ghost || (p.thruT > 0 && b.i === p.thru)) continue; // on traverse la barre qu'on vient de lâcher
       if (Math.abs(p.x - b.px) > b.ex + P.R + 0.05 || Math.abs(p.z - b.pz) > b.ez + P.R + 0.05) continue;
-      if (p.y > b.py + b.hh + 0.05 || p.y + P.H < b.py - b.hh - 0.05) continue;
-      if (!capsuleBox(b, p.x, p.y, p.z, P.R, P.H)) continue;
+      const hp = p.slideT > 0 ? P.HS : P.H; // glissade / tacle : on est bas (on passe sous les obstacles bas)
+      if (p.y > b.py + b.hh + 0.05 || p.y + hp < b.py - b.hh - 0.05) continue;
+      if (!capsuleBox(b, p.x, p.y, p.z, P.R, hp)) continue;
       any = true;
       p.x += CN.x * CN.d; p.y += CN.y * CN.d; p.z += CN.z * CN.d;
       // vitesse relative à la surface : on retire la part qui rentre dedans
@@ -255,8 +293,10 @@ function collidePlayer(W, p, groundOk = true) {
   return ground;
 }
 // collision entre les deux grimpeurs : on peut se pousser et monter sur la tête de l'autre
-function collideMates(W) {
-  const [a, b] = W.pl, r = P.R * 2;
+function collideMates(W) { const [a, b] = W.pl; collidePair(a, b); }
+function collideAll(W) { for (let i = 0; i < W.pl.length; i++) for (let j = i + 1; j < W.pl.length; j++) collidePair(W.pl[i], W.pl[j]); }
+function collidePair(a, b) {
+  const r = P.R * 2;
   const ay0 = a.y + P.R, ay1 = a.y + P.H - P.R, by0 = b.y + P.R, by1 = b.y + P.H - P.R;
   // points les plus proches de deux segments verticaux
   const sa = clamp((Math.max(ay0, by0) + Math.min(ay1, by1)) / 2, ay0, ay1), sb = clamp(sa, by0, by1), sa2 = clamp(sb, ay0, ay1);
@@ -360,6 +400,8 @@ function leaveWall(p, nx, nz, ix, iz, mode) {
 /* ------------------------------ grimpeur ------------------------------ */
 export const IDLE = { mx: 0, mz: 0, jump: false, jc: 0, brace: false, pull: false, dc: 0, uc: 0, reset: false };
 const CD = { x: 0, y: 0, z: 0, yaw: 0 };
+const others = (W, p) => W.pl.filter((q) => q !== p);
+function nearestOther(W, p) { let best = null, bd = 1e9; for (const q of W.pl) { if (q === p) continue; const d = Math.hypot(q.x - p.x, q.z - p.z) + Math.abs(q.y - p.y); if (d < bd) { bd = d; best = q; } } return best; }
 function stepPlayer(W, p, I, mate) {
   const dt = DT;
   p.stT += dt; p.grabCd = Math.max(0, p.grabCd - dt); p.thruT = Math.max(0, (p.thruT || 0) - dt); p.knock = Math.max(0, p.knock - dt); p.land = Math.max(0, p.land - dt);
@@ -388,19 +430,20 @@ function stepPlayer(W, p, I, mate) {
     const t0 = p.pT, H = atkHit(p); p.pT += dt;
     if (p.pT <= H && p.lunge > 0 && (p.st === ST.GROUND || p.st === ST.AIR)) { const s = Math.min(p.lunge, (p.lunge / Math.max(dt, H - t0)) * dt); const nx = p.x + Math.sin(p.yaw) * s, nz = p.z + Math.cos(p.yaw) * s; if (!inside(W, nx, p.y + 0.9, nz, P.R)) { p.x = nx; p.z = nz; } p.lunge -= s; }
     if (p.pT < H + 0.12) wx = wz = wl = 0; // pendant le coup, on ne court pas
-    if (t0 < H && p.pT >= H) punchHit(W, p, mate);
+    if (t0 < H && p.pT >= H) { if (W.free) for (const q of others(W, p)) punchHit(W, p, q); else punchHit(W, p, mate); }
     if (p.pT > (p.pK ? 0.75 : 0.55)) p.pT = null;
   }
   if ((pPress || kPress) && p.pCd <= 0 && !p.downT && !p.ko && (p.st === ST.GROUND || p.st === ST.AIR) && !p.cup && !p.haul) {
     p.pT = 0; p.pK = kPress && !pPress ? 1 : 0; p.pCd = p.pK ? P.KICK_CD : P.PUNCH_CD; p.lunge = 0;
     p.pSide = p.pK ? 1 : (Math.imul(W.tick + 7 * p.id + 13, 2654435761) >>> 16) & 1; // poing : 0 = jab (gauche), 1 = cross (droite)
-    if (mate && !W.alone && !W.solo) { const h = Math.hypot(mate.x - p.x, mate.z - p.z), want = p.pK ? 1.3 : 1.0;
-      if (h < 2.6) p.yaw = Math.atan2(mate.x - p.x, mate.z - p.z);
-      if (h > want && h < (p.pK ? P.KICK_R : P.PUNCH_R) + 0.7 && Math.abs(mate.y - p.y) < 1) p.lunge = h - want; }
+    const tg = W.free ? nearestOther(W, p) : mate;
+    if (tg && (W.free || (!W.alone && !W.solo))) { const h = Math.hypot(tg.x - p.x, tg.z - p.z), want = p.pK ? 1.3 : 1.0;
+      if (h < 2.6) p.yaw = Math.atan2(tg.x - p.x, tg.z - p.z);
+      if (h > want && h < (p.pK ? P.KICK_R : P.PUNCH_R) + 0.7 && Math.abs(tg.y - p.y) < 1) p.lunge = h - want; }
     ev(W, 'swing', { p: p.id, side: p.pSide, kick: p.pK, x: p.x, y: p.y + 1.4, z: p.z });
   }
   p.ropeUp = false;
-  if (p.st !== ST.GROUND && p.slideT) { p.slideT = 0; p.slideCd = P.SLIDE_CD; }
+  if (p.st !== ST.GROUND && p.slideT) { p.slideT = 0; p.crawl = false; p.slideCd = P.SLIDE_CD; }
   if (p.st !== ST.AIR) { p.dj = false; p.cupUsed = false; p.slideJump = false; } // second saut (mode solo) rendu dès qu'on touche quelque chose
   p.ropeCd = Math.max(0, (p.ropeCd || 0) - dt);
   // levier à portée : « Interagir » le bascule
@@ -488,13 +531,13 @@ function stepPlayer(W, p, I, mate) {
       p.dj = false; p.coy = P.COYOTE; p.sta = p.haul ? p.sta - P.STA_HAUL * (0.4 + (p.load || 0)) * dt : Math.min(1, p.sta + P.STA_REGEN * dt);
       // GLISSADE (touche dédiée) : en courant, un appui lance une glissade rapide (élan ×1,28, freinage doux, virage lent) ; sauter pendant la glissade donne
       // un saut plus long ; on peut la couper (relâcher) après 0,22 s. Recharge courte.
-      const sPress = !!I.slide && !p.sHeld; p.sHeld = !!I.slide; p.slideCd = Math.max(0, (p.slideCd || 0) - dt);
+      const sPress = !!I.slide && !p.sHeld; p.sHeld = !!I.slide; p.slideCd = Math.max(0, (p.slideCd || 0) - dt); p.tackleCd = Math.max(0, (p.tackleCd || 0) - dt); p.recT = Math.max(0, (p.recT || 0) - dt);
       if (sPress && !p.slideT && p.slideCd <= 0 && !p.haul && !p.cup && !p.downT) {
         const rvx0 = p.vx - p.gvx, rvz0 = p.vz - p.gvz, sp0 = Math.hypot(rvx0, rvz0);
         if (sp0 > 1.2) { p.sdx = rvx0 / sp0; p.sdz = rvz0 / sp0; } else if (wl > 0.3) { p.sdx = wx / wl; p.sdz = wz / wl; } else { p.sdx = Math.sin(p.yaw); p.sdz = Math.cos(p.yaw); }
-        p.slideT = P.SLIDE_T; p.sv = Math.max(sp0, P.RUN) * P.SLIDE_BOOST; ev(W, 'slide', { p: p.id, x: p.x, y: p.y, z: p.z });
+        p.slideT = P.SLIDE_T; p.crawl = false; p.sv = Math.max(sp0, P.RUN) * P.SLIDE_BOOST; ev(W, 'slide', { p: p.id, x: p.x, y: p.y, z: p.z, dx: p.sdx, dz: p.sdz });
       }
-      let spd = P.RUN;
+      let spd = P.RUN * (p.recT > 0 ? 0.55 : 1); // juste après une glissade : on se relève (plus lent)
       let tx = wx * spd, tz = wz * spd;
       if (p.brace) { tx *= 0.25; tz *= 0.25; } // arc-bouté : on avance à petits pas
       if (p.haul) { tx *= P.HAUL_MOVE; tz *= P.HAUL_MOVE; } // on tire à deux mains : la chaîne nous attire vers le vide 
@@ -518,12 +561,21 @@ function stepPlayer(W, p, I, mate) {
       p.vx = nvx + p.gvx; p.vz = nvz + p.gvz; p.vy = Math.min(p.vy, p.gvy);
       if (p.slideT > 0) { // la glissade impose la vitesse : direction qui tourne lentement vers la direction voulue, vitesse qui retombe
         p.slideT -= dt;
-        if (wl > 0.2) { const a0 = Math.atan2(p.sdx, p.sdz), d = Math.atan2(Math.sin(Math.atan2(wx, wz) - a0), Math.cos(Math.atan2(wx, wz) - a0)), a1 = a0 + clamp(d, -P.SLIDE_TURN * dt, P.SLIDE_TURN * dt); p.sdx = Math.sin(a1); p.sdz = Math.cos(a1); }
-        p.sv = Math.max(P.RUN * 0.7, p.sv - P.SLIDE_DECEL * dt);
+        if (p.crawl) { // sous un plafond bas : on rampe, la direction suit l'envie
+          if (wl > 0.2) { p.sdx = wx / wl; p.sdz = wz / wl; p.sv = P.CRAWL; } else p.sv = 0;
+        } else {
+          if (wl > 0.2) { const a0 = Math.atan2(p.sdx, p.sdz), d = Math.atan2(Math.sin(Math.atan2(wx, wz) - a0), Math.cos(Math.atan2(wx, wz) - a0)), a1 = a0 + clamp(d, -P.SLIDE_TURN * dt, P.SLIDE_TURN * dt); p.sdx = Math.sin(a1); p.sdz = Math.cos(a1); }
+          p.sv = Math.max(P.RUN * 0.7, p.sv - P.SLIDE_DECEL * dt);
+          for (const q of others(W, p)) tackleHit(W, p, q);
+        }
         p.vx = p.sdx * p.sv + p.gvx; p.vz = p.sdz * p.sv + p.gvz;
-        if ((!I.slide && p.slideT < P.SLIDE_T - P.SLIDE_MIN) || p.brace || p.haul) p.slideT = 0;
-        if (p.slideT <= 0) { p.slideT = 0; p.slideCd = P.SLIDE_CD; }
+        if (!p.crawl && ((!I.slide && p.slideT < P.SLIDE_T - P.SLIDE_MIN) || p.brace || p.haul)) p.slideT = 0;
+        if (p.slideT <= 0) {
+          if (!canStand(W, p) && !p.brace && !p.haul) { p.slideT = 0.05; p.crawl = true; } // plafond bas : on reste accroupi
+          else { p.slideT = 0; p.crawl = false; p.slideCd = P.SLIDE_CD; p.recT = P.SLIDE_REC; }
+        }
       }
+      if (p.crawl && p.buf > 0) p.buf = 0; // coincé sous un plafond bas : pas de saut
       if (p.buf > 0 && cupBoost(W, p, mate)) { /* courte échelle */ }
       else if (p.buf > 0) { // saut : on garde l'élan de la plateforme
         p.buf = 0; p.vy = P.JUMP + Math.max(0, p.gvy); p.st = ST.AIR; p.stT = 0; p.coy = 0; p.cut = false; p.jHeld = true; p.onMate = false;
@@ -568,7 +620,7 @@ function stepPlayer(W, p, I, mate) {
     const wasGround = ground;
     const g = collidePlayer(W, p);
     if (g) setGround(W, p, g);
-    else if (p.onMate && Math.abs(p.y - (mate.y + P.H)) < 0.08 && Math.hypot(p.x - mate.x, p.z - mate.z) < P.R * 2) { p.st = ST.GROUND; }
+    else if (p.onMate && mate && Math.abs(p.y - (mate.y + P.H)) < 0.08 && Math.hypot(p.x - mate.x, p.z - mate.z) < P.R * 2) { p.st = ST.GROUND; }
     else if (wasGround && p.vy <= p.gvy + 0.01 && !p.onMate) {
       // accroche au sol : on suit les marches et les plateformes qui descendent
       const gr = groundBelow(W, p.x, p.y + 0.02, p.z, 0.32);
@@ -609,7 +661,7 @@ function uStep(b, f, fi, d) { const ax = FACE[f][0] ? b.s : b.c, az = FACE[f][0]
 function roomAbove(W, b, f, u) { facePoint(b, f, u, -0.4, b.py + b.hh + 1.0, FP); return !inside(W, FP.x, FP.y, FP.z); }
 const atkHit = (p) => (p.pK ? P.KICK_HIT : p.pSide ? 0.26 : 0.2); // instant de l'impact du coup en cours
 function punchHit(W, p, m) {
-  if (!m || W.alone || W.solo || m.ko || m.downT > 0) return;
+  if (!m || (W.alone && !W.free) || W.solo || m.ko || m.downT > 0) return;
   if (m.st !== ST.GROUND && m.st !== ST.AIR) return; // accroché, en paroi, en liane : on ne le décroche pas d'un coup
   const dx = m.x - p.x, dz = m.z - p.z, h = Math.hypot(dx, dz), fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
   if (h > (p.pK ? P.KICK_R : P.PUNCH_R) || Math.abs(m.y - p.y) > 1.3 || (h > 0.2 && (dx * fx + dz * fz) / h < 0.35)) return;
@@ -617,6 +669,16 @@ function punchHit(W, p, m) {
   const V = p.pK ? P.KICK_V : P.PUNCH_V; m.vx = ux * V + p.vx * 0.3; m.vz = uz * V + p.vz * 0.3; m.vy = p.pK ? P.KICK_VY : P.PUNCH_VY; toAir(m); m.coy = 0; m.noCut = true;
   m.knock = 0.9; m.ko = true; m.grabCd = 0.6; m.hang = m.climb = m.mantle = null; m.cup = false; m.pT = null;
   ev(W, 'punch', { p: p.id, v: m.id, side: p.pSide, kick: p.pK, x: m.x, y: m.y + (p.pK ? 1.15 : 1.55), z: m.z, ux, uz });
+}
+// TACLE : la glissade fauche les grimpeurs DEBOUT sur le sol devant soi (un saut bien placé l'évite). Le tacleur perd de l'élan, la victime est projetée puis reste au sol.
+function tackleHit(W, p, m) {
+  if (!m || W.solo || (W.alone && !W.free) || m.ko || m.downT > 0 || m.st !== ST.GROUND || (p.tackleCd || 0) > 0 || p.sv < P.RUN * 0.9) return;
+  const dx = m.x - p.x, dz = m.z - p.z, h = Math.hypot(dx, dz);
+  if (h > P.TACKLE_R || Math.abs(m.y - p.y) > 0.6 || (h > 0.15 && (dx * p.sdx + dz * p.sdz) / h < 0.35)) return;
+  m.vx = p.sdx * P.TACKLE_V + (p.gvx || 0); m.vz = p.sdz * P.TACKLE_V + (p.gvz || 0); m.vy = P.TACKLE_VY; toAir(m); m.coy = 0; m.noCut = true;
+  m.knock = 0.7; m.ko = true; m.grabCd = 0.6; m.hang = m.climb = m.mantle = null; m.cup = false; m.pT = null; m.slideT = 0;
+  p.sv *= 0.55; p.tackleCd = P.TACKLE_CD;
+  ev(W, 'tackle', { p: p.id, v: m.id, x: m.x, y: m.y + 0.4, z: m.z, ux: p.sdx, uz: p.sdz });
 }
 // le grimpeur p saute dans les mains jointes de son partenaire (mains depuis au moins 0,15 s, à portée, pieds à hauteur du sol ou des mains)
 function cupBoost(W, p, m) {
@@ -664,7 +726,7 @@ function findRope(W, p, mate) {
   const hy = p.y + 1.9;
   for (let i = 0; i < ropes.length; i++) {
     const r = ropes[i];
-    if (mate.st === ST.ROPE && mate.rope.i === i) continue;
+    if (mate?.st === ST.ROPE && mate.rope.i === i) continue;
     if ((p.ropeCd > 0 && p.lastRope === i) || hy > r.y - 0.4 || hy < r.y - r.len) continue;
     if (Math.hypot(p.x - r.x, p.z - r.z) > P.ROPE_REACH + (r.y - hy) * 0.05) continue;
     return { i, s: Math.max(0.8, r.y - hy) };
@@ -937,11 +999,37 @@ function shadowMate(W) {
 // outils du moteur prêtés aux modules de monde (core/biomes)
 const onBody = (W, b) => { let n = 0; for (const p of W.pl) if (p.st === ST.GROUND && p.gb === b.i) n++; return n; };
 const X = { ST, P, DT, HP, CH, ev: (W, k, o) => ev(W, k, o), clamp, onB: onBody, inside, groundBelow, bounds, spanOf, toAir: (p) => toAir(p) };
+function stepFree(W, inputs) {
+  const pl = W.pl, n = pl.length, cps = W.level.checkpoints;
+  if (!W.started && pl.some((p, i) => { const I = inputs[i] || IDLE; return Math.hypot(I.mx || 0, I.mz || 0) > 0.2 || I.jc !== p.jc; })) { W.started = true; ev(W, 'go'); }
+  if (W.started && !W.done) W.time += DT;
+  for (let i = 0; i < n; i++) stepPlayer(W, pl[i], inputs[i] || IDLE, nearestOther(W, pl[i]));
+  collideAll(W);
+  for (const p of pl) if (p.st === ST.AIR || p.st === ST.GROUND) { const g = collidePlayer(W, p); if (g && p.st === ST.AIR && p.vy <= g.vy + 0.5) setGround(W, p, g); }
+  for (const m of BIOMES) m.post?.(W, X);
+  for (let i = 0; i < n; i++) {
+    const p = pl[i], I = inputs[i] || IDLE;
+    if (!I.reset) W.rLock[i] = false; p.rHold = I.reset && !W.rLock[i] ? (p.rHold || 0) + DT : 0;
+    const abyss = p.y < W.level.abyss;
+    if (abyss || p.rHold > 0.5) { if (abyss) { W.falls++; ev(W, 'abyss', { p: p.id }); } else { W.resets++; W.rLock[i] = true; ev(W, 'reset', { p: p.id }); } respawnPlayer(W, p); ev(W, 'respawn', { p: p.id, cp: p.cp }); continue; }
+    for (let c = p.cp + 1; c < cps.length; c++) {
+      const cc = cps[c];
+      if (p.st === ST.GROUND && Math.hypot(p.x - cc.x, p.z - cc.z) < cc.r && Math.abs(p.y - cc.y) < 3) {
+        p.cp = c; ev(W, 'checkpoint', { p: p.id, cp: c, x: cc.x, y: cc.y, z: cc.z });
+        if (cc.finish && !p.done) { p.done = true; p.finishT = W.time; W.rank.push(p.id); ev(W, 'finish', { p: p.id, time: W.time, rank: W.rank.length }); if (W.rank.length >= n) W.done = true; }
+        break;
+      }
+    }
+  }
+  W.cp = Math.max(...pl.map((p) => p.cp)); W.cpMax = Math.max(W.cpMax, W.cp); W.best = Math.max(W.best, ...pl.map((p) => p.y));
+  return W;
+}
 export function stepWorld(W, inputs) {
   W.ev.length = 0;
   W.tick++;
   updateBodies(W);
   stepMechanisms(W);
+  if (W.free) return stepFree(W, inputs);
   const [A, B] = W.pl, IA = inputs[0] || IDLE, IB = inputs[1] || IDLE;
   if (!W.started && (Math.hypot(IA.mx, IA.mz) > 0.2 || Math.hypot(IB.mx, IB.mz) > 0.2 || IA.jc !== A.jc || IB.jc !== B.jc)) { W.started = true; ev(W, 'go'); }
   if (W.started && !W.done) W.time += DT;
@@ -990,7 +1078,7 @@ export function snapWorld(W, exact = false) {
   const r3 = exact ? (v) => v : R3;
   return {
     k: W.tick, L: W.L, Lc: r3(W.Lc), cp: W.cp, cpm: W.cpMax, tm: r3(W.time), st: W.started ? 1 : 0, dn: W.done ? 1 : 0, f: W.falls, sv: W.saves, rs: W.resets, ten: r3(W.ten), ta: r3(W.taut), be: r3(W.best),
-    rh: W.resetHold.map(r3), lt: r3(W.lostT || 0), rl: (W.rLock || [false, false]).slice(),
+    rh: W.resetHold.map(r3), lt: r3(W.lostT || 0), rl: (W.rLock || [false, false]).slice(), rk: (W.rank || []).slice(),
     pl: W.pl.map((p) => ({ ...p, hang: p.hang && { ...p.hang }, climb: p.climb && { ...p.climb }, mantle: p.mantle && { ...p.mantle } })),
     ch: W.ch.map((n) => [r3(n.x), r3(n.y), r3(n.z), r3(n.ox), r3(n.oy), r3(n.oz)]),
     cr: W.cr, sk: W.sk, dr: W.dr, cw: W.cw, sw: W.sw, gt: W.gt, gtp: W.gtp, hs: W.hs, db: W.db, ext: W.ext,
@@ -998,7 +1086,7 @@ export function snapWorld(W, exact = false) {
 }
 export function applySnap(W, s) {
   W.tick = s.k; W.L = s.L; W.Lc = s.Lc; W.cp = s.cp; W.cpMax = s.cpm; W.time = s.tm; W.started = !!s.st; W.done = !!s.dn; W.falls = s.f; W.saves = s.sv; W.resets = s.rs; W.ten = s.ten; W.taut = s.ta; W.best = s.be;
-  W.resetHold = s.rh.slice(); W.lostT = s.lt || 0; W.rLock = (s.rl || [false, false]).slice();
+  W.resetHold = s.rh.slice(); W.lostT = s.lt || 0; W.rLock = (s.rl || [false, false]).slice(); if (W.free) W.rank = (s.rk || []).slice();
   W.pl = s.pl.map((p) => ({ ...p, hang: p.hang && { ...p.hang }, climb: p.climb && { ...p.climb }, mantle: p.mantle && { ...p.mantle } }));
   W.ch = s.ch.map((a) => ({ x: a[0], y: a[1], z: a[2], ox: a[3], oy: a[4], oz: a[5] }));
   const cp = (o) => JSON.parse(JSON.stringify(o || {}));
