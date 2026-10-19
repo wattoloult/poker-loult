@@ -368,12 +368,13 @@ function poseClimber(c, p, mate, W, dt, rp) {
   else if (c.cur !== 'Jump_Land' || c.acts.Jump_Land.time > 0.35) setAnim(c, a, a === 'Jump_Start' ? 0.05 : 0.16);
   if (c.cur === 'Jog_Fwd_Loop') c.acts.Jog_Fwd_Loop.timeScale = Math.max(0.7, spd / 5.4);
   if (c.cur === 'Walk_Loop') c.acts.Walk_Loop.timeScale = Math.max(0.6, spd / 1.8);
+  if (W.crazy && c.czRev && c.acts[c.cur] && (c.cur === 'Jog_Fwd_Loop' || c.cur === 'Walk_Loop')) c.acts[c.cur].timeScale *= -1; // marche arrière : la foulée est jouée à l'envers
   c.lastSt = p.st; c.lastVy = p.vy;
   c.mixer.update(S.hitstop > 0 ? dt * 0.08 : dt); // arrêt sur image de l'impact
   // position et orientation (lissées : le rendu ne doit jamais trembler même si la physique corrige)
   c.g.position.set(rp.x, rp.y, rp.z);
   const koFly = p.ko && p.st === ST.AIR && Math.hypot(p.vx, p.vz) > 1;
-  const wantYaw = koFly ? Math.atan2(-p.vx, -p.vz) : p.downT > 0 || p.dead > 0 ? c.yaw : p.yaw;
+  const wantYaw = koFly ? Math.atan2(-p.vx, -p.vz) : p.downT > 0 || p.dead > 0 ? c.yaw : W.crazy && S.crazy ? S.crazy.bodyYaw(c, p, dt) : p.yaw; // mode crazy : bassin = direction de déplacement, buste = visée
   let dy = wantYaw - c.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); c.yaw += dy * Math.min(1, dt * (koFly ? 30 : 16));
   c.g.rotation.y = c.yaw;
   const kick = c.atk?.kick ? kickPose(c.atk.t) : null, slide = p.st === ST.GROUND && p.slideT > 0 && !p.crawl && !p.ko;

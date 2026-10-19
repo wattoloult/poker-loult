@@ -14,8 +14,10 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 export const A = { yaw: 0, pitch: 0, scope: 0 }; // visée du joueur local (la SEULE source de ay / ap envoyés)
 export const cfg = { blood: true };
-const X = { on: false, W: null, G: null, me: null, rifles: [], aim: [], rec: [], feed: [], hitT: 0, hitHead: false, dmgT: 0, dmgAng: 0, banner: null, bannerT: 0, wasDead: false, camBack: 3.6, fov: 58, droplets: null, decals: [], pools: [], casings: [], tracers: [], puffs: [], mist: [], flashes: [], lastSnd: {} };
-const FOV0 = 58, FOV_SCOPE = 13;
+const X = { on: false, W: null, G: null, me: null, rifles: [], aim: [], rec: [], feed: [], hitT: 0, hitHead: false, dmgT: 0, dmgAng: 0, banner: null, bannerT: 0, wasDead: false, camBack: 5.6, fov: 60, droplets: null, decals: [], pools: [], casings: [], tracers: [], puffs: [], mist: [], flashes: [], lastSnd: {} };
+// RÉGLAGES DE LA CAMÉRA (une seule source) : la caméra est TOUJOURS sur le rayon de visée du tireur (épaule CZ.SHOULDER à droite, CZ.CAMUP au-dessus des yeux, définis dans
+// core/sim.js car la balle part de ce rayon) ; ici : sa distance, son champ de vision et ses transitions.
+export const CAM = { dist: 5.6, fov: 60, adsDist: 2.1, adsFov: 32, minDist: 1.1, adsSpeed: 9, inSpeed: 18, outSpeed: 2.2, wallMargin: 0.25 };
 
 /* ------------------------------ textures procédurales ------------------------------ */
 function canvasTex(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; }
@@ -114,7 +116,7 @@ export const moveYaw = () => A.yaw + Math.PI;
 /* ------------------------------ mise en place ------------------------------ */
 export function begin(G) {
   stop(); const W = G.W, T = textures();
-  X.on = true; X.W = W; X.G = G; X.me = G.me; X.feed = []; X.wasDead = false; X.banner = null; X.hitT = 0; X.dmgT = 0; X.camBack = 3.6;
+  X.on = true; X.W = W; X.G = G; X.me = G.me; X.feed = []; X.wasDead = false; X.banner = null; X.hitT = 0; X.dmgT = 0; X.camBack = CAM.dist; X.backS = null;
   const p = W.pl[G.me ?? 0]; if (p) { A.yaw = p.ay ?? p.yaw; A.pitch = 0; } A.scope = 0;
   X.root = new THREE.Group(); S.scene.add(X.root);
   X.rifles = W.pl.map(() => { const r = buildRifle(); X.root.add(r.g); r.g.visible = false; return r; });
@@ -443,6 +445,22 @@ function curl(c, side, n, amounts) {
     }
   }
 }
+// ORIENTATION DU CORPS : le bassin (la racine du personnage) suit la direction de DÉPLACEMENT (±75° de la visée ; en reculant il garde le regard devant et la course est jouée à l'envers),
+// le buste reprend la différence jusqu'à la visée (torsion répartie sur la colonne, jamais plus de ~70° au total). Rien ne s'accumule : tout est recalculé à chaque image depuis la visée.
+const D75 = (75 * Math.PI) / 180;
+export function bodyYaw(c, p, dt) {
+  const k = c.k, aim = k === X.me && !(p.dead > 0) ? A.yaw : p.ay ?? p.yaw;
+  if (c.legYaw === undefined || !Number.isFinite(c.legYaw)) c.legYaw = aim;
+  const vx = p.vx - (p.gvx || 0), vz = p.vz - (p.gvz || 0), sp = Math.hypot(vx, vz); let tgt = c.legYaw; c.czRev = false;
+  if (sp > 0.9 && p.st === ST.GROUND) {
+    const rel = wrap(Math.atan2(vx, vz) - aim);
+    if (Math.abs(rel) <= (105 * Math.PI) / 180) tgt = aim + clamp(rel, -D75, D75);
+    else { c.czRev = true; tgt = aim + clamp(wrap(rel + Math.PI), -D75 * 0.7, D75 * 0.7); } // marche arrière : jambes vers l'avant (animation inversée)
+  } else if (p.st === ST.AIR) tgt = aim + clamp(wrap(c.legYaw - aim), -D75, D75); // en l'air on garde l'orientation du saut
+  else if (Math.abs(wrap(aim - c.legYaw)) > (50 * Math.PI) / 180) tgt = aim; // à l'arrêt : on pivote sur place seulement quand la visée s'éloigne trop
+  c.legYaw += clamp(wrap(tgt - c.legYaw), -14 * dt, 14 * dt);
+  return c.legYaw;
+}
 const RBL = new THREE.Vector3();
 const AIMK = { yaw: 0, pitch: 0 };
 function aimFor(k, p, dt) {
@@ -472,8 +490,7 @@ export function pose(cl, W, dt, rp, me) {
   for (let k = 0; k < W.pl.length; k++) {
     const p = W.pl[k], c = cl[k], r = X.rifles[k]; if (!c || !r) continue;
     const alive = !(p.dead > 0) && (p.st === ST.GROUND || p.st === ST.AIR);
-    const scoped = k === me && A.scope > 0.85;
-    r.g.visible = alive && !scoped; c.g.visible = !scoped && !(k === me && A.scope > 0.85);
+    r.g.visible = alive; c.g.visible = true;
     c.ring.visible = true;
     if (!alive) continue;
     const a = aimFor(k, p, dt), d = new THREE.Vector3().copy(aimDirV(a.yaw, a.pitch)), Rv = new THREE.Vector3(rightOf(a.yaw).x, 0, rightOf(a.yaw).z);
@@ -498,7 +515,10 @@ export function pose(cl, W, dt, rp, me) {
     // buste : il suit la visée (tangage) et tourne un peu vers l'épaule du fusil
     const axisR = new THREE.Vector3(Rv.x, 0, Rv.z).normalize();
     for (const [bn, kf] of [['spine_01', 0.12], ['spine_02', 0.2], ['spine_03', 0.22], ['neck_01', 0.15], ['Head', 0.25]]) { const b = c.bones[bn]; if (b) rotWorld(b, axisR, a.pitch * kf - rec * 0.05); }
-    const sp2 = c.bones.spine_02; if (sp2) rotWorld(sp2, _e.set(0, 1, 0), -0.38); // torse tourné vers la droite : l'épaule gauche s'avance
+    { // torsion du buste = écart entre le bassin (c.yaw, racine rendue) et la visée, répartie sur trois vertèbres
+      const twist = clamp(wrap(a.yaw - c.yaw), -1.25, 1.25), Y = _e.set(0, 1, 0);
+      for (const [bn, kf] of [['spine_01', 0.25], ['spine_02', 0.4], ['spine_03', 0.35]]) { const b = c.bones[bn]; if (b) rotWorld(b, Y, twist * kf); }
+    }
     c.root.updateMatrixWorld(true);
     // mains
     const toW = (v) => v.clone().applyMatrix4(RIFLE_WORLD), dirW = (v) => v.clone().transformDirection(RIFLE_WORLD);
@@ -529,25 +549,27 @@ export function camera(W, rp, me, dt, cam) {
   let f = me; if (f == null || !W.pl[f]) { f = X.spec ?? 0; if (W.pl[f]?.dead > 0) { f = W.pl.findIndex((q) => !(q.dead > 0)); if (f < 0) f = 0; } X.spec = f; }
   const p = W.pl[f], r = rp[f], dead = p.dead > 0, own = f === me;
   const aim = own ? A : X.aim[f] || { yaw: p.ay ?? 0, pitch: 0 };
-  // lunette : le zoom suit le bouton droit (lissé) ; impossible mort, en rechargement ou accroché
-  const wantScope = own && !dead && p.scope ? 1 : 0; A.scope += (wantScope - A.scope) * Math.min(1, dt * 14);
-  if (own && wantScope && A.scope < 0.3 && !X.scopeSnd) { X.scopeSnd = true; Snd.gun('scope', { wet: 0 }); } if (!wantScope) X.scopeSnd = false;
-  const sc = own ? sm(A.scope) : 0;
-  const eyeY = r.y + crazyEye(p), R = rightOf(aim.yaw), d = aimDirV(aim.yaw, aim.pitch);
-  X.eyeS = X.eyeS === undefined ? eyeY : X.eyeS + (eyeY - X.eyeS) * Math.min(1, dt * 12);
+  // visée (clic droit) : la caméra se rapproche de l'épaule en douceur, le champ se resserre ; impossible mort ou en rechargement
+  const want = own && !dead && p.scope ? 1 : 0; A.scope += (want - A.scope) * Math.min(1, dt * CAM.adsSpeed);
+  if (own && want && A.scope < 0.3 && !X.scopeSnd) { X.scopeSnd = true; Snd.gun('scope', { wet: 0 }); } if (!want) X.scopeSnd = false;
+  const sc = own ? sm(A.scope) : 0, R = rightOf(aim.yaw), d = aimDirV(aim.yaw, aim.pitch);
   let px, py, pz, lx, ly, lz;
   if (dead && own) { // caméra de mort : tourne autour du corps
-    const cy = r.y + 1.0, dist = 5.2, ch = Math.cos(0.45); px = r.x + Math.sin(A.yaw + Math.PI) * -dist * ch * -1; px = r.x - Math.sin(A.yaw) * dist * ch; pz = r.z - Math.cos(A.yaw) * dist * ch; py = cy + Math.sin(0.45) * dist; lx = r.x; ly = cy; lz = r.z;
+    const cy = r.y + 1.0, dist = 5.2, ch = Math.cos(0.45); px = r.x - Math.sin(A.yaw) * dist * ch; pz = r.z - Math.cos(A.yaw) * dist * ch; py = cy + Math.sin(0.45) * dist; lx = r.x; ly = cy; lz = r.z;
   } else {
-    const bx = r.x + R.x * CZ.SHOULDER, by = X.eyeS, bz = r.z + R.z * CZ.SHOULDER; // l'axe de la caméra = le rayon de visée du tireur
-    let back = lerp(X.camBack, 0.05, sc);
-    // le décor ne doit pas boucher la vue : on rapproche la caméra du tireur au premier mur rencontré
-    let t = back; for (const b of W.bodies) { if (!b.on || b.ghost || b.ex === undefined) continue; if (Math.abs(bx - b.px) > b.ex + back || Math.abs(bz - b.pz) > b.ez + back || Math.abs(by - b.py) > b.hh + back) continue; const h = rayBody(b, bx, by, bz, -d.x, -d.y, -d.z, t); if (h && h.t < t) t = Math.max(0.25, h.t - 0.2); }
-    back = t; px = bx - d.x * back; py = by - d.y * back; pz = bz - d.z * back; lx = px + d.x * 40; ly = py + d.y * 40; lz = pz + d.z * 40;
+    const eyeY = r.y + crazyEye(p) + CZ.CAMUP; X.eyeS = X.eyeS === undefined ? eyeY : X.eyeS + (eyeY - X.eyeS) * Math.min(1, dt * 10); // les yeux montent / descendent doucement (glissade)
+    const bx = r.x + R.x * CZ.SHOULDER, by = X.eyeS, bz = r.z + R.z * CZ.SHOULDER;
+    const want2 = lerp(CAM.dist, CAM.adsDist, sc);
+    // le décor ne doit pas boucher la vue : premier mur sur le rayon arrière ; on s'en approche vite, on s'en éloigne lentement (jamais de va-et-vient)
+    let t = want2; for (const b of W.bodies) { if (!b.on || b.ghost || b.ex === undefined) continue; if (Math.abs(bx - b.px) > b.ex + want2 || Math.abs(bz - b.pz) > b.ez + want2 || Math.abs(by - b.py) > b.hh + want2) continue; const h = rayBody(b, bx, by, bz, -d.x, -d.y, -d.z, t); if (h && h.t < t) t = Math.max(CAM.minDist * 0.6, h.t - CAM.wallMargin); }
+    if (X.backS == null) X.backS = t; else X.backS += (t - X.backS) * Math.min(1, dt * (t < X.backS ? CAM.inSpeed : CAM.outSpeed));
+    const back = Math.min(X.backS, t < X.backS ? t : X.backS); X.backS = back; // jamais derrière un mur
+    px = bx - d.x * back; py = by - d.y * back; pz = bz - d.z * back; lx = px + d.x * 40; ly = py + d.y * 40; lz = pz + d.z * 40;
+    if (py < r.y + 0.3) py = r.y + 0.3; // ne passe pas sous le sol quand on vise vers le haut
   }
   const sh = S.shake || 0; S.shake = Math.max(0, sh - dt * 1.6);
   cam.position.set(px + (Math.random() - 0.5) * sh * 0.3, py + (Math.random() - 0.5) * sh * 0.3, pz); cam.lookAt(lx, ly, lz);
-  const fov = lerp(FOV0, FOV_SCOPE, sc); if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
+  const fov = lerp(CAM.fov, CAM.adsFov, sc); if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
   S.sun.position.set(r.x + S.sunDir.x * 60, r.y + S.sunDir.y * 60, r.z + S.sunDir.z * 60); S.sun.target.position.set(r.x, r.y, r.z);
   return true;
 }
@@ -584,9 +606,9 @@ export function hud(W, dt, G) {
   const dead = me.dead > 0;
   // viseur : l'écart des traits suit la dispersion réelle du tir ; remplacé par la lunette
   const spread = crazySpread(me), gap = (Math.tan(spread) / Math.tan((S.cam.fov * Math.PI) / 360)) * (innerHeight / 2), sc = sm(A.scope);
-  const cr = $('#cz-cross'); cr.style.opacity = dead || sc > 0.5 ? 0 : 1;
+  const cr = $('#cz-cross'); cr.style.opacity = dead ? 0 : 1;
   cr.querySelector('.u').style.top = `${-gap - 11}px`; cr.querySelector('.d').style.top = `${gap + 2}px`; cr.querySelector('.l').style.left = `${-gap - 11}px`; cr.querySelector('.r').style.left = `${gap + 2}px`;
-  $('#cz-scope').style.opacity = sc; $('#cz-scope').style.display = sc > 0.02 ? 'block' : 'none';
+  $('#cz-scope').style.display = 'none'; // le Kar98k n'a pas de lunette : visée à l'épaule (caméra rapprochée, champ resserré)
   X.hitT = Math.max(0, X.hitT - dt); const hm = $('#cz-hit'); hm.style.opacity = X.hitT > 0 ? Math.min(1, X.hitT / 0.12) : 0; hm.classList.toggle('head', X.hitHead);
   X.dmgT = Math.max(0, X.dmgT - dt); $('#cz-vig').style.opacity = Math.min(1, X.dmgT * 1.8);
   const di = $('#cz-dmg i'); di.style.opacity = X.dmgT > 0 ? Math.min(1, X.dmgT * 2) : 0; di.style.transform = `rotate(${(-X.dmgAng * 180) / Math.PI}deg)`; di.style.transformOrigin = '60px 150px';

@@ -570,7 +570,7 @@ function renderRoom(m) {
   $$('#r-mode button').forEach((b) => { b.classList.toggle('on', b.dataset.m === m.cfg.mode); b.disabled = !host; }); $('#r-len').style.display = free ? 'none' : '';
   $('#r-players').innerHTML = Array.from({ length: max }, (_, i) => i).map((i) => { const p = m.players[i]; return `<li class="${p ? '' : 'empty'}"><i style="background:${['#ff9a3c', '#46b8ff', '#5ed67a', '#e86cc0'][i]}"></i>${p ? esc(p.name) + (p.id === m.host ? ` <small>${tr('hôte')}</small>` : '') + (p.id === m.you ? ` <small>${tr('toi')}</small>` : '') + (p.offline ? ` <small>${tr('déconnecté')}</small>` : '') : tr(free ? 'Place libre…' : 'En attente d\'un partenaire…')}</li>`; }).join('');
   $$('#r-len button').forEach((b) => { b.classList.toggle('on', +b.dataset.l === m.cfg.L); b.disabled = !host; });
-  fillCourseSelects(); $('#r-course').value = m.cfg.course; $('#r-course').disabled = !host;
+  fillCourseSelects(m.cfg.mode === 'crazy'); $('#r-course').value = m.cfg.course; $('#r-course').disabled = !host;
   $('#r-start').disabled = !host || m.players.length < 2;
   $('#r-start').textContent = host ? (m.players.length < 2 ? tr('En attente du 2e grimpeur') : tr(free ? 'Lancer la course' : 'Lancer l\'ascension')) : tr('L\'hôte lance la partie');
 }
@@ -597,8 +597,8 @@ function showCourses(mode) {
   }).join('');
   show('courses'); ($('.floor.sel') || $('.floor:not(.none)'))?.scrollIntoView({ block: 'center' });
 }
-function fillCourseSelects() {
-  const opts = visible().map((c) => `<option value="${c.id}">${esc(tr(c.name))}${c.published ? '' : ' (test)'}</option>`).join('');
+function fillCourseSelects(crazy = false) {
+  const opts = (crazy ? courseList(true, true) : visible()).map((c) => `<option value="${c.id}">${esc(tr(c.name))}${c.published ? '' : ' (test)'}</option>`).join('');
   $('#r-course').innerHTML = opts;
 }
 $('#r-course').addEventListener('change', (e) => net?.send({ t: 'cfg', course: e.target.value }));
