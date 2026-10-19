@@ -42,7 +42,7 @@ const boardOf = (id) => (boards[id] ||= []);
 
 const rooms = new Map();
 // parcours autorisé : publié, ou n'importe lequel pour un client authentifié en playtest (clé serveur)
-const okCourse = (ws, id, mode = 'coop') => (mode === 'crazy' ? (COURSES[id]?.crazy ? id : 'cour') : COURSES[id] && !COURSES[id].crazy && (COURSES[id].published || ws.pt) ? id : DEFAULT_COURSE);
+const okCourse = (ws, id, mode = 'coop') => (mode === 'crazy' ? (COURSES[id]?.crazy ? id : 'quartier') : COURSES[id] && !COURSES[id].crazy && (COURSES[id].published || ws.pt) ? id : DEFAULT_COURSE);
 // modes sans chaîne (libre, crazy) : jusqu'à 4 joueurs, chacun pour soi, sièges contigus
 const solo = (r) => r.cfg.mode === 'free' || r.cfg.mode === 'crazy';
 let nextId = 1;

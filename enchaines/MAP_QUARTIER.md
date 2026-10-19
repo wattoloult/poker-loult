@@ -1,7 +1,7 @@
 # Le Quartier du Dragon — refonte jouable de la Cour du Dragon (mode crazy)
 
 Arène `quartier` (`core/courses/quartier.js`), construite avec le pack « Courtyard » (`assets/exports/combat_fight_arena_psx.glb`, najjar320, licence `assets/LICENSE.txt`).
-L'ancienne arène `cour` est **conservée telle quelle** (`core/courses/cour.js`, `published: false`, encore sélectionnable au salon) : tout est réversible, le fichier GLB n'est **pas modifié**.
+L'ancienne arène `cour` est **conservée telle quelle** (`core/courses/cour.js`, `published: false`, encore sélectionnable au salon) ; le Quartier est l'arène crazy par défaut : tout est réversible, le fichier GLB n'est **pas modifié**.
 
 Plan généré à partir des collisions réelles : `node tools/plan.mjs quartier tools/plan-quartier.png 12` → `tools/plan-quartier.png`
 (gris = hauteur du dessus des volumes, plus clair = plus bas ; rouge = toits hors d'atteinte ; jaune = rebords saisissables ; orange = caisses et murets ; cyan = apparitions ; magenta = points d'accroche des cordes).

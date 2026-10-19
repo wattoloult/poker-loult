@@ -4,7 +4,7 @@
 // Repère : celui du GLB (x −20,5…20,7 ; z −29,7…5,6 ; sol y = 0). Les murs sont les pavillons (retrait de 0,45 m = le débord des toits) ; leurs toits en pente ne se montent pas (`nograb`).
 import { course } from '../kit.js';
 
-const K = course({ id: 'cour', world: 'medieval', name: 'La Cour du Dragon', short: 'Pavillons, ruelles et escalier autour d\'une cour pavée', diff: 2, published: true, crazy: true,
+const K = course({ id: 'cour', world: 'medieval', name: 'La Cour du Dragon', short: 'Pavillons, ruelles et escalier autour d\'une cour pavée', diff: 2, published: false, crazy: true, // remplacée par « Le Quartier du Dragon » (quartier.js) ; gardée telle quelle, sélectionnable au salon
   medals: { gold: 1, silver: 2, bronze: 3 }, backdrop: 'gorge', abyss: -10, envGlb: 'assets/exports/combat_fight_arena_psx.glb', envBackdrop: 'assets/exports/mountains_sky_backdrop.glb' });
 const { block, cp } = K;
 K.zone(1, 'La Cour');

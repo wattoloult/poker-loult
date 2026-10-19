@@ -8,7 +8,7 @@ import { course } from '../kit.js';
 import { placePiece } from './cour-kit.js';
 
 const GLB = 'assets/exports/combat_fight_arena_psx.glb';
-const K = course({ id: 'quartier', world: 'medieval', name: 'Le Quartier du Dragon', short: 'Rues larges, toits praticables, balcons et kiosque autour du pavillon', diff: 2, published: false, // en test : pas encore vérifié en partie réelle (sélectionnable au salon) crazy: true,
+const K = course({ id: 'quartier', world: 'medieval', name: 'Le Quartier du Dragon', short: 'Rues larges, toits praticables, balcons et kiosque autour du pavillon', diff: 2, published: true, crazy: true,
   medals: { gold: 1, silver: 2, bronze: 3 }, backdrop: 'enceinte', abyss: -10, envGlb: GLB, envBackdrop: 'assets/exports/mountains_sky_backdrop.glb' });
 const { block, cp } = K;
 K.zone(1, 'Le Quartier');
