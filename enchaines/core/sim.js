@@ -1016,7 +1016,7 @@ const onBody = (W, b) => { let n = 0; for (const p of W.pl) if (p.st === ST.GROU
 const X = { ST, P, DT, HP, CH, ev: (W, k, o) => ev(W, k, o), clamp, onB: onBody, inside, groundBelow, bounds, spanOf, toAir: (p) => toAir(p) };
 
 /* ------------------------------ mode CRAZY : arène, fusil à verrou ------------------------------ */
-export const CZ = { LIMIT: 15, TIME: 300, RESPAWN: 3, PROT: 2, SHOULDER: 0.45, BORE: 0.12, WALL_SLIDE: 3.2, WALL_CD: 0.22, SCOPE_SLOW: 0.55, WJ_OUT: 6.4, WJ_UP: 8.6,
+export const CZ = { LIMIT: 15, TIME: 300, RESPAWN: 3, PROT: 2, SHOULDER: 0.75, CAMUP: 0.35, BORE: 0.12, WALL_SLIDE: 3.2, WALL_CD: 0.22, SCOPE_SLOW: 0.55, WJ_OUT: 6.4, WJ_UP: 8.6,
   // phases du cycle de culasse (s depuis le tir) et du rechargement (s depuis son début) : chacune émet un événement de son propre bruit
   BOLT: [[0.10, 'up'], [0.22, 'back'], [0.42, 'eject'], [0.60, 'fwd'], [0.80, 'down']], RELOAD_AT: [[0.25, 'open'], [0.85, 'clip'], [1.85, 'push'], [2.3, 'close']] };
 export const crazyEye = (p) => (p.slideT > 0 || p.crawl ? KAR.EYE_SLIDE : KAR.EYE);
@@ -1098,7 +1098,7 @@ function fireShot(W, p) {
   // dispersion déterministe (même tirage chez tous) : un point dans un disque autour de la visée
   const h = Math.imul(W.tick * 31 + p.id * 977 + p.ammo, 2654435761) >>> 0, a = ((h & 0xffff) / 65536) * Math.PI * 2, r = (((h >>> 16) & 0xffff) / 65536) ** 0.5 * sp;
   const d = aimDir(ay + Math.cos(a) * r, clamp(ap + Math.sin(a) * r, -1.45, 1.45)), R = rightOf(ay), eye = crazyEye(p);
-  const cx = p.x + R.x * CZ.SHOULDER, cy = p.y + eye, cz = p.z + R.z * CZ.SHOULDER;
+  const cx = p.x + R.x * CZ.SHOULDER, cy = p.y + eye + CZ.CAMUP, cz = p.z + R.z * CZ.SHOULDER;
   const aimT = traceRay(W, p, cx, cy, cz, d, KAR.RANGE).t, px = cx + d.x * aimT, py = cy + d.y * aimT, pz = cz + d.z * aimT;
   // départ de la balle : au niveau du fusil, à droite du corps
   const ox = p.x + R.x * CZ.BORE, oy = p.y + eye - 0.12, oz = p.z + R.z * CZ.BORE;

@@ -154,11 +154,11 @@ test('mode crazy : tir sur un adversaire, mort annoncée à tous, vote entre ar�
   b.send({ t: 'join', code }); await wait(150); a.send({ t: 'start' }); await wait(250);
   assert.equal(a.last.start.mode, 'crazy'); assert.equal(a.last.start.s.pl.length, 2); assert.equal(a.last.start.s.ch.length, 0);
   const W = rooms.get(code).W; assert.ok(W.crazy);
-  // Ana en (0, ., -20) vise Ben posé à 12 m : tête (hauteur 1,68 m ; l'épaule décale la balle de 0,45 m à droite)
-  Object.assign(W.pl[0], { x: -20, y: 0, z: -2, prot: 0, ay: 0 }); Object.assign(W.pl[1], { x: -20.45, y: 0, z: 10, prot: 0 });
+  // Ana en (0, ., -20) vise Ben posé à 12 m : tête (hauteur 1,68 m ; la caméra est décalée de 0,75 m à droite)
+  Object.assign(W.pl[0], { x: -20, y: 0, z: -2, prot: 0, ay: 0 }); Object.assign(W.pl[1], { x: -20 - 0.75, y: 0, z: 10, prot: 0 });
   W.level.bodies; // la carte du Dépôt a des conteneurs : on dégage le couloir de tir
   for (const bd of W.bodies) if (bd.i > 0 && bd.mat === 'metal' && Math.abs(bd.px + 20) < 8) bd.on = false;
-  const ap = Math.atan2(1.68 - 1.5, 12), bits = 256;
+  const ap = Math.atan2(1.68 - 1.85, 12), bits = 256; // le rayon de la caméra part de l'épaule (0,75 m à droite), 0,35 m au-dessus des yeux
   for (let ct = 1; ct <= 30; ct += 2) { a.send({ t: 'i', a: [[ct, 0, 0, bits, 0, 0, 0, 0, ap], [ct + 1, 0, 0, bits, 0, 0, 0, 0, ap]] }); await wait(16); }
   await wait(300);
   const evs = [...a.msgs, ...b.msgs].filter((m) => m.t === 's').flatMap((m) => m.e);
