@@ -525,7 +525,7 @@ const aimDirV = (yaw, pitch) => { const o = aimDir(yaw, pitch); return new THREE
 
 /* ------------------------------ caméra ------------------------------ */
 export function camera(W, rp, me, dt, cam) {
-  if (!X.on) return false;
+  if (!X.on || S.debugCam) return false; // caméra libre (tests, captures)
   let f = me; if (f == null || !W.pl[f]) { f = X.spec ?? 0; if (W.pl[f]?.dead > 0) { f = W.pl.findIndex((q) => !(q.dead > 0)); if (f < 0) f = 0; } X.spec = f; }
   const p = W.pl[f], r = rp[f], dead = p.dead > 0, own = f === me;
   const aim = own ? A : X.aim[f] || { yaw: p.ay ?? 0, pitch: 0 };
