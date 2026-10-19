@@ -19,7 +19,7 @@ export const dbg = {};
 const X = { on: false, W: null, G: null, me: null, rifles: [], aim: [], rec: [], feed: [], hitT: 0, hitHead: false, dmgT: 0, dmgAng: 0, banner: null, bannerT: 0, wasDead: false, camBack: 5.6, fov: 60, droplets: null, decals: [], pools: [], casings: [], tracers: [], puffs: [], mist: [], flashes: [], lastSnd: {} };
 // RÉGLAGES DE LA CAMÉRA (une seule source) : la caméra est TOUJOURS sur le rayon de visée du tireur (épaule CZ.SHOULDER à droite, CZ.CAMUP au-dessus des yeux, définis dans
 // core/sim.js car la balle part de ce rayon) ; ici : sa distance, son champ de vision et ses transitions.
-export const CAM = { dist: 5.6, fov: 60, adsDist: 2.1, adsFov: 32, scopeFov: 15, zoomSpeed: 10, minDist: 1.1, adsSpeed: 9, inSpeed: 18, outSpeed: 2.2, wallMargin: 0.25 };
+export const CAM = { dist: 5.6, fov: 60, adsDist: 2.1, adsFov: 32, scopeFov: 15, zoomSpeed: 10, minDist: 1.3, adsSpeed: 9, inSpeed: 18, outSpeed: 2.2, wallMargin: 1.0 };
 
 /* ------------------------------ textures procédurales ------------------------------ */
 function canvasTex(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; }
