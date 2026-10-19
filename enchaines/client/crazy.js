@@ -574,8 +574,8 @@ function hangPose(c, p, W, dt, mantle) {
   for (const s of ['l', 'r']) { const cl = B['clavicle_' + s]; if (cl) rotWorld(cl, f, (s === 'l' ? 0.26 : -0.26) * k); }
   const arm = (s) => wpos(B['upperarm_' + s], V()).distanceTo(wpos(B['lowerarm_' + s], V())) + wpos(B['lowerarm_' + s], V()).distanceTo(wpos(B['hand_' + s], V()));
   if (!mantle) {
-    const shY = (wpos(B.upperarm_l, V()).y + wpos(B.upperarm_r, V()).y) / 2, want = mid.y - 0.07 - 0.92 * (arm('l') + arm('r')) / 2, drop = clamp(shY - want, 0, 0.32) * k;
-    if (drop > 0) { c.root.position.y -= drop; c.root.updateMatrixWorld(true); } c.hangDrop = drop;
+    const shY = (wpos(B.upperarm_l, V()).y + wpos(B.upperarm_r, V()).y) / 2, want = mid.y - 0.07 - 0.92 * (arm('l') + arm('r')) / 2, drop = clamp(shY - want, -0.25, 0.32) * k; // bras courts : le corps remonte ; bras longs : il descend
+    if (drop) { c.root.position.y -= drop; c.root.updateMatrixWorld(true); } c.hangDrop = drop;
   }
   // 5. bras et mains ; déplacement latéral = une main après l'autre
   st.ph += dt * 7 * Math.min(1, Math.abs(p.lat || 0) * 2); const mv = Math.min(1, Math.abs(p.lat || 0) * 2); c.armMiss = []; c.gripPts = [];
@@ -596,6 +596,14 @@ function hangPose(c, p, W, dt, mantle) {
     ik2(th, ca, fo, foot, f.clone().addScaledVector(up, 0.2));
   }
 }
+// plaque de couche de la crosse par rapport à l'articulation de l'épaule droite (os upperarm_r), dans le repère de visée : en haut, à droite, vers l'avant (m)
+const BUTT = { up: 0.05, side: -0.05, fwd: -0.02 };
+// par personnage (l'os de l'épaule n'est pas au même endroit dans chaque squelette) : réglages MESURÉS dans le navigateur, crosse épaulée (points du fût à plus de 2 cm dans
+// le maillage déformé, sur 30) : Deadlock 12-20 → 4 (buste un peu plus de profil), Cyber 4 → 0, Anime 5 (réglage commun)
+const FIT = { deadlock: { butt: { up: 0.04, side: 0.06, fwd: 0.04 }, stance: 0.8 }, cyber: { butt: { up: 0.05, side: 0.03, fwd: -0.02 } } };
+// port bas (repos, course) : déplacement de la plaque de couche (m) et inclinaison du canon vers le bas (rad)
+const LOWREADY = { down: -0.14, side: 0.08, fwd: 0.06, pitch: 0.6 };
+const G0 = () => X.G;
 const RIFLE_WORLD = new THREE.Matrix4();
 export function pose(cl, W, dt, rp, me) {
   if (!X.on) return;
