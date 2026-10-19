@@ -64,7 +64,7 @@ export const RIFLE = {
 // lunette au-dessus du boîtier (z −28,7 … +6,5 cm), culasse Bolt_2 (tige + poignée) et percuteur Bolt_1 qui coulissent, détente séparée.
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 const RIFLE_GLB = { org: 0.52, butt: -0.555, muzzle: 0.555, slideMax: 0.08, handleLen: 0.045,
-  gripR: V3(-0.03, -0.083, -0.31), gripL: V3(0.0, -0.05, 0.2), eject: V3(-0.03, 0.0, -0.14), pivot: V3(0, 0, -0.12),
+  gripR: V3(-0.03, -0.083, -0.31), gripL: V3(0.0, -0.05, 0.15), eject: V3(-0.03, 0.0, -0.14), pivot: V3(0, 0, -0.12),
   R: { f: V3(0.6, -0.55, 0.55), n: V3(0.95, 0.2, 0.1) }, L: { f: V3(-0.92, 0.2, 0.3), n: V3(0.05, 1, 0.05) }, glb: true };
 let GLB = null; const BORE_CM = { x: 0.17, y: 3.8 };
 export async function load() { // appelé AVANT le départ (écran de chargement) : 53 Mo de textures PBR (3 × 4096² + 3 × 2048²), mises en cache par le navigateur
@@ -506,7 +506,7 @@ function curl(c, side, n, amounts) {
 }
 // ORIENTATION DU CORPS : le bassin (la racine du personnage) suit la direction de DÉPLACEMENT (±75° de la visée ; en reculant il garde le regard devant et la course est jouée à l'envers),
 // le buste reprend la différence jusqu'à la visée (torsion répartie sur la colonne, jamais plus de ~70° au total). Rien ne s'accumule : tout est recalculé à chaque image depuis la visée.
-const D75 = (75 * Math.PI) / 180;
+const D75 = (75 * Math.PI) / 180, STANCE = 0.55;
 export function bodyYaw(c, p, dt) {
   const k = c.k, aim = k === X.me && !(p.dead > 0) ? A.yaw : p.ay ?? p.yaw;
   if (c.legYaw === undefined || !Number.isFinite(c.legYaw)) c.legYaw = aim;
@@ -577,7 +577,7 @@ export function pose(cl, W, dt, rp, me) {
     const axisR = new THREE.Vector3(Rv.x, 0, Rv.z).normalize();
     for (const [bn, kf] of [['spine_01', 0.12], ['spine_02', 0.2], ['spine_03', 0.22], ['neck_01', 0.15], ['Head', 0.25]]) { const b = c.bones[bn]; if (b) rotWorld(b, axisR, a.pitch * kf - rec * 0.05); }
     { // torsion du buste = écart entre le bassin (c.yaw, racine rendue) et la visée, répartie sur trois vertèbres
-      const twist = clamp(wrap(a.yaw - c.yaw), -1.25, 1.25), Y = _e.set(0, 1, 0);
+      const twist = clamp(wrap(a.yaw - STANCE - c.yaw), -1.5, 1.25), Y = _e.set(0, 1, 0); // STANCE : posture de tir, buste tourné vers la droite (épaule gauche en avant) comme tout tireur — c'est elle qui permet à la main gauche d'atteindre le garde-main
       for (const [bn, kf] of [['spine_01', 0.25], ['spine_02', 0.4], ['spine_03', 0.35]]) { const b = c.bones[bn]; if (b) rotWorld(b, Y, twist * kf); }
     }
     c.root.updateMatrixWorld(true);
