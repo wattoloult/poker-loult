@@ -11,7 +11,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { WebSocketServer } from 'ws';
-import { createWorld, stepWorld, snapWorld, DT, IDLE } from './core/sim.js';
+import { createWorld, stepWorld, snapWorld, DT, IDLE, CZ, joinCrazy, leaveCrazy } from './core/sim.js';
 import { COURSES, DEFAULT_COURSE } from './core/worlds.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -63,7 +63,7 @@ function roomView(r, you) {
 }
 function pushRoom(r) { for (const p of r.people) send(p.ws, roomView(r, p.seat)); for (const ws of r.spect) send(ws, roomView(r, null)); }
 function seatFree(r) { const used = new Set(live(r).map((p) => p.seat)); for (let s = 0; s < r.max; s++) if (!used.has(s)) return s; }
-const canStart = (r) => (solo(r) ? live(r).length >= 2 && live(r).length <= 4 : live(r).length === 2);
+const canStart = (r) => (solo(r) ? live(r).length >= (r.cfg.mode === 'crazy' ? 1 : 2) && live(r).length <= 4 : live(r).length === 2); // crazy : on lance seul, les autres rejoignent en cours de manche
 function create(ws, m) {
   leave(ws);
   const L = LENS.includes(+m.L) ? +m.L : 6.5, mode = m.mode === 'free' || m.mode === 'crazy' ? m.mode : 'coop', course = okCourse(ws, m.course, mode);
@@ -88,15 +88,25 @@ function join(ws, m) {
   }
   leave(ws);
   if (live(r).length < r.max && r.phase === 'lobby') { seatIn(r, ws); return pushRoom(r); }
+  if (r.phase === 'play' && r.cfg.mode === 'crazy' && r.W && !r.W.done && live(r).length < r.max) return joinMidGame(r, ws);
   if (r.spect.size >= 12) return send(ws, { t: 'err', m: 'Salon complet.' });
   r.spect.add(ws); ws.room = r; pushRoom(r); if (r.W) send(ws, startMsg(r, null));
 }
+// MODE CRAZY : arrivée en pleine manche — premier siège libre (celui d'un joueur parti, sinon un nouveau en bout de liste), grimpeur ajouté à la simulation, invulnérable
+// jusqu'à la fin de son chargement ; les autres reçoivent la nouvelle liste (« roster ») et chargent son personnage sans quitter la partie
+function joinMidGame(r, ws) {
+  const used = new Set(live(r).map((p) => p.seat)); let seat = 0; while (used.has(seat)) seat++; seat = Math.min(seat, r.W.pl.length);
+  r.people.push({ sid: ws.id, token: ws.token, ws, seat, name: ws.name, q: [], last: null, ack: 0, fresh: true, ready: false }); r.spect.delete(ws); ws.room = r;
+  joinCrazy(r.W, seat); send(ws, startMsg(r, seat)); castRoster(r, ws); pushRoom(r);
+}
+function castRoster(r, except) { const m = { t: 'roster', names: startMsg(r, null).names, gone: r.W.pl.map((p) => (p.gone ? 1 : 0)) }; for (const p of r.people) if (p.ws && p.ws !== except) send(p.ws, m); for (const w of r.spect) send(w, m); }
 function leave(ws) {
   const r = ws.room; if (!r) return; ws.room = null;
   if (r.spect.delete(ws)) return pushRoom(r);
   const p = r.people.find((x) => x.ws === ws); if (!p) return;
   p.gone = true; p.ws = null;
   r.people = r.people.filter((x) => !x.gone);
+  if (r.phase === 'play' && r.cfg.mode === 'crazy' && r.W) { leaveCrazy(r.W, p.seat); castRoster(r); } // crazy : son grimpeur quitte l'arène, son siège se libère
   if (r.host === ws.id) r.host = r.people[0]?.sid ?? null;
   if (r.phase === 'play' && r.people.length < (solo(r) ? 1 : 2)) { r.phase = 'lobby'; r.W = null; cast(r, { t: 'room', ...roomView(r, null), phase: 'lobby' }); }
   if (!r.people.length && !r.spect.size) return closeRoom(r);
@@ -274,7 +284,7 @@ wss.on('connection', (ws) => {
         ws.pt = true; send(ws, { t: 'pt', ok: 1, code }); break;
       }
       case 'board': { const id = COURSES[m.course] ? m.course : DEFAULT_COURSE; send(ws, { t: 'board', course: id, solo: m.solo ? 1 : 0, simV: SIM_V, list: boardOf(m.solo ? 'solo:' + id : id).slice(0, TOP) }); break; }
-      case 'list': send(ws, { t: 'rooms', list: [...rooms.values()].filter((x) => x.phase === 'lobby' && live(x).length < x.max).slice(0, 20).map((x) => ({ code: x.code, host: live(x)[0]?.name || '?', n: live(x).length, max: x.max, mode: x.cfg.mode })) }); break;
+      case 'list': send(ws, { t: 'rooms', list: [...rooms.values()].filter((x) => (x.phase === 'lobby' || (x.phase === 'play' && x.cfg.mode === 'crazy' && x.W && !x.W.done)) && live(x).length < x.max).slice(0, 20).map((x) => ({ code: x.code, host: live(x)[0]?.name || '?', n: live(x).length, max: x.max, mode: x.cfg.mode, play: x.phase === 'play' ? 1 : 0 })) }); break;
       case 'create': create(ws, m); break;
       case 'join': join(ws, m); break;
       case 'leave': leave(ws); break;
@@ -284,7 +294,7 @@ wss.on('connection', (ws) => {
       case 'restart': if (r && r.host === ws.id && r.phase === 'play') startGame(r); break;
       case 'vote': if (r && p && r.vote && r.vote.list.includes(m.course)) { r.vote.votes[p.seat] = m.course; cast(r, voteMsg(r)); } break;
       case 'cp': if (r && p && r.W) { if (r.cfg.mode === 'crazy') break; else if (r.cfg.mode === 'free') p.rstT = 0.7; else { r.W.resetHold[p.seat] = 1.01; r.run?.push(['cp', p.seat]); } } break; // retour au point de passage demandé depuis le menu
-      case 'ready': if (p) p.ready = true; break; // fin de chargement du client (mode crazy)
+      case 'ready': if (p) { p.ready = true; const q = r?.W?.pl[p.seat]; if (q && q.prot > 100) q.prot = CZ.PROT; } break; // fin de chargement du client (mode crazy) ; arrivé en cours de manche : fin de l'invulnérabilité de chargement
       case 'devtp': if (DEV && p && r?.W?.pl[p.seat]) { const q = r.W.pl[p.seat]; for (const k of ['x', 'y', 'z', 'ay']) if (Number.isFinite(m[k])) q[k] = m[k]; q.vx = q.vy = q.vz = 0; q.st = 1; q.hang = q.mantle = null; } break; // DÉVELOPPEMENT SEULEMENT (ENCH_DEV=1) : place son grimpeur (captures, mises au point)
       case 'i': {
         if (!p || !r.W || !Array.isArray(m.a)) break;
@@ -307,7 +317,7 @@ const timers = [
   setInterval(() => {
     const now = process.hrtime.bigint(), dt = Math.min(0.1, Number(now - lastTick) / 1e9); lastTick = now;
     for (const r of rooms.values()) {
-      for (const p of [...r.people]) if (p.offline && (p.offT += dt) > GRACE) { p.gone = true; r.people = r.people.filter((x) => x !== p); if (r.phase === 'play' && r.people.length < (solo(r) ? 1 : 2)) { r.phase = 'lobby'; r.W = null; } if (r.host === p.oldSid) r.host = r.people[0]?.sid ?? null; pushRoom(r); }
+      for (const p of [...r.people]) if (p.offline && (p.offT += dt) > GRACE) { p.gone = true; r.people = r.people.filter((x) => x !== p); if (r.phase === 'play' && r.cfg.mode === 'crazy' && r.W) { leaveCrazy(r.W, p.seat); castRoster(r); } if (r.phase === 'play' && r.people.length < (solo(r) ? 1 : 2)) { r.phase = 'lobby'; r.W = null; } if (r.host === p.oldSid) r.host = r.people[0]?.sid ?? null; pushRoom(r); }
       if (!r.people.some((p) => p.ws) && !r.spect.size) { if ((r.empty += dt) > 30) { closeRoom(r); continue; } } else r.empty = 0;
       update(r, dt);
       if (r.vote && Date.now() >= r.vote.endsAt) resolveVote(r);

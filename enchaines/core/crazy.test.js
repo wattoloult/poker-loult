@@ -72,7 +72,7 @@ test('mort, compteurs, réapparition protégée, fin de manche', () => {
   assert.ok(ev.some((e) => e.k === 'kill' && e.p === 0 && e.v === 1 && e.head)); assert.equal(a.kills, 1); assert.equal(b.deaths, 1); assert.ok(b.dead > 0);
   const ev2 = run(W, [IDLE, IDLE], CZ.RESPAWN + 0.1);
   assert.ok(ev2.some((e) => e.k === 'spawn' && e.p === 1)); assert.equal(b.hp, KAR.HP); assert.ok(b.prot > 0);
-  a.kills = W.limit - 1; b.prot = 0; Object.assign(b, { x: -15 - SH, y: 0, z: 17 }); Object.assign(a, { x: -15, y: 0, z: -3, cd: 0, cyc: 0 });
+  a.kills = 3; W.time = W.tmax - 0.05; b.prot = 0; // la manche finit au temps (10 min), pas aux éliminations Object.assign(b, { x: -15 - SH, y: 0, z: 17 }); Object.assign(a, { x: -15, y: 0, z: -3, cd: 0, cyc: 0 });
   const ev3 = run(W, [I, IDLE], 0.1); assert.ok(W.done); assert.deepEqual(W.rank, [0, 1]); assert.ok(ev3.some((e) => e.k === 'end'));
 });
 

@@ -525,10 +525,18 @@ function getNet() {
     show(null); $('#hud').classList.add('on'); $('#hud').dataset.mode = G.free ? 'free' : 'online'; $('#end').classList.remove('on');
     if (G.crazy) Crazy.begin(G); else { $('#help').classList.add('show'); setTimeout(() => $('#help').classList.remove('show'), 9000); }
   });
+  // MODE CRAZY : un joueur arrive (ou part) en pleine manche : nouvelle liste, personnage chargé à la volée, sans quitter la partie
+  net.on('roster', async (m) => {
+    if (G.mode !== 'online' || !G.W || !G.crazy) return; const prevN = G.names?.length; G.names = m.names; G.gone = m.gone;
+    if (prevN === m.names.length) return; // simple départ : le grimpeur est masqué par le rendu (p.gone), rien à recharger
+    const cs = G.crazyChars ? m.names.map((_, k) => ['anime', 'deadlock', 'cyber', 'anime'][k % 4]) : null;
+    if (cs) { await Scene.prepareChars([...new Set(cs)]).catch(() => null); G.crazyChars = cs; }
+    Scene.setRoster(m.names.length, cs); Crazy.begin(G);
+  });
   net.on('s', (m) => {
     if (G.mode !== 'online' || !G.W) return;
     const W = G.W, me = G.me;
-    if (me == null) { const before = W.pl.map((p) => [p.x, p.y, p.z]); applySnap(W, m.w); G.specIn = m.in.map(decIn); W.pl.forEach((p, k) => Scene.addError(k, before[k][0] - p.x, before[k][1] - p.y, before[k][2] - p.z)); if (m.e?.length) handleEvents(W, m.e, true); return; }
+    if (me == null) { const before = W.pl.map((p) => [p.x, p.y, p.z]); applySnap(W, m.w); G.specIn = m.in.map(decIn); W.pl.forEach((p, k) => { if (before[k]) Scene.addError(k, before[k][0] - p.x, before[k][1] - p.y, before[k][2] - p.z); }); if (m.e?.length) handleEvents(W, m.e, true); return; }
     const ack = m.ack[me];
     while (G.pend.length && G.pend[0][0] <= ack) G.pend.shift();
     const before = W.pl.map((p) => [p.x, p.y, p.z]);
@@ -536,7 +544,7 @@ function getNet() {
     G.seatIn = m.in.map(decIn);
     for (const [, I] of G.pend) stepWorld(W, W.pl.map((_, k) => (k === me ? I : G.seatIn[k] || IDLE)));
     W.ev.length = 0;
-    W.pl.forEach((p, k) => Scene.addError(k, before[k][0] - p.x, before[k][1] - p.y, before[k][2] - p.z));
+    W.pl.forEach((p, k) => { if (before[k]) Scene.addError(k, before[k][0] - p.x, before[k][1] - p.y, before[k][2] - p.z); });
     desyncWatch(W, me, before, m);
     if (m.e?.length) handleEvents(W, m.e, true);
   });
@@ -583,11 +591,12 @@ function renderRoom(m) {
   $('#r-players').innerHTML = Array.from({ length: max }, (_, i) => i).map((i) => { const p = m.players[i]; return `<li class="${p ? '' : 'empty'}"><i style="background:${['#ff9a3c', '#46b8ff', '#5ed67a', '#e86cc0'][i]}"></i>${p ? esc(p.name) + (p.id === m.host ? ` <small>${tr('hôte')}</small>` : '') + (p.id === m.you ? ` <small>${tr('toi')}</small>` : '') + (p.offline ? ` <small>${tr('déconnecté')}</small>` : '') : tr(free ? 'Place libre…' : 'En attente d\'un partenaire…')}</li>`; }).join('');
   $$('#r-len button').forEach((b) => { b.classList.toggle('on', +b.dataset.l === m.cfg.L); b.disabled = !host; });
   fillCourseSelects(m.cfg.mode === 'crazy'); $('#r-course').value = m.cfg.course; $('#r-course').disabled = !host;
-  $('#r-start').disabled = !host || m.players.length < 2;
-  $('#r-start').textContent = host ? (m.players.length < 2 ? tr('En attente du 2e grimpeur') : tr(free ? 'Lancer la course' : 'Lancer l\'ascension')) : tr('L\'hôte lance la partie');
+  const czm = m.cfg.mode === 'crazy', need = czm ? 1 : 2; // crazy : on lance seul, les autres rejoignent en pleine manche
+  $('#r-start').disabled = !host || m.players.length < need;
+  $('#r-start').textContent = host ? (m.players.length < need ? tr('En attente du 2e grimpeur') : czm ? 'Lancer la manche (10 min)' : tr(free ? 'Lancer la course' : 'Lancer l\'ascension')) : tr('L\'hôte lance la partie');
 }
 function renderRooms(list) {
-  $('#o-list').innerHTML = list.length ? list.map((r) => `<li><b>${esc(r.host)}</b><span>${r.n}/${r.max || 2}${r.mode === 'free' ? ' · ' + tr('libre') : r.mode === 'crazy' ? ' · crazy' : ''}</span><button data-code="${r.code}">Rejoindre</button></li>`).join('') : '<li class="muted">Aucun salon ouvert pour l\'instant.</li>';
+  $('#o-list').innerHTML = list.length ? list.map((r) => `<li><b>${esc(r.host)}</b><span>${r.n}/${r.max || 2}${r.mode === 'free' ? ' · ' + tr('libre') : r.mode === 'crazy' ? ' · crazy' + (r.play ? ' · en cours' : '') : ''}</span><button data-code="${r.code}">Rejoindre</button></li>`).join('') : '<li class="muted">Aucun salon ouvert pour l\'instant.</li>';
 }
 
 /* ------------------------------ choix du parcours ------------------------------ */

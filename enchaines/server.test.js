@@ -146,6 +146,20 @@ test('mode libre : 3 grimpeurs sans chaîne, entrées de chacun, arrivée class�
   for (const x of [a, b, c, d]) x.ws.close();
 });
 
+test('mode crazy : on lance seul (manche de 10 min), un 2e joueur rejoint EN PLEINE MANCHE (protégé pendant son chargement), puis part (son grimpeur quitte l\'arène)', async () => {
+  const a = client('Solo'), b = client('Tard'); await a.ready; await b.ready;
+  a.send({ t: 'create', L: 6.5, mode: 'crazy', course: 'quartier' }); await wait(150); const code = a.last.room.code;
+  a.send({ t: 'start' }); await wait(250); assert.equal(a.last.start?.seat, 0, 'lancé seul'); a.send({ t: 'ready' }); await wait(200);
+  const W = rooms.get(code).W; assert.equal(W.pl.length, 1); assert.equal(W.tmax, 600, '10 minutes'); const t0 = W.time; await wait(300); assert.ok(W.time > t0, 'la manche tourne');
+  b.send({ t: 'list' }); await wait(150); assert.ok(b.last.rooms.list.some((x) => x.code === code && x.play), 'la partie en cours est listée');
+  b.send({ t: 'join', code }); await wait(250);
+  assert.equal(b.last.start?.seat, 1, 'siège attribué en pleine manche'); assert.equal(W.pl.length, 2); assert.ok(W.pl[1].prot > 100, 'invulnérable pendant le chargement');
+  assert.deepEqual(a.last.roster?.names.length, 2, 'le premier joueur reçoit la nouvelle liste');
+  b.send({ t: 'ready' }); await wait(150); assert.ok(W.pl[1].prot <= 2.01, 'protection normale une fois chargé');
+  b.send({ t: 'leave' }); await wait(200); assert.ok(W.pl[1].gone && W.pl[1].dead > 1000, 'parti : hors de l\'arène'); assert.equal(rooms.get(code).phase, 'play', 'la manche continue seule');
+  const c = client('Retour'); await c.ready; c.send({ t: 'join', code }); await wait(250); assert.equal(c.last.start?.seat, 1, 'le siège libéré est repris'); assert.ok(!W.pl[1].gone && W.pl[1].kills === 0);
+  for (const x of [a, b, c]) x.ws.close(); await wait(100);
+});
 test('mode crazy : tir sur un adversaire, mort annoncée à tous, vote entre arènes uniquement', async () => {
   const { server: srv } = await import('./server.js'); if (!srv.listening) srv.listen(18807); await wait(100);
   const a = client('Ana'), b = client('Ben'); await a.ready; await b.ready;
@@ -164,7 +178,7 @@ test('mode crazy : tir sur un adversaire, mort annoncée à tous, vote entre ar�
   const evs = [...a.msgs, ...b.msgs].filter((m) => m.t === 's').flatMap((m) => m.e);
   assert.ok(evs.some((e) => e.k === 'kill' && e.p === 0 && e.v === 1 && e.head), 'la mort est annoncée'); assert.equal(W.pl[0].kills, 1);
   assert.ok(b.msgs.some((m) => m.t === 's' && m.e.some((e) => e.k === 'kill')), 'Ben le reçoit aussi');
-  W.pl[0].kills = W.limit; await wait(300);
+  W.pl[0].kills = 15; W.time = W.tmax; await wait(300); // fin de manche au temps
   const end = a.last.end; assert.ok(end && end.crazy && end.rank[0].name === 'Ana' && end.rank[0].kills >= 15, 'classement');
   await wait(100); assert.ok(a.last.vote.list.length >= 2 && a.last.vote.list.every((id) => ['depot', 'toits', 'quartier'].includes(id)), 'le vote ne propose que des arènes');
   for (const x of [a, b]) x.ws.close(); stop();

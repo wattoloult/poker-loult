@@ -661,6 +661,7 @@ export function frame(W, dt, view = {}) {
     // changement d'état (prise d'un rebord, fin de la hisse) : la simulation place le corps d'un coup ; l'affichage part de là où il était et rejoint en ~0,25 s (pas de téléportation visible)
     if (c.stPrev !== undefined && c.stPrev !== p.st && c.lastRp && (p.st === ST.HANG || p.st === ST.MANTLE || c.stPrev === ST.MANTLE || c.stPrev === ST.HANG) && Math.hypot(c.lastRp.x - x, c.lastRp.y - y, c.lastRp.z - z) < 1.6) c.err.set(c.lastRp.x - x, c.lastRp.y - y, c.lastRp.z - z);
     c.stPrev = p.st; const out = { x: x + c.err.x, y: y + c.err.y, z: z + c.err.z }; c.lastRp = out; return out; });
+  for (let k = W.pl.length; k < S.cl.length; k++) { S.cl[k].g.visible = false; S.cl[k].ring.visible = false; S.cl[k].mark.visible = false; } // sièges vides (partie crazy lancée seul)
   S.hitstop = Math.max(0, (S.hitstop || 0) - dt);
   S.me = view.me;
   for (let k = 0; k < W.pl.length; k++) poseClimber(S.cl[k], W.pl[k], W.free ? nearestPl(W, k) : W.pl[1 - k], W, dt, rp[k]);

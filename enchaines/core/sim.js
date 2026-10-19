@@ -1055,7 +1055,7 @@ const onBody = (W, b) => { let n = 0; for (const p of W.pl) if (p.st === ST.GROU
 const X = { ST, P, DT, HP, CH, ev: (W, k, o) => ev(W, k, o), clamp, onB: onBody, inside, groundBelow, bounds, spanOf, toAir: (p) => toAir(p) };
 
 /* ------------------------------ mode CRAZY : arène, fusil à verrou ------------------------------ */
-export const CZ = { WR_MIN: 4.0, WR_V: 6.6, WR_T: 1.0, WR_UP: 2.2, WR_G: 6.0, STEP: 0.16, ACC: 30, DEC: 26, SPRINT: 1.32, BACK: 0.8, GRAB_LO: 1.45, GRAB_HI: 2.3, GRAB_REACH: 0.28, VAULT_LO: 0.55, LIMIT: 15, TIME: 300, RESPAWN: 3, PROT: 2, SHOULDER: 0.75, CAMUP: 0.35, BORE: 0.12, WALL_SLIDE: 3.2, WALL_CD: 0.22, WJ_MAX: 3, SCOPE_SLOW: 0.55, ZOOM_T: 0.3, SCOPE_UP: -0.068, WJ_OUT: 6.4, WJ_UP: 8.6,
+export const CZ = { TIME: 600, LIMIT: 0, WR_MIN: 4.0, WR_V: 6.6, WR_T: 1.0, WR_UP: 2.2, WR_G: 6.0, STEP: 0.16, ACC: 30, DEC: 26, SPRINT: 1.32, BACK: 0.8, GRAB_LO: 1.45, GRAB_HI: 2.3, GRAB_REACH: 0.28, VAULT_LO: 0.55, RESPAWN: 3, PROT: 2, SHOULDER: 0.75, CAMUP: 0.35, BORE: 0.12, WALL_SLIDE: 3.2, WALL_CD: 0.22, WJ_MAX: 3, SCOPE_SLOW: 0.55, ZOOM_T: 0.3, SCOPE_UP: -0.068, WJ_OUT: 6.4, WJ_UP: 8.6,
   // phases du cycle de culasse (s depuis le tir) et du rechargement (s depuis son début) : chacune émet un événement de son propre bruit
   BOLT: [[0.10, 'up'], [0.22, 'back'], [0.42, 'eject'], [0.60, 'fwd'], [0.80, 'down']], RELOAD_AT: [[0.25, 'open'], [0.85, 'clip'], [1.85, 'push'], [2.3, 'close']] };
 export const crazyEye = (p) => (p.slideT > 0 || p.crawl ? KAR.EYE_SLIDE : KAR.EYE);
@@ -1139,6 +1139,16 @@ function spawnCrazy(W) {
   }
   resetMechanisms(W); W.ten = 0; W.taut = 0; W.cp = 0;
 }
+// ARRIVÉE EN COURS DE MANCHE (mode crazy) : le siège reçoit un grimpeur neuf (ou reprend celui d'un joueur parti), compteurs à zéro, place d'apparition la plus éloignée
+// des adversaires ; invulnérable (prot) jusqu'à la fin de son chargement — le serveur ramène la protection à CZ.PROT quand le client annonce « prêt »
+export function joinCrazy(W, seat) {
+  let p = W.pl[seat];
+  if (!p) { p = newPlayer(seat, 0, 0, 0); p.cp = 0; p.done = false; W.pl[seat] = p; W.nPl = W.pl.length; }
+  p.gone = false; p.kills = 0; p.deaths = 0; resetCombat(p); placeAt(W, p, pickSpawn(W, p)); p.prot = 3600;
+  ev(W, 'spawn', { p: seat, x: p.x, y: p.y, z: p.z }); return p;
+}
+// DÉPART EN COURS DE MANCHE : le grimpeur sort de l'arène (ni visible, ni touchable, ni compté) ; son siège pourra être repris
+export function leaveCrazy(W, seat) { const p = W.pl[seat]; if (!p) return; p.gone = true; p.dead = 1e9; p.vx = p.vy = p.vz = 0; p.hang = p.mantle = null; }
 function respawnCrazy(W, p) {
   resetCombat(p); placeAt(W, p, pickSpawn(W, p)); p.prot = CZ.PROT; ev(W, 'spawn', { p: p.id, x: p.x, y: p.y, z: p.z });
 }
@@ -1230,6 +1240,7 @@ function stepCrazy(W, inputs) {
   if (!W.done) W.time += DT;
   for (let i = 0; i < n; i++) {
     const p = pl[i], I = inputs[i] || IDLE;
+    if (p.gone) continue; // parti en cours de manche
     if (p.dead > 0) { p.dead -= DT; p.vx = p.vz = 0; if (p.dead <= 0 && !W.done) respawnCrazy(W, p); continue; }
     p.ay = Number.isFinite(I.ay) ? I.ay : p.ay; p.ap = clamp(Number.isFinite(I.ap) ? I.ap : p.ap, -1.45, 1.45);
     const sl = p.scope ? CZ.SCOPE_SLOW : p.rl >= 0 ? 0.8 : 1;
@@ -1241,8 +1252,8 @@ function stepCrazy(W, inputs) {
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (!pl[i].dead && !pl[j].dead) collidePair(pl[i], pl[j]);
   for (const p of pl) if (!p.dead && (p.st === ST.AIR || p.st === ST.GROUND)) { const g = collidePlayer(W, p); if (g && p.st === ST.AIR && p.vy <= g.vy + 0.5) setGround(W, p, g); }
   for (const p of pl) if (!p.dead && p.y < W.level.abyss) { ev(W, 'abyss', { p: p.id }); const by = p.lastBy >= 0 && W.time - p.lastByT < 6 ? p.lastBy : null; killPlayer(W, p, by, false, 0, 0, 0); }
-  if (!W.done && (pl.some((p) => p.kills >= W.limit) || W.time >= W.tmax)) {
-    W.done = true; W.rank = pl.map((p) => p.id).sort((a, b) => pl[b].kills - pl[a].kills || pl[a].deaths - pl[b].deaths || a - b);
+  if (!W.done && ((W.limit > 0 && pl.some((p) => p.kills >= W.limit)) || W.time >= W.tmax)) { // limit 0 = pas de fin aux éliminations : la manche dure tmax
+    W.done = true; W.rank = pl.filter((p) => !p.gone).map((p) => p.id).sort((a, b) => pl[b].kills - pl[a].kills || pl[a].deaths - pl[b].deaths || a - b);
     ev(W, 'end', { rank: W.rank.slice() });
   }
   W.cp = 0; W.best = 0;

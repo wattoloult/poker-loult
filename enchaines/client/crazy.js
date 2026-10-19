@@ -575,6 +575,7 @@ export function pose(cl, W, dt, rp, me) {
   X.me = me;
   for (let k = 0; k < W.pl.length; k++) {
     const p = W.pl[k], c = cl[k], r = X.rifles[k]; if (!c || !r) continue;
+    if (p.gone) { c.g.visible = false; c.ring.visible = false; r.g.visible = false; c.czPost = null; continue; } // parti en cours de manche
     const alive = !(p.dead > 0) && (p.st === ST.GROUND || p.st === ST.AIR), climbing = !(p.dead > 0) && (p.st === ST.HANG || p.st === ST.MANTLE);
     r.g.visible = alive; c.g.visible = true;
     c.ring.visible = true;
@@ -729,8 +730,8 @@ export function hud(W, dt, G) {
   if (!X.on) return;
   const me = W.pl[G.me ?? 0], tmax = W.tmax || CZ.TIME, left = Math.max(0, tmax - W.time), m = Math.floor(left / 60);
   $('#cz-timer').textContent = `${m}:${String(Math.floor(left % 60)).padStart(2, '0')}`;
-  $('#cz-goal').textContent = `Premier à ${W.limit}`;
-  const rows = W.pl.map((p, k) => ({ k, p })).sort((a, b) => b.p.kills - a.p.kills || a.p.deaths - b.p.deaths);
+  $('#cz-goal').textContent = W.limit > 0 ? `Premier à ${W.limit}` : 'Manche de 10 min · on rejoint en cours';
+  const rows = W.pl.map((p, k) => ({ k, p })).filter((r) => !r.p.gone).sort((a, b) => b.p.kills - a.p.kills || a.p.deaths - b.p.deaths);
   $('#cz-score').innerHTML = rows.map((r) => `<li class="${r.k === G.me ? 'me' : ''}"><i style="background:${colOf(r.k)}"></i><span>${nameOf(r.k)}</span><b>${r.p.kills}</b></li>`).join('');
   for (const f of X.feed) f.t -= dt; if (X.feed.some((f) => f.t <= 0)) { X.feed = X.feed.filter((f) => f.t > 0); renderFeed(); }
   if (!me) return;
