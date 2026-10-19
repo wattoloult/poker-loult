@@ -367,6 +367,7 @@ function findLedge(W, p, wx, wz, lo = P.GRAB_LO, hi = P.GRAB_HI, reach = P.GRAB_
     if (b.bar) { // barre d'accroche (selon son grand axe) : on la saisit en passant dessous ou à côté, quel que soit le sens
       const alongX = b.hw > b.hd, cross = alongX ? L.lz : L.lx, u = alongX ? L.lx : L.lz, half = alongX ? b.hw : b.hd;
       if (Math.abs(cross) > P.ROPE_REACH || Math.abs(u) > half - 0.15) continue;
+      if (W.crazy && groundBelow(W, p.x, grabY(b) - P.HANG_DROP + 0.05, p.z, 0.35)) continue; // crazy : on ne pend pas à une barre trop basse (les pieds toucheraient le sol)
       const vc = alongX ? p.vz : p.vx; // côté d'arrivée : on fait face au sens de la traversée
       const f = alongX ? (cross > 0.05 ? 2 : cross < -0.05 ? 3 : vc > 0 ? 3 : 2) : (cross > 0.05 ? 0 : cross < -0.05 ? 1 : vc > 0 ? 1 : 0);
       if (Math.abs(cross) < bd) { bd = Math.abs(cross); best = { b: b.i, f, u }; }
@@ -688,7 +689,9 @@ function stepPlayer(W, p, I, mate) {
           const h = W.crazy ? findLedge(W, p, wx, wz, CZ.GRAB_LO, CZ.GRAB_HI, CZ.GRAB_REACH) : findLedge(W, p, wx, wz);
           const v = !h && W.crazy && wl > 0.3 ? findLedge(W, p, wx, wz, CZ.VAULT_LO, CZ.GRAB_LO, CZ.GRAB_REACH) : null;
           if (v && roomAbove(W, W.bodies[v.b], v.f, v.u)) startMantle(W, p, W.bodies[v.b], v.f, v.u);
-          else if (h) { p.st = ST.HANG; p.hang = h; p.stT = 0; p.vx = p.vy = p.vz = 0; hangPose(W, p); ev(W, 'grab', { p: p.id, x: p.x, y: p.y + 2, z: p.z }); }
+          else if (h) { p.st = ST.HANG; p.hang = h; p.stT = 0; p.vx = p.vy = p.vz = 0; hangPose(W, p); ev(W, 'grab', { p: p.id, x: p.x, y: p.y + 2, z: p.z });
+            // crazy : un rebord si bas qu'en pendant les pieds toucheraient le sol (ou s'y enfonceraient) : on se hisse directement
+            if (W.crazy && !W.bodies[h.b].bar && groundBelow(W, p.x, p.y + 0.3, p.z, 0.6) && roomAbove(W, W.bodies[h.b], h.f, h.u)) startMantle(W, p, W.bodies[h.b], h.f, h.u); }
           else { const r = findRope(W, p, mate); if (r) { p.st = ST.ROPE; p.rope = r; p.stT = 0; ev(W, 'grab', { p: p.id, rope: 1, x: p.x, y: p.y + 2, z: p.z }); } }
         }
       }
@@ -1055,7 +1058,7 @@ const onBody = (W, b) => { let n = 0; for (const p of W.pl) if (p.st === ST.GROU
 const X = { ST, P, DT, HP, CH, ev: (W, k, o) => ev(W, k, o), clamp, onB: onBody, inside, groundBelow, bounds, spanOf, toAir: (p) => toAir(p) };
 
 /* ------------------------------ mode CRAZY : arène, fusil à verrou ------------------------------ */
-export const CZ = { TIME: 600, LIMIT: 0, WR_MIN: 4.0, WR_V: 6.6, WR_T: 1.0, WR_UP: 2.2, WR_G: 6.0, STEP: 0.16, ACC: 30, DEC: 26, SPRINT: 1.32, BACK: 0.8, GRAB_LO: 1.45, GRAB_HI: 2.3, GRAB_REACH: 0.28, VAULT_LO: 0.55, RESPAWN: 3, PROT: 2, SHOULDER: 0.75, CAMUP: 0.35, BORE: 0.12, WALL_SLIDE: 3.2, WALL_CD: 0.22, WJ_MAX: 3, SCOPE_SLOW: 0.55, ZOOM_T: 0.3, SCOPE_UP: -0.068, WJ_OUT: 6.4, WJ_UP: 8.6,
+export const CZ = { TIME: 600, LIMIT: 0, WR_MIN: 4.0, WR_V: 7.6, WR_T: 1.4, WR_UP: 2.6, WR_G: 5.2, WR_REACH: 0.8, WR_GAP: 0.04, WR_END: 2.8, WR_DRAG: 1.6, WR_PUSH: 2.0, WR_LEFT: 1.8, WR_OUT: 7.4, STEP: 0.16, ACC: 30, DEC: 26, SPRINT: 1.32, BACK: 0.8, GRAB_LO: 1.45, GRAB_HI: 2.3, GRAB_REACH: 0.28, VAULT_LO: 0.55, RESPAWN: 3, PROT: 2, SHOULDER: 0.75, CAMUP: 0.35, BORE: 0.12, WALL_SLIDE: 3.2, WALL_CD: 0.22, WJ_MAX: 3, SCOPE_SLOW: 0.55, ZOOM_T: 0.3, SCOPE_UP: -0.068, WJ_OUT: 6.4, WJ_UP: 8.6,
   // phases du cycle de culasse (s depuis le tir) et du rechargement (s depuis son début) : chacune émet un événement de son propre bruit
   BOLT: [[0.10, 'up'], [0.22, 'back'], [0.42, 'eject'], [0.60, 'fwd'], [0.80, 'down']], RELOAD_AT: [[0.25, 'open'], [0.85, 'clip'], [1.85, 'push'], [2.3, 'close']] };
 export const crazyEye = (p) => (p.slideT > 0 || p.crawl ? KAR.EYE_SLIDE : KAR.EYE);
@@ -1074,46 +1077,64 @@ function wallNormal(W, p) {
   for (const [dx, dz] of WD) for (const h of [0.5, 1.25]) if (inside(W, p.x + dx * (P.R + 0.14), p.y + h, p.z + dz * (P.R + 0.14), 0)) { nx -= dx; nz -= dz; break; }
   const l = Math.hypot(nx, nz); return l > 0.01 ? { x: nx / l, z: nz / l } : null;
 }
-// COURSE MURALE (wall-run) : UNIQUEMENT sur un mur marqué (b.wallrun, finition ivoire au rendu ; b.wrFaces = faces permises). En l'air, collé au mur (à moins de 16 cm),
-// avec au moins WR_MIN m/s le long du mur et en poussant dans ce sens : on court sur le mur WR_T s au plus (petite montée puis descente lente), vitesse le long du mur
-// maintenue ; Espace = saut mural (on repart du mur). État à plat (p.wrB, p.wrT, p.wrTx, p.wrTz, p.wrVy) : il passe tel quel dans les instantanés.
-function wallRunFace(W, p) {
-  for (const b of near(W, p.x, p.z, 1)) {
-    if (!b.on || !b.wallrun || p.y + 0.3 < b.py - b.hh || p.y + 1.3 > b.py + b.hh) continue;
+// COURSE MURALE (wall-run) — mécanique de déplacement, UNIQUEMENT sur une face de mur déclarée (b.wallrun + b.wrFaces, b.wrY = bande de hauteur permise) par la
+// configuration des surfaces de l'arène (core/courses/quartier.js SURFACES). Une surface de course n'est PAS une prise (les murs restent nograb).
+//   entrée : en l'air, après un saut, face à moins de WR_REACH du corps (sonde orientée sur la normale du mur), vitesse le long du mur ≥ WR_MIN, on ne s'éloigne pas
+//            du mur, on pousse dans le sens de la course, et il reste au moins WR_LEFT m de façade devant ;
+//   pendant : le corps est AMENÉ en douceur à WR_GAP du mur (pas de téléportation), vitesse tangentielle conservée puis freinée (WR_DRAG), petit élan vers le haut puis
+//            pesanteur réduite (WR_G) ; pousser vers l'avant entretient la vitesse, pousser à l'opposé du mur le fait lâcher ;
+//   sortie : bout de la façade, vitesse < WR_END, temps écoulé, mur perdu, on pousse dehors → on repart en saut / chute avec SA vitesse (jamais figé en l'air) ;
+//            Espace = saut mural (wallJump : on repart du mur, vers l'avant).
+// État à plat (p.wrB, p.wrT, p.wrTx, p.wrTz, p.wrVy, p.wnx, p.wnz) : il passe tel quel dans les instantanés.
+function wallRunFace(W, p, reach, need = 0) {
+  let best = null, bd = 1e9;
+  for (const b of near(W, p.x, p.z, reach + 1)) {
+    if (!b.on || !b.wallrun) continue;
+    const y0 = b.wrY ? b.wrY[0] : b.py - b.hh, y1 = b.wrY ? b.wrY[1] : b.py + b.hh; if (p.y + 0.2 < y0 || p.y + 1.4 > y1) continue;
     local(b, p.x, p.z, L);
     for (let f = 0; f < 4; f++) {
       if (b.wrFaces && !b.wrFaces.includes(f)) continue;
       const [fx, fz] = FACE[f], fi = faceInfo(b, f), dist = fx ? fx * L.lx - fi.out : fz * L.lz - fi.out, u = fx ? L.lz : L.lx;
-      if (dist < P.R - 0.06 || dist > P.R + 0.16 || Math.abs(u) > fi.half - 0.25) continue;
-      return { b: b.i, nx: fi.nx, nz: fi.nz };
+      if (dist < P.R - 0.08 || dist > P.R + reach || Math.abs(u) > fi.half - 0.2) continue;
+      const tx = fi.nz, tz = -fi.nx, du = uStep(b, f, fi, 1), left = need ? fi.half - u * Math.sign(du * need) : 9; // longueur de façade restante dans le sens de la course
+      if (dist < bd) { bd = dist; best = { b: b.i, f, nx: fi.nx, nz: fi.nz, dist, left, tx, tz }; }
     }
   }
-  return null;
+  return best;
 }
+function endWallRun(W, p) { p.wrB = -1; p.wrCd = 0.3; ev(W, 'wallrunEnd', { p: p.id }); }
 function stepWallRun(W, p, wx, wz, wl, dt) {
   p.wrCd = Math.max(0, (p.wrCd || 0) - dt);
   if (p.wrB >= 0) {
-    const w = wallRunFace(W, p);
-    if (!w || w.b !== p.wrB || p.wrT > CZ.WR_T || wl < 0.2) { p.wrB = -1; p.wrCd = 0.35; ev(W, 'wallrunEnd', { p: p.id }); return; }
-    p.wrT += dt; const along = Math.max(CZ.WR_V * 0.8, p.vx * p.wrTx + p.vz * p.wrTz);
-    p.vx = p.wrTx * along - w.nx * 0.6; p.vz = p.wrTz * along - w.nz * 0.6; // collé au mur, vitesse le long du mur conservée
+    const w = wallRunFace(W, p, 0.35);
+    const along = p.vx * p.wrTx + p.vz * p.wrTz, inA = wl > 0.2 ? (wx * p.wrTx + wz * p.wrTz) / wl : 0, out = wl > 0.2 ? (wx * (w?.nx || 0) + wz * (w?.nz || 0)) / wl : 0;
+    if (!w || w.b !== p.wrB || p.wrT > CZ.WR_T || along < CZ.WR_END || out > 0.6) { endWallRun(W, p); return; } // fin : on garde sa vitesse, la pesanteur normale reprend
+    p.wrT += dt;
+    const sp = Math.min(CZ.WR_V, along + (inA > 0.3 ? CZ.WR_PUSH : -CZ.WR_DRAG) * dt); // entretien en poussant, sinon la vitesse retombe
+    const pull = clamp((w.dist - (P.R + CZ.WR_GAP)) * 10, -2, 4); // rapprochement doux du mur (quelques centimètres par image), jamais de saut de position
+    p.vx = p.wrTx * sp - w.nx * pull; p.vz = p.wrTz * sp - w.nz * pull;
     p.wrVy -= CZ.WR_G * dt; p.vy = p.wrVy; p.wsl = 0; p.wnx = w.nx; p.wnz = w.nz;
     return;
   }
-  if (p.wrCd > 0 || wl < 0.3 || p.vy < -5) return;
-  const w = wallRunFace(W, p); if (!w) return;
-  let tx = -w.nz, tz = w.nx; const along = p.vx * tx + p.vz * tz, inA = (wx * tx + wz * tz) / wl;
-  if (Math.abs(along) < CZ.WR_MIN || Math.abs(inA) < 0.35 || Math.sign(inA) !== Math.sign(along)) return;
+  if (p.wrCd > 0 || wl < 0.3 || p.vy < -4 || p.stT < 0.05) return;
+  const w = wallRunFace(W, p, CZ.WR_REACH); if (!w) return;
+  let tx = w.tx, tz = w.tz; const along = p.vx * tx + p.vz * tz, away = p.vx * w.nx + p.vz * w.nz, inA = (wx * tx + wz * tz) / wl;
+  if (Math.abs(along) < CZ.WR_MIN || away > 1.0 || Math.abs(inA) < 0.25 || Math.sign(inA) !== Math.sign(along)) return;
   if (along < 0) { tx = -tx; tz = -tz; }
+  const room = wallRunFace(W, p, CZ.WR_REACH, along < 0 ? -1 : 1); if (!room || room.left < CZ.WR_LEFT) return; // pas assez de façade devant soi
   p.wrB = w.b; p.wrT = 0; p.wrTx = tx; p.wrTz = tz; p.wrVy = Math.max(p.vy, CZ.WR_UP); p.wnx = w.nx; p.wnz = w.nz;
   ev(W, 'wallrun', { p: p.id, x: p.x, y: p.y, z: p.z });
 }
 function wallJump(W, p, wx, wz) {
   if ((p.wjN || 0) >= CZ.WJ_MAX) return false; // pas d'escalade infinie d'un mur : trois sauts muraux par envol
   const n = wallNormal(W, p); if (!n) return false;
-  p.wjN = (p.wjN || 0) + 1; p.buf = 0; p.wjCd = CZ.WALL_CD; if (p.wrB >= 0) { p.wrB = -1; p.wjN--; } p.wrCd = 0.4; // sortie de course murale : ne compte pas dans les trois sauts p.cut = false; p.jHeld = true; p.dj = false;
-  const dn = wx * n.x + wz * n.z, sx = wx - n.x * dn, sz = wz - n.z * dn; // on se laisse orienter le long du mur seulement
-  p.vx = n.x * CZ.WJ_OUT + sx * 2.2; p.vz = n.z * CZ.WJ_OUT + sz * 2.2; p.vy = CZ.WJ_UP;
+  const fromRun = p.wrB >= 0, keep = fromRun ? p.vx * p.wrTx + p.vz * p.wrTz : 0, tx = p.wrTx, tz = p.wrTz;
+  // sortie de course murale : ne compte pas dans les trois sauts muraux
+  if (fromRun) p.wrB = -1; else p.wjN = (p.wjN || 0) + 1;
+  p.buf = 0; p.wjCd = CZ.WALL_CD; p.wrCd = 0.4; p.cut = false; p.jHeld = true; p.dj = false;
+  const dn = wx * n.x + wz * n.z, sx = wx - n.x * dn, sz = wz - n.z * dn, out = fromRun ? CZ.WR_OUT : CZ.WJ_OUT; // on se laisse orienter le long du mur seulement
+  p.vx = n.x * out + sx * 2.2; p.vz = n.z * out + sz * 2.2; p.vy = CZ.WJ_UP;
+  if (fromRun) { p.vx += tx * keep * 0.85; p.vz += tz * keep * 0.85; } // l'élan le long du mur est conservé (saut en diagonale)
   ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z, wall: 1, nx: n.x, nz: n.z });
   return true;
 }

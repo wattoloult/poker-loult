@@ -89,7 +89,7 @@ test('Quartier : le pavillon (B1) se gravit par ses balcons — garde-corps 3,89
   const [x, z] = at('B1', -5, 7.7), R = bot(x, 0, z), { p } = R; // élan depuis 1,6 m devant la façade (juste dessous, la tête cogne le plancher du balcon)
   assert.ok(R.go(0, -1, R.hangs, 1.5, true), 'balcon 1 saisi depuis la place : ' + R.log); assert.ok(R.mantle() && p.y > 3.8, 'perché sur le balcon 1 : ' + R.log);
   assert.ok(R.go(0, -1, R.hangs, 1.5, true), 'balcon 2 : ' + R.log); assert.ok(R.mantle() && p.y > 6.8, 'perché sur le balcon 2 : ' + R.log);
-  assert.ok(R.go(0, -1, R.hangs, 1.5, true), 'égout du toit (sous le débord) : ' + R.log); assert.ok(R.mantle() && p.y > 8.9, 'sur le toit : ' + R.log);
+  assert.ok(R.go(0, -1, R.climbs, 1.5, true), 'égout du toit (sous le débord, ou franchi d\'un élan) : ' + R.log); assert.ok(R.mantle() && p.y > 8.9, 'sur le toit : ' + R.log);
   assert.ok(R.go(0, -1, (q) => q.y > 10.3, 4), 'faîte : ' + R.log);
 });
 
@@ -173,28 +173,65 @@ test('Quartier : chaque pièce du pack a ses collisions, et le kit couvre tous l
   assert.ok(L.bodies.length < 600, 'nombre de boîtes raisonnable (grille spatiale) : ' + L.bodies.length);
 });
 
-// ---------- PARKOUR VISION : ce qui est marqué ivoire fonctionne, le reste non ----------
-test('Parkour Vision : la planche ivoire de B4 permet la course murale ; le mur nu du pavillon, juste en face, ne la permet pas', () => {
-  const run = (x, dirX) => { const W = createWorld({ crazy: true, course: 'quartier', players: 1 }), p = W.pl[0]; Object.assign(p, { x, y: 0, z: -22.5, vx: 0, vz: 0, st: ST.GROUND, prot: 0 });
-    let on = 0, z0 = null, z1 = null, ymin = 9;
-    for (let i = 0; i < 300; i++) { const I = { ...IDLE, mz: 1, mx: p.z > -19.6 ? dirX : 0, ay: 0, brace: true, jc: p.z > -19.9 ? 1 : 0, jump: p.z > -19.9 && p.z < -18.5 }; // sprint vers le sud, saut le long du mur
-      stepWorld(W, [I]); if (p.wrB >= 0) { on++; if (z0 == null) z0 = p.z; z1 = p.z; ymin = Math.min(ymin, p.y); } }
-    return { on: on / 120, len: z0 == null ? 0 : z1 - z0, ymin };
-  };
-  const a = run(-11.88, -0.3); assert.ok(a.on > 0.5 && a.len > 3.5 && a.ymin > 0.4, `course murale sur la planche : ${a.on.toFixed(2)} s, ${a.len.toFixed(1)} m (y min ${a.ymin.toFixed(2)})`);
-  const b = run(-7.4, 0.3); assert.ok(b.on === 0, 'pas de course murale sur un mur ordinaire');
+// ---------- SURFACES DE PARKOUR : ce qui est marqué ivoire fonctionne, le reste non ----------
+import { SURFACES, WALLRUN_MIN } from './courses/quartier.js';
+// course : départ (x, z), direction (dx, dz) de la course, saut quand on a parcouru `jumpAt` m, on « biaise » vers le mur de (bx, bz) après le saut ; renvoie le relevé
+function wallRun(x, z, dx, dz, jumpAt, bx, bz, onWall = () => ({}), steps = 360) {
+  const W = createWorld({ crazy: true, course: 'quartier', players: 1 }), p = W.pl[0]; Object.assign(p, { x, y: 0, z, vx: 0, vz: 0, st: ST.GROUND, prot: 0 });
+  const R = { t: 0, len: 0, z0: null, maxStep: 0, gaps: [], endSt: null, endV: 0, exitVy: [], jumped: false }; let px = p.x, pz = p.z, was = false, d0 = 0, jc = 0;
+  for (let i = 0; i < steps; i++) {
+    d0 = Math.hypot(p.x - x, p.z - z); const air = d0 > jumpAt; if (air && !R.jumped) { R.jumped = true; jc++; }
+    const extra = was ? onWall(p, i) : {}; if (extra.jc) jc++;
+    stepWorld(W, [{ ...IDLE, mx: dx + (air ? bx : 0) + (extra.mx || 0), mz: dz + (air ? bz : 0) + (extra.mz || 0), ay: Math.atan2(dx, dz), brace: true, jc, jump: air && i < 400 }]);
+    const on = p.wrB >= 0; R.maxStep = Math.max(R.maxStep, Math.hypot(p.x - px, p.z - pz)); px = p.x; pz = p.z;
+    if (on) { R.t += DT; if (R.z0 == null) R.z0 = [p.x, p.z]; R.len = Math.hypot(p.x - R.z0[0], p.z - R.z0[1]); R.gaps.push(p.wnx !== undefined ? 1 : 0); }
+    if (was && !on && R.endSt == null) { R.endSt = p.st; R.endV = Math.hypot(p.vx, p.vz); R.endP = [p.x, p.y, p.z]; R.endVel = [p.vx, p.vy, p.vz]; }
+    if (R.endSt != null && R.exitVy.length < 20) R.exitVy.push(p.vy);
+    was = on;
+  }
+  R.p = p; R.W = W; return R;
+}
+
+test('Course murale : on court au milieu de la ruelle, on saute en biaisant vers la grande façade du pavillon → on court sur le mur (vitesse tenue, sans téléportation)', () => {
+  const r = wallRun(-8.3, -5.5, 0, -1, 3.0, 0.35, 0);
+  assert.ok(r.t > 0.6 && r.len > 4, `course sur le mur : ${r.t.toFixed(2)} s, ${r.len.toFixed(1)} m`);
+  assert.ok(r.maxStep < 0.12, 'aucun déplacement instantané (pas max ' + r.maxStep.toFixed(3) + ' m par image)');
 });
 
-test('Parkour Vision : la poutre-appui ivoire se saisit depuis le sol, on s\'y hisse, et de là on atteint la barre de la ruelle', () => {
-  const W = createWorld({ crazy: true, course: 'quartier', players: 1 }), p = W.pl[0]; Object.assign(p, { x: -9.3, y: 0, z: -13.9, vx: 0, vz: 0, st: ST.GROUND, prot: 0 });
+test('Course murale : abordée en diagonale (35°) depuis l\'autre côté de la ruelle', () => {
+  const r = wallRun(-11.2, -6, 0.55, -0.8, 1.8, 0.2, 0);
+  assert.ok(r.t > 0.5 && r.len > 3, `diagonale : ${r.t.toFixed(2)} s, ${r.len.toFixed(1)} m`);
+});
+
+test('Course murale : en bout de façade on repart en saut/chute avec sa vitesse (jamais figé en l\'air), et la pesanteur normale reprend', () => {
+  const r = wallRun(-8.3, -5.5, 0, -1, 3.0, 0.35, 0);
+  assert.ok(r.endSt === ST.AIR || r.endSt === ST.GROUND, 'sortie de course : ' + r.endSt); assert.ok(r.endV > 2, 'vitesse conservée à la sortie : ' + r.endV.toFixed(2));
+  if (r.endSt === ST.AIR) assert.ok(r.exitVy.length > 3 && r.exitVy[3] < r.exitVy[0], 'la pesanteur reprend (vy décroît)');
+});
+
+test('Course murale : Espace = saut de sortie (élan conservé), on repart du mur et on se reçoit sur le toit bas d\'en face (B4)', () => {
+  const W = createWorld({ crazy: true, course: 'quartier', players: 1 }), p = W.pl[0]; Object.assign(p, { x: -8.3, y: 0, z: -5.5, vx: 0, vz: 0, st: ST.GROUND, prot: 0 });
+  let jc = 0, air = false, jumped = false, land = null;
+  for (let i = 0; i < 400 && !land; i++) {
+    if (!air && Math.hypot(p.x + 8.3, p.z + 5.5) > 3) { air = true; jc++; }
+    let mx = air ? 0.35 : 0, mz = -1; if (p.wrB >= 0 && p.wrT > 0.3 && !jumped) { jumped = true; jc++; mx = -1; } else if (jumped) { mx = -1; mz = -0.6; }
+    stepWorld(W, [{ ...IDLE, mx, mz, ay: Math.atan2(0, -1), brace: true, jc, jump: air }]);
+    if (jumped && p.st !== ST.AIR) land = { st: p.st, x: p.x, y: p.y, z: p.z };
+  }
+  assert.ok(jumped && land && land.x < -11.6 && land.y > 2.9, 'enchaînement mur → toit de B4 : reçu en ' + JSON.stringify(land));
+});
+
+test('Course murale RÉSERVÉE : pas sur la maison basse B4 ni sur une façade non déclarée ; une surface de course n\'est pas une prise', () => {
+  const low = wallRun(-11.8, -5.5, 0, -1, 3.0, -0.35, 0); assert.ok(low.t === 0, 'pas de course sur la maison basse B4');
+  for (const b of L.bodies) if (b.wallrun) { assert.ok(b.nograb, 'mur de course non saisissable'); const len = b.wrFaces[0] < 2 ? b.d : b.w; assert.ok(len >= WALLRUN_MIN.len && b.h >= WALLRUN_MIN.h, 'grande façade seulement'); }
+  assert.equal(L.bodies.filter((b) => b.wallrun).length, SURFACES.filter((e) => e.type === 'wallrun').length, 'seules les surfaces déclarées');
+});
+
+test('Surfaces : la poutre-appui se saisit depuis le sol, on s\'y hisse, et de là on atteint la barre en console', () => {
+  const W = createWorld({ crazy: true, course: 'quartier', players: 1 }), p = W.pl[0]; Object.assign(p, { x: -14, y: 0, z: -24.4, vx: 0, vz: 0, st: ST.GROUND, prot: 0 });
   let jc = 0; const go = (mx, mz, cond, n, jump) => { if (jump) jc++; for (let i = 0; i < n; i++) { stepWorld(W, [{ ...IDLE, mx, mz, jc, jump: jump && i < 48, ay: Math.atan2(mx, mz) }]); if (cond()) return true; } return false; };
-  assert.ok(go(1, 0, () => p.st === ST.HANG || (p.st === ST.GROUND && p.y > 2.2), 200, true), 'poutre saisie : ' + p.st + ' ' + p.y.toFixed(2));
-  if (p.st === ST.HANG) assert.ok(go(0, 0, () => p.st === ST.GROUND, 200, true));
+  assert.ok(go(0, -1, () => p.st === ST.HANG || p.st === ST.MANTLE || (p.st === ST.GROUND && p.y > 2.2), 200, true), 'poutre saisie : ' + p.st + ' ' + p.y.toFixed(2));
+  if (p.st !== ST.GROUND) assert.ok(go(0, 0, () => p.st === ST.GROUND, 200, p.st === ST.HANG));
   assert.ok(p.y > 2.25 && W.bodies[p.gb]?.pk === 'appui', 'debout sur la poutre : ' + p.y.toFixed(2));
-  assert.ok(go(0, 1, () => p.st === ST.HANG && W.bodies[p.hang.b].bar, 200, true), 'barre saisie depuis la poutre : ' + p.st + ' ' + p.y.toFixed(2) + ' ' + p.z.toFixed(2));
-});
-
-test('Parkour Vision : seuls les éléments marqués portent une fonction (barre, course murale) ; tous les marqués sont réels et accessibles depuis le sol de la carte', () => {
-  for (const b of L.bodies) { if (b.bar) assert.equal(b.pk, 'barre'); if (b.wallrun) assert.equal(b.pk, 'wallrun'); }
-  const kinds = new Set(L.bodies.filter((b) => b.pk).map((b) => b.pk)); for (const k of ['wallrun', 'barre', 'appui', 'corniche']) assert.ok(kinds.has(k), 'type présent : ' + k);
+  assert.ok(go(-1, 0, () => p.st === ST.HANG && W.bodies[p.hang.b].bar, 200, true), 'barre saisie depuis la poutre : ' + p.st + ' ' + p.x.toFixed(2) + ' ' + p.y.toFixed(2));
 });

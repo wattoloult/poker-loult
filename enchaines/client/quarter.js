@@ -107,10 +107,12 @@ function buildParkour(L, grp, nodes) {
         const g = alongX ? new THREE.BoxGeometry(len, 0.11, 0.12) : new THREE.BoxGeometry(0.12, 0.11, len);
         withShell(mesh(g, metal, grp, b.x + c * lx + s * lz, top - 0.05, b.z - s * lx + c * lz, r), 0.03);
       }
-    } else if (b.pk === 'wallrun') { // planche de course : lattes horizontales laquées ivoire sur un fond sombre (lisible de loin, jamais confondue avec un mur), au volume exact
-      const c = Math.cos(r), sn = Math.sin(r), thin = b.w < b.d, len = thin ? b.d : b.w, dep = thin ? b.w : b.d, n = Math.max(3, Math.round(b.h / 0.42)), sh = b.h / n;
-      mesh(thin ? new THREE.BoxGeometry(dep * 0.5, b.h, len) : new THREE.BoxGeometry(len, b.h, dep * 0.5), DARK, grp, b.x, b.y, b.z, r);
-      for (let i = 0; i < n; i++) withShell(mesh(thin ? new THREE.BoxGeometry(dep, sh - 0.06, len) : new THREE.BoxGeometry(len, sh - 0.06, dep), lacq, grp, b.x, b.y - b.h / 2 + sh * (i + 0.5), b.z, r), 0.03);
+    } else if (b.pk === 'wallrun') { // course murale : la façade garde sa texture ; deux fines baguettes ivoire courent le long de la bande de course, et deux repères
+      // verticaux marquent l'entrée et la sortie (indicateur de gameplay, pas un revêtement)
+      const FACE = [[1, 0], [-1, 0], [0, 1], [0, -1]], [fx, fz] = FACE[b.wrFaces[0]], out = (fx ? b.w : b.d) / 2 + 0.018, half = (fx ? b.d : b.w) / 2 - 0.25;
+      const cs = Math.cos(r), sn = Math.sin(r), at = (lx, lz) => [b.x + cs * lx + sn * lz, b.z - sn * lx + cs * lz], [y0, y1] = b.wrY || [b.y - b.h / 2, b.y + b.h / 2];
+      for (const y of [y0 + 1.0, y0 + 2.45]) { const g = fx ? new THREE.BoxGeometry(0.035, 0.06, half * 2) : new THREE.BoxGeometry(half * 2, 0.06, 0.035); const [x, z] = at(fx * out, fz * out); withShell(mesh(g, metal, grp, x, y, z, r), 0.025); }
+      for (const e of [-1, 1]) { const g = fx ? new THREE.BoxGeometry(0.035, 1.6, 0.07) : new THREE.BoxGeometry(0.07, 1.6, 0.035); const [x, z] = fx ? at(fx * out, e * half) : at(e * half, fz * out); withShell(mesh(g, metal, grp, x, y0 + 1.72, z, r), 0.025); }
     } else { // poutre d'appui : bois laqué ivoire, à la taille exacte du volume
       withShell(mesh(new THREE.BoxGeometry(b.w, b.h, b.d), lacq, grp, b.x, b.y, b.z, r));
     }

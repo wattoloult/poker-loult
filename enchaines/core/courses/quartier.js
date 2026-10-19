@@ -45,7 +45,6 @@ export const LAYOUT = [
   ['B9', -14, 34.84, Math.PI, 'sud-B9'], ['B3', 8, 35.46, Math.PI, 'sud-B3'], ['B8', -6, 23.5, 0, 'sud-B8'],
 ];
 const PIECE_IDS = {}; for (const [n, x, z, r, tag] of LAYOUT) PIECE_IDS[tag || n] = placePiece(K, n, x, z, r, { tag });
-export const CORNICHES = ['B4']; // pièces dont l'égout est marqué « corniche » (prototype Parkour Vision)
 // comblements : fentes entre un bâtiment et l'enceinte (trop étroites pour être des passages)
 block(21.9, 0, 10, -31.6, 1.2, 9, solid);
 // liseré de 12 cm de la cour pavée (Arena_Floor), découpé au pied du perron
@@ -83,20 +82,21 @@ const TRUNK = { erable: 0.45, lanterne: 0.42, bambou: 1.4 };
 for (const [k, x, z, h] of DECOR) block(x, 0, k === 'erable' ? 2.4 : h, z, TRUNK[k], TRUNK[k], { noMesh: 1, nograb: 1, decor: k });
 for (const [k, x, z, w, h, d, r = 0] of PROPS) block(x, 0, h, z, w, d, { noMesh: 1, yaw: r, prop: k, ...(k === 'muret' ? { nograb: 1 } : {}) });
 
-// PARKOUR VISION — prototype sur la maison basse (B4) et la ruelle ouest : chaque élément ivoire nacré au rendu (client/quarter.js) EST le volume de collision qui porte la
-// fonction (rien d'autre n'en a l'aspect) : pk = genre lu par le rendu et les tests. Murs ordinaires : ni prise, ni course murale.
-//   wallrun  planche de course sur le mur est de B4 (seule surface où l'on court sur un mur) ; barre  barre métallique en travers de la ruelle (on s'y suspend, on s'élance) ;
-//   appui    poutre qui dépasse du pavillon (rebord à saisir, petite plateforme) ; corniche  égout de B4 (rebord qu'on longe et dont on passe les coins : volume du toit, pk ajouté)
-export const PARKOUR = [
-  { pk: 'wallrun', x: -12.33, z: -14.5, y0: 0.5, y1: 3.0, w: 0.14, d: 9.6, wrFaces: [0] },
-  { pk: 'barre', x: -8.2, z: -12.9, y: 5.6, w: 2.4, d: 0.12 }, // en console, scellée au mur du pavillon : on l'attrape bras levés en sautant depuis la poutre
-  { pk: 'appui', x: -7.6, z: -13.9, y0: 2.05, y1: 2.3, w: 1.2, d: 0.7 },
+// SURFACES DE PARKOUR (système de données réutilisable, lu par la simulation, le rendu et les tests). Chaque entrée : type de mouvement, support (face d'un mur réel d'une
+// pièce, ou élément construit), bande de hauteur, dimensions minimales vérifiées ici, indication visuelle. Le matériau ivoire nacré n'apparaît QUE là où la surface
+// permet réellement le mouvement. Types : wallrun (course le long d'un mur), barre (suspension, élan), appui (rebord / petite plateforme à saisir), corniche (égout qu'on
+// longe). Glissade murale, prise de rebord ordinaire, franchissement : mécaniques générales (voir core/sim.js), pas de marquage.
+// Course murale RÉSERVÉE aux grandes façades qui ouvrent un vrai parcours (longueur ≥ 8 m, hauteur ≥ 4 m) : jamais les maisons basses ni les petites constructions.
+export const WALLRUN_MIN = { len: 8, h: 4 };
+export const SURFACES = [
+  { type: 'wallrun', piece: 'B1', wall: 0, face: 1, y: [0.3, 6.2], why: 'ruelle ouest, 11 m de façade ; on en ressort sur le toit bas de B4, en face' },
+  { type: 'wallrun', piece: 'B1', wall: 1, face: 0, y: [0.3, 6.2], why: 'ruelle est, 11 m ; vers le porche et le toit de B5' },
+  { type: 'wallrun', piece: 'B7', wall: 0, face: 2, y: [0.3, 5.6], why: 'rue arrière, 14 m sous l\'auvent ; coupe la rue d\'un bout à l\'autre en hauteur' },
+  { type: 'appui', x: -14, z: -26.5, y: [2.05, 2.3], w: 0.7, d: 1.2, why: 'poutre qui dépasse de B9 sur la rue arrière (on la saisit du sol, on s\'y hisse)' },
+  { type: 'barre', x: -15.2, z: -25.9, y: 5.6, w: 0.12, d: 2.4, why: 'barre en console scellée dans la façade de B9 : bras levés depuis la poutre, puis élan' },
+  { type: 'corniche', piece: 'B4', why: 'égout de la maison basse : rebord saisissable depuis le pied du mur, on le longe, on passe les coins' },
 ];
-for (const e of PARKOUR) {
-  if (e.pk === 'barre') block(e.x, e.y - 0.12, e.y, e.z, e.w, e.d, { noMesh: 1, bar: 1, pk: 'barre' });
-  else if (e.pk === 'wallrun') block(e.x, e.y0, e.y1, e.z, e.w, e.d, { noMesh: 1, nograb: 1, wallrun: 1, wrFaces: e.wrFaces, pk: 'wallrun' });
-  else block(e.x, e.y0, e.y1, e.z, e.w, e.d, { noMesh: 1, pk: e.pk });
-}
+// (la mise en place a lieu après la pose des bâtiments, plus bas : applySurfaces)
 
 // PLACES D'APPARITION : rues, ruelles, placettes (la plus éloignée des adversaires est choisie)
 const spawns = [[-10, -23.6, Math.PI / 2], [10, -23.8, -Math.PI / 2], [0, -23, Math.PI], [-9.7, -14, 0], [9.9, -12, 0], [-17.5, -4.6, -Math.PI / 2], [17.5, -7.6, Math.PI / 2],
@@ -121,6 +121,19 @@ export const ENV = {
   layout: [...LAYOUT.map(([n, x, z, r]) => ({ node: n === 'Stairs' ? 'Stairs' : 'Building_' + n, x, z, r })), { node: 'Arena_Floor', x: 0, z: fz, r: 0 }],
   ground: { x0: B.x0, x1: B.x1, z0: B.z0, z1: B.z1 }, bounds: B, walls: WALLS, gates: GATES, props: PROPS, decor: DECOR,
 };
-const L0 = K.done({ env: ENV, anchors: ANCHORS, parkour: PARKOUR });
-for (const t of CORNICHES) for (const i of PIECE_IDS[t] || []) { const b = L0.bodies[i]; if (b.roof && !b.nograb) b.pk = 'corniche'; } // égout saisissable de la pièce
+// éléments construits (barre, appui) : de vrais volumes ; les surfaces portées par un bâtiment (wallrun, corniche) marquent ses propres volumes après K.done()
+for (const e of SURFACES) {
+  if (e.type === 'barre') block(e.x, e.y - 0.12, e.y, e.z, e.w, e.d, { noMesh: 1, bar: 1, pk: 'barre' });
+  else if (e.type === 'appui') block(e.x, e.y[0], e.y[1], e.z, e.w, e.d, { noMesh: 1, pk: 'appui' });
+}
+const L0 = K.done({ env: ENV, anchors: ANCHORS, surfaces: SURFACES });
+for (const e of SURFACES) {
+  const ids = PIECE_IDS[e.piece] || [];
+  if (e.type === 'corniche') for (const i of ids) { const b = L0.bodies[i]; if (b.roof && !b.nograb) b.pk = 'corniche'; } // égout saisissable de la pièce
+  if (e.type === 'wallrun') {
+    const b = L0.bodies[ids[e.wall]], len = e.face < 2 ? b.d : b.w, h = Math.min(e.y[1], b.y + b.h / 2) - Math.max(e.y[0], b.y - b.h / 2);
+    if (!b || len < WALLRUN_MIN.len || h < WALLRUN_MIN.h) throw new Error(`surface de course murale trop petite : ${e.piece} (${len?.toFixed(1)} × ${h?.toFixed(1)} m)`);
+    Object.assign(b, { wallrun: 1, wrFaces: [e.face], wrY: e.y, pk: 'wallrun' }); // le MUR RÉEL du bâtiment (il reste nograb : une surface de course n'est pas une prise)
+  }
+}
 export default L0;

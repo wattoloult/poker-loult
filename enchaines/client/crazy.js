@@ -515,7 +515,8 @@ export function bodyYaw(c, p, dt) {
   const k = c.k, aim = k === X.me && !(p.dead > 0) ? A.yaw : p.ay ?? p.yaw;
   if (c.legYaw === undefined || !Number.isFinite(c.legYaw)) c.legYaw = aim;
   const vx = p.vx - (p.gvx || 0), vz = p.vz - (p.gvz || 0), sp = Math.hypot(vx, vz); let tgt = c.legYaw; c.czRev = false;
-  if (p.st === ST.HANG || p.st === ST.MANTLE || p.st === ST.CLIMB) { c.legYaw = p.yaw; return p.yaw; } // accroché : le corps fait FACE au mur (la simulation l'oriente), jamais vers la visée
+  if (p.st === ST.HANG || p.st === ST.MANTLE || p.st === ST.CLIMB) { c.legYaw = p.yaw; return p.yaw; }
+  if (p.wrB >= 0) { const ty = Math.atan2(p.wrTx, p.wrTz); c.legYaw += clamp(wrap(ty - c.legYaw), -16 * dt, 16 * dt); return c.legYaw; } // course murale : parallèle au mur // accroché : le corps fait FACE au mur (la simulation l'oriente), jamais vers la visée
   if (sp > 0.9 && p.st === ST.GROUND) {
     const rel = wrap(Math.atan2(vx, vz) - aim);
     if (Math.abs(rel) <= (105 * Math.PI) / 180) tgt = aim + clamp(rel, -D75, D75);
@@ -547,28 +548,54 @@ function cycleAnim(el) { // culasse après un tir : lever (0 → 0,10), reculer 
   const up = sm(el / 0.1), back = sm((el - 0.1) / 0.12), fwd = sm((el - 0.46) / 0.14), down = sm((el - 0.66) / 0.14);
   return { handle: el < 0.66 ? lerp(-0.7, 1.3, up) : lerp(1.3, -0.7, down), slide: back * (1 - fwd), hand: el < 0.05 ? sm(el / 0.05) : el < 0.8 ? 1 : 1 - sm((el - 0.8) / 0.12) };
 }
-// PRISE D'UN REBORD (suspendu, puis en se hissant) : chaque main va au point de prise RÉEL du bord (core/sim.js ledgePoint), de part et d'autre du milieu, posée sur le
-// dessus juste après l'arête ; IK à deux segments (coudes vers l'extérieur et le bas), puis la main est orientée d'après SA géométrie (orientHand : axes déduits du médius
-// et du pouce, aucune rotation arbitraire) : doigts par-dessus le bord (vers le mur), paume vers le bas = prise en pronation ; les doigts se referment sur l'arête.
-function gripLedge(c, p, W) {
+// SUSPENSION (barre ou rebord) : POSE DÉDIÉE, construite sur le squelette de chaque personnage. Aucune animation du jeu ne montre un corps suspendu : le clip de repos
+// (Idle_Loop) laissait le corps debout, jambes tendues, seuls les bras tirés vers le haut. Ici, à chaque image :
+//   1. pendule : la racine tourne autour de l'axe des mains (barre : balancement lancé par la vitesse d'arrivée, amorti ; rebord : corps contre le mur, sans balancement) ;
+//   2. dos remis droit : chaque os (bassin exclu) revient vers SA pose de repos (aucune torsion héritée du clip) ;
+//   3. épaules engagées : clavicules relevées dans le plan frontal ;
+//   4. hauteur : le corps descend jusqu'à ce que l'épaule soit à 92 % de la longueur RÉELLE du bras sous la prise (bras presque tendus, coudes à peine fléchis) ;
+//   5. bras en IK jusqu'au point de prise réel (core/sim.js ledgePoint), coudes vers l'extérieur ; mains orientées par LEUR géométrie (orientHand) : barre = prise en
+//      pronation (paume vers l'avant, doigts par-dessus la barre puis refermés autour), rebord = paume posée à plat sur le dessus, doigts par-dessus l'arête ;
+//   6. jambes pendantes en IK (genoux un peu fléchis, pieds légèrement décalés ; contre un mur, pointes de pied vers la paroi).
+const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+function hangPose(c, p, W, dt, mantle) {
   const L = ledgePoint(W, p), B = c.bones; if (!L || !B.upperarm_l || !B.upperarm_r) return;
-  const n = new THREE.Vector3(L.nx, 0, L.nz), t = new THREE.Vector3(L.tx, 0, L.tz), down = new THREE.Vector3(0, -1, 0), into = n.clone().negate();
-  c.armMiss = [];
+  const b = W.bodies[(p.hang || p.mantle).b], bar = !!b?.bar, n = V(L.nx, 0, L.nz), f = n.clone().negate(), t = V(L.tx, 0, L.tz), up = V(0, 1, 0);
+  const mid = bar ? V(L.x, L.y - b.hh, L.z).addScaledVector(n, -(b.hw > b.hd ? b.hd : b.hw)) : V(L.x, L.y, L.z); // barre : son axe ; rebord : l'arête
+  const st = (c.hangSt ||= { a: 0, v: 0, k: 0, id: '', ph: 0 }), id = (p.hang || p.mantle).b + ':' + (p.hang || p.mantle).f;
+  if (st.id !== id) { st.id = id; st.k = 0; st.a = 0; st.v = bar ? clamp(((c.lvx || 0) * f.x + (c.lvz || 0) * f.z) / 1.9, -1.6, 1.6) : 0; }
+  st.k = Math.min(1, st.k + dt / 0.2); const k = mantle ? 1 : sm(st.k);
+  if (bar && !mantle) { st.v += (-(9.8 / 1.9) * Math.sin(st.a) - 1.3 * st.v) * dt; st.a += st.v * dt; } else { st.a *= Math.max(0, 1 - dt * 8); st.v = 0; }
+  // 2. dos droit (os de la colonne vers leur pose de repos)
+  if (c.restQ) for (const nm of ['spine_01', 'spine_02', 'spine_03', 'neck_01']) { const bb = B[nm]; if (bb && c.restQ[nm]) bb.quaternion.slerp(c.restQ[nm], 0.85 * k); }
+  // 1 + 4. racine : pivot sur l'axe des mains, puis descente jusqu'à des bras presque tendus
+  const H = 2.0, a = st.a; c.root.rotation.set(a, 0, 0); c.root.position.set(0, H - H * Math.cos(a), -H * Math.sin(a)); c.root.updateMatrixWorld(true);
+  // 3. épaules engagées : clavicule droite et gauche relevées autour de l'axe avant
+  for (const s of ['l', 'r']) { const cl = B['clavicle_' + s]; if (cl) rotWorld(cl, f, (s === 'l' ? 0.26 : -0.26) * k); }
+  const arm = (s) => wpos(B['upperarm_' + s], V()).distanceTo(wpos(B['lowerarm_' + s], V())) + wpos(B['lowerarm_' + s], V()).distanceTo(wpos(B['hand_' + s], V()));
+  if (!mantle) {
+    const shY = (wpos(B.upperarm_l, V()).y + wpos(B.upperarm_r, V()).y) / 2, want = mid.y - 0.07 - 0.92 * (arm('l') + arm('r')) / 2, drop = clamp(shY - want, 0, 0.32) * k;
+    if (drop > 0) { c.root.position.y -= drop; c.root.updateMatrixWorld(true); } c.hangDrop = drop;
+  }
+  // 5. bras et mains ; déplacement latéral = une main après l'autre
+  st.ph += dt * 7 * Math.min(1, Math.abs(p.lat || 0) * 2); const mv = Math.min(1, Math.abs(p.lat || 0) * 2); c.armMiss = []; c.gripPts = [];
   for (const s of ['l', 'r']) {
-    const sg = s === 'l' ? -1 : 1, T = new THREE.Vector3(L.x, L.y + 0.025, L.z).addScaledVector(t, sg * 0.21).addScaledVector(into, 0.06);
-    const pole = n.clone().multiplyScalar(0.55).addScaledVector(t, sg * 0.7).addScaledVector(down, 0.35);
-    c.armMiss.push(ik2(B['upperarm_' + s], B['lowerarm_' + s], B['hand_' + s], T, pole));
-    const nh = orientHand(c, s, into, down); if (nh) curl(c, s, nh, { index: [0.75, 0.9, 0.5], middle: [0.8, 0.95, 0.55], ring: [0.85, 0.95, 0.55], pinky: [0.9, 0.95, 0.55], thumb: [0.3, 0.25, 0.1] });
+    const sg = s === 'l' ? -1 : 1, G = mid.clone().addScaledVector(t, sg * 0.21 + Math.sin(st.ph + (s === 'l' ? 0 : Math.PI)) * 0.07 * mv);
+    const wrist = bar ? G.clone().addScaledVector(up, -0.075).addScaledVector(f, -0.03) : G.clone().addScaledVector(up, 0.025).addScaledVector(f, 0.06);
+    c.gripPts.push(G);
+    const sh = wpos(B['upperarm_' + s], V()), T = sh.clone().lerp(wrist, k); // la main monte vers la prise (saisie en 0,2 s)
+    c.armMiss.push(ik2(B['upperarm_' + s], B['lowerarm_' + s], B['hand_' + s], T, f.clone().multiplyScalar(0.25).addScaledVector(t, sg * 0.75).addScaledVector(up, -0.1)));
+    const nh = bar ? orientHand(c, s, up.clone().addScaledVector(f, 0.25), f) : orientHand(c, s, f, V(0, -1, 0));
+    if (nh) curl(c, s, nh, bar ? { index: [1.0, 1.1, 0.8], middle: [1.05, 1.15, 0.85], ring: [1.1, 1.15, 0.85], pinky: [1.15, 1.15, 0.85], thumb: [0.6, 0.5, 0.3] } : { index: [0.75, 0.9, 0.5], middle: [0.8, 0.95, 0.55], ring: [0.85, 0.95, 0.55], pinky: [0.9, 0.95, 0.55], thumb: [0.3, 0.25, 0.1] });
+  }
+  // 6. jambes pendantes (genoux un peu fléchis vers l'avant, pieds légèrement décalés, petit retard sur le balancement)
+  if (!mantle) for (const s of ['l', 'r']) {
+    const th = B['thigh_' + s], ca = B['calf_' + s], fo = B['foot_' + s]; if (!th || !ca || !fo) continue;
+    const hip = wpos(th, V()), len = hip.distanceTo(wpos(ca, V())) + wpos(ca, V()).distanceTo(wpos(fo, V())), sg = s === 'l' ? -1 : 1;
+    const foot = hip.clone().addScaledVector(up, -0.93 * len).addScaledVector(t, sg * 0.04).addScaledVector(f, (bar ? (s === 'l' ? 0.05 : -0.07) : 0.1) - st.v * 0.05);
+    ik2(th, ca, fo, foot, f.clone().addScaledVector(up, 0.2));
   }
 }
-// plaque de couche de la crosse par rapport à l'articulation de l'épaule droite (os upperarm_r), dans le repère de visée : en haut, à droite, vers l'avant (m)
-const BUTT = { up: 0.05, side: -0.05, fwd: -0.02 };
-// par personnage (l'os de l'épaule n'est pas au même endroit dans chaque squelette) : réglages MESURÉS dans le navigateur, crosse épaulée (points du fût à plus de 2 cm dans
-// le maillage déformé, sur 30) : Deadlock 12-20 → 4 (buste un peu plus de profil), Cyber 4 → 0, Anime 5 (réglage commun)
-const FIT = { deadlock: { butt: { up: 0.04, side: 0.06, fwd: 0.04 }, stance: 0.8 }, cyber: { butt: { up: 0.05, side: 0.03, fwd: -0.02 } } };
-// port bas (repos, course) : déplacement de la plaque de couche (m) et inclinaison du canon vers le bas (rad)
-const LOWREADY = { down: -0.14, side: 0.08, fwd: 0.06, pitch: 0.6 };
-const G0 = () => X.G;
 const RIFLE_WORLD = new THREE.Matrix4();
 export function pose(cl, W, dt, rp, me) {
   if (!X.on) return;
@@ -585,7 +612,7 @@ export function pose(cl, W, dt, rp, me) {
     const allB = c.boneList ||= [...new Set(Object.values(c.bones).filter(Boolean))];
     if (c.czPost) { for (const [b, st] of c.czPost) if (b.quaternion.equals(st.after)) b.quaternion.copy(st.before); c.root.updateMatrixWorld(true); }
     const pre = new Map(allB.map((b) => [b, b.quaternion.clone()]));
-    if (climbing) { c.root.updateMatrixWorld(true); gripLedge(c, p, W); c.czPost = new Map(); for (const [b, q0] of pre) if (!b.quaternion.equals(q0)) c.czPost.set(b, { before: q0, after: b.quaternion.clone() }); continue; }
+    if (climbing) { c.root.updateMatrixWorld(true); hangPose(c, p, W, dt, p.st === ST.MANTLE); c.czPost = new Map(); for (const [b, q0] of pre) if (!b.quaternion.equals(q0)) c.czPost.set(b, { before: q0, after: b.quaternion.clone() }); continue; }
     if (c.restQ && !dbg.noDamp) for (const n in c.restQ) { const b = c.bones[n]; if (b) b.quaternion.slerp(c.restQ[n], DAMP[n] ?? 0.8); } // le clip de course balance bassin, buste et tête de gauche à droite : on les ramène en grande partie à la pose de repos ; la visée les oriente ensuite
     const a = aimFor(k, p, dt), d = new THREE.Vector3().copy(aimDirV(a.yaw, a.pitch)), Rv = new THREE.Vector3(rightOf(a.yaw).x, 0, rightOf(a.yaw).z);
     // longueur des bras : les bras de ce modèle sont courts pour un fusil de 1,1 m ; on les allonge un peu (l'échelle suit l'axe de l'os)

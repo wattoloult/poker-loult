@@ -170,3 +170,22 @@ test('glissade murale : contre un mur lisse on ne s\'accroche pas, on glisse (ch
   let top = 0; for (let i = 0; i < 120; i++) { stepWorld(V, [{ ...IDLE, mz: 1, ay: 0, jc: 1, jump: i < 40 }]); if (q.st === ST.HANG) hung = true; if (q.st === ST.GROUND) top = Math.max(top, q.y); }
   assert.ok(!hung && top > 1.65, 'mur de 1,7 m franchi d\'un coup, sans pendre : debout à ' + top.toFixed(2));
 });
+
+test('barres : suspension à plusieurs hauteurs (corps SOUS la barre, pieds libres), barre trop basse refusée, rebord bas franchi au lieu de pendre les pieds dans le sol', () => {
+  const K = course({ id: 'czb', world: 'mech', name: 't', short: 't', diff: 1, published: false, crazy: true, medals: { gold: 1, silver: 2, bronze: 3 }, abyss: -12 });
+  K.block(0, -4, 0, 0, 60, 60, { mat: 'metal' }); K.cp(-25, 0, -25); K.cp(25, 0, 25);
+  const HS = [2.2, 2.6, 3.1, 3.6, 3.85]; HS.forEach((h, i) => K.block(-12 + i * 6, h - 0.12, h, 0, 3, 0.12, { mat: 'metal', bar: 1 })); K.block(0, 0, 2.25, 12, 6, 2, { mat: 'brick' }); // rebord bas de 2,25 m
+  const L = K.done();
+  for (const [i, h] of HS.entries()) {
+    const W = createWorld({ crazy: true, level: L, players: 1 }), p = W.pl[0]; Object.assign(p, { x: -12 + i * 6, y: 0, z: 0.9, vx: 0, vz: 0, st: ST.GROUND, prot: 0 });
+    let hung = null; for (let k = 0; k < 150 && !hung; k++) { stepWorld(W, [{ ...IDLE, mz: -1, ay: Math.PI, jc: 1, jump: k < 45 }]); if (p.st === ST.HANG) hung = { y: p.y, z: p.z, bar: W.bodies[p.hang.b].bar }; }
+    if (h < 2.4) { assert.ok(!hung, `barre à ${h} m : trop basse, refusée (les pieds toucheraient le sol)`); continue; }
+    assert.ok(hung && hung.bar, `barre à ${h} m saisie`); assert.ok(Math.abs(hung.y - (h - P.HANG_DROP)) < 1e-6 && hung.y > 0.35, `corps sous la barre, pieds à ${hung.y.toFixed(2)} m du sol`);
+    assert.ok(Math.abs(hung.z) < 0.01, 'centré sous la barre : ' + hung.z.toFixed(3));
+    for (let k = 0; k < 120; k++) stepWorld(W, [{ ...IDLE, mx: 1, ay: Math.PI, jc: 1 }]); assert.ok(p.st === ST.HANG && p.x > -12 + i * 6 + 0.8, 'déplacement latéral le long de la barre');
+    stepWorld(W, [{ ...IDLE, ay: Math.PI, jc: 1, dc: 1 }]); for (let k = 0; k < 60; k++) stepWorld(W, [{ ...IDLE, ay: Math.PI, jc: 1, dc: 1 }]); assert.ok(p.st !== ST.HANG && p.y < 0.05, 'lâcher : on retombe (gravité normale)');
+  }
+  const W = createWorld({ crazy: true, level: L, players: 1 }), p = W.pl[0]; Object.assign(p, { x: 0, y: 0, z: 10.3, vx: 0, vz: 0, st: ST.GROUND, prot: 0 }); let hungLow = false;
+  let top = 0; for (let k = 0; k < 150; k++) { stepWorld(W, [{ ...IDLE, mz: 1, ay: 0, jc: 1, jump: k < 45 }]); if (p.st === ST.HANG && p.y < 0.3) hungLow = true; if (p.st === ST.GROUND) top = Math.max(top, p.y); }
+  assert.ok(!hungLow && top > 2.2, 'rebord de 2,25 m : franchi, jamais suspendu les pieds au sol (debout à ' + top.toFixed(2) + ')');
+});

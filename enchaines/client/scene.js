@@ -350,7 +350,8 @@ function poseClimber(c, p, mate, W, dt, rp) {
   const spd = Math.hypot(p.vx - p.gvx, p.vz - p.gvz);
   let a = ST_ANIM(p, spd);
   if (p.st === ST.AIR && p.dangling) a = 'NinjaJump_Idle_Loop';
-  if (p.st === ST.HANG) a = 'Idle_Loop'; // accroché : buste droit, pas le dos cambré du saut
+  if (p.st === ST.HANG) a = 'Idle_Loop'; // accroché : buste droit, pas le dos cambré du saut (mode crazy : pose de suspension dédiée, client/crazy.js hangPose)
+  if (W.crazy && p.wrB >= 0) a = 'Sprint_Loop'; // course murale : vraie foulée, cadencée sur la vitesse le long du mur
   if (W.done) a = c.k ? 'Dance_Loop' : 'Yes';
   // COUPS : début d'un coup = la simulation remet pT à zéro. Poing = vraie animation (jab du bras gauche / cross du bras droit, UAL Quaternius),
   // jouée d'un bout à l'autre ; pied = garde (Punch_Enter) + jambe posée image par image plus bas. Coup encaissé : Hit_Head / Hit_Chest bref.
@@ -392,8 +393,11 @@ function poseClimber(c, p, mate, W, dt, rp) {
     c.acf = (c.acf || 0) + ((ax * fx + az * fz) - (c.acf || 0)) * Math.min(1, dt * 8); c.acl = (c.acl || 0) + ((ax * fz - az * fx) - (c.acl || 0)) * Math.min(1, dt * 8);
     const pitch = Math.max(-0.07, Math.min(0.13, c.acf * 0.006 + 0.03 * Math.min(1, spd / 6))), roll = Math.max(-0.14, Math.min(0.14, -c.acl * 0.006));
     c.root.rotation.x += (pitch - c.root.rotation.x) * Math.min(1, dt * 10); c.root.rotation.z += (roll - c.root.rotation.z) * Math.min(1, dt * 10);
+  } else if (W.crazy && p.wrB >= 0) { // course murale : corps incliné vers l'extérieur (pieds contre la paroi, tête loin du mur), parallèle à la façade
+    const rx = -Math.cos(c.yaw), rz = Math.sin(c.yaw), side = Math.sign((p.wnx || 0) * rx + (p.wnz || 0) * rz) || 1;
+    c.root.rotation.z += (0.33 * side - c.root.rotation.z) * Math.min(1, dt * 12); c.root.rotation.x += (0.08 - c.root.rotation.x) * Math.min(1, dt * 10);
   } else if (p.st !== ST.ROPE && c.root.rotation.x) c.root.rotation.x *= Math.max(0, 1 - dt * 10); // fin du balancement de liane / de la vrille
-  if (!(W.crazy && p.st === ST.GROUND) && c.root.rotation.z) c.root.rotation.z *= Math.max(0, 1 - dt * 10);
+  if (!(W.crazy && (p.st === ST.GROUND || p.wrB >= 0)) && c.root.rotation.z) c.root.rotation.z *= Math.max(0, 1 - dt * 10);
   c.lvx = p.vx - p.gvx; c.lvz = p.vz - p.gvz;
   { const a = c.root.rotation.x, h = 0.95, drop = slide ? 0.62 * Math.min(1, Math.abs(a) / 1.15) : 0; if (p.st !== ST.ROPE && a) c.root.position.set(0, h - h * Math.cos(a) - drop, -h * Math.sin(a)); else c.root.position.set(0, 0, 0); }
   // poses procédurales : bras vers le bord, le mur ou la chaîne
