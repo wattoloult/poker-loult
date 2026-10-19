@@ -197,7 +197,7 @@ export function stop() {
   for (const c of X.casings) S.scene.remove(c.o); for (const t of X.tracers) S.scene.remove(t.o); for (const p of X.puffs) S.scene.remove(p.o); for (const p of X.mist) S.scene.remove(p.o);
   X.casings = []; X.tracers = []; X.puffs = []; X.mist = []; X.decals = []; X.pools = []; X.rifles = [];
   if (S.cam) { S.cam.fov = 52; S.cam.updateProjectionMatrix(); }
-  for (const c of S.cl || []) { c.g.visible = true; for (const b of Object.values(c.bones)) b.scale.set(1, 1, 1); }
+  for (const c of S.cl || []) { c.g.visible = true; if (!c.charId) for (const b of Object.values(c.bones)) b?.scale.set(1, 1, 1); }
   $('#cz')?.classList.remove('on');
 }
 export const active = () => X.on;
@@ -554,7 +554,7 @@ export function pose(cl, W, dt, rp, me) {
     if (!alive) continue;
     const a = aimFor(k, p, dt), d = new THREE.Vector3().copy(aimDirV(a.yaw, a.pitch)), Rv = new THREE.Vector3(rightOf(a.yaw).x, 0, rightOf(a.yaw).z);
     // longueur des bras : les bras de ce modèle sont courts pour un fusil de 1,1 m ; on les allonge un peu (l'échelle suit l'axe de l'os)
-    for (const s of ['l', 'r']) for (const n of ['upperarm_', 'lowerarm_']) { const b = c.bones[n + s]; if (b && !c.armScaled) b.scale.y = 1.16; }
+    for (const s of ['l', 'r']) for (const n of ['upperarm_', 'lowerarm_']) { const b = c.bones[n + s]; if (b && !c.armScaled && !c.charId) b.scale.y = 1.16; }
     c.armScaled = true;
     // état du fusil : recul, culasse, rechargement
     // dbg : fige l'animation à un instant donné (captures et vérifications) — { cyc: s depuis le tir } ou { rl: s depuis le début du rechargement }
@@ -597,8 +597,8 @@ export function pose(cl, W, dt, rp, me) {
       c.armMiss = [ik2(B.upperarm_l, B.lowerarm_l, B.hand_l, wL, poleL), ik2(B.upperarm_r, B.lowerarm_r, B.hand_r, wR, poleR)];
       const handHoldingBolt = (reloading && rlT < 2.4 && rlT > 0.05 && (rlT < 0.45 || (rlT > 1.75 && rlT < 2.4))) || (hand != null && hand > 0.3);
       const nR = orientHand(c, 'r', dirW(fingR.f), dirW(handHoldingBolt ? new THREE.Vector3(0.1, 0.9, 0.3) : fingR.n)), nL = orientHand(c, 'l', dirW(fingL.f), dirW(fingL.n));
-      if (nR) { const trig = p.cd > KAR.FIRE_CD - 0.06 ? 0.7 : 0.18; curl(c, 'r', nR, { index: [trig, trig, trig * 0.5], middle: [1.15, 1.25, 0.9], thumb: [0.45, 0.4, 0.2] }); }
-      if (nL) curl(c, 'l', nL, { index: [0.95, 1.1, 0.7], middle: [1.1, 1.2, 0.9], thumb: [0.25, 0.3, 0.15] });
+      if (nR) { const trig = p.cd > KAR.FIRE_CD - 0.06 ? 0.7 : 0.18; curl(c, 'r', nR, { index: [trig, trig, trig * 0.5], middle: [1.15, 1.25, 0.9], ring: [1.2, 1.25, 0.9], pinky: [1.25, 1.25, 0.9], thumb: [0.45, 0.4, 0.2] }); }
+      if (nL) curl(c, 'l', nL, { index: [0.95, 1.1, 0.7], middle: [1.1, 1.2, 0.9], ring: [1.15, 1.2, 0.9], pinky: [1.2, 1.2, 0.9], thumb: [0.25, 0.3, 0.15] });
     }
   }
 }

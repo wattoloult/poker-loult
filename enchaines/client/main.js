@@ -508,7 +508,8 @@ function getNet() {
     G.mode = 'online'; G.demo = null; G.me = m.seat; G.names = m.names; G.L = m.L; G.crazy = m.mode === 'crazy'; G.free = m.mode === 'free' || G.crazy; G.seatIn = []; document.body.classList.toggle('czmode', G.crazy); if (!G.crazy) Crazy.stop(); G.vote = null; $('#e-vote').style.display = 'none';
     G.course = m.course || DEFAULT_COURSE; setTimeout(() => $('#fade').classList.remove('on'), 400);
     G.W = applySnap(createWorld({ L: m.L, course: G.course, free: G.free && !G.crazy, crazy: G.crazy, players: G.free ? m.names.length : undefined }), m.s); G.ct = 0; G.pend = []; G.out = []; G.partnerIn = IDLE; G.done = false; slot[0].jc = slot[0].dc = slot[0].uc = 0;
-    const W = G.W; await Scene.buildLevel(W); if (G.W !== W) return; Scene.setRoster(W.pl.length); Music.playWorld(W.level.world); // partie quittée pendant le chargement : on s'arrête là
+    const W = G.W; await Scene.buildLevel(W); if (G.W !== W) return; if (G.crazy) { const cs = G.crazyChars = W.pl.map((_, k) => ['anime', 'deadlock', 'cyber', 'anime'][k % 4]); setLoad(0.2, 'Les personnages…'); await Scene.prepareChars([...new Set(cs)]).catch((e) => { console.warn('personnages', e); G.crazyChars = null; }); if (G.W !== W) return; }
+    Scene.setRoster(W.pl.length, G.crazy ? G.crazyChars : null); Music.playWorld(W.level.world); // partie quittée pendant le chargement : on s'arrête là
     if (G.crazy) { setLoad(0.3, 'Le fusil…'); await Crazy.load(); if (G.W !== W) return; }
     await prepare(W); if (G.W !== W) return; G.prep = false; G.last = performance.now(); G.acc = 0;
     net.send({ t: 'ready' });

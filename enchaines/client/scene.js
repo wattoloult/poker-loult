@@ -7,6 +7,7 @@ import { ST, P, groundBelow } from '../core/sim.js';
 import * as LV from './levelview.js';
 import * as Mechs from './mechs.js';
 import * as Sfx from './sfx.js';
+import * as Chars from './chars.js';
 
 export const S = { ready: false };
 export const _clips = () => CLIPS; // outils de mise au point (console)
@@ -198,27 +199,28 @@ function headOnly(mesh) {
   const ng = g.clone(); ng.setIndex(out); ng.clearGroups(); mesh.geometry = ng;
 }
 const ANIMS = ['Idle_Loop', 'Walk_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Jump_Start', 'Jump_Loop', 'Jump_Land', 'Crouch_Idle_Loop', 'NinjaJump_Idle_Loop', 'Hit_Knockback', 'Dance_Loop', 'Yes', 'Roll', 'Death01', 'LayToIdle', 'Punch_Jab', 'Punch_Cross', 'Punch_Enter', 'Hit_Head', 'Hit_Chest'];
-function makeClimber(k) {
-  const root = cloneSkinned(S.tpl[k % 2 ? 'f' : 'm']);
+function makeClimber(k, charId) {
+  const ch = charId ? Chars.instance(charId) : null; // personnage fourni (client/chars.js) : modèle d'origine + animations reciblées ; sinon le rôdeur d'origine
+  const root = ch ? ch.root : cloneSkinned(S.tpl[k % 2 ? 'f' : 'm']);
   const TINT = [0xffe2c4, 0xc4dcff, 0xc9f3d2, 0xf7cbe6], GLOW = [0x3a1800, 0x06213f, 0x0a2f14, 0x3d0f2c];
   const tint = new THREE.Color(TINT[k] ?? 0xffffff), glow = new THREE.Color(GLOW[k] ?? 0x101010);
-  root.traverse((o) => {
+  if (!ch) root.traverse((o) => {
     if (!o.isSkinnedMesh) return;
     const mats = (Array.isArray(o.material) ? o.material : [o.material]).map((m) => { if (!m.userData.ranger) return m; const c = m.clone(); c.color.copy(tint); c.emissive = glow; return c; });
     o.material = mats.length > 1 ? mats : mats[0];
   });
   const g = new THREE.Group(); g.add(root);
-  const mixer = new THREE.AnimationMixer(root), acts = {};
-  for (const n of ANIMS) if (CLIPS[n]) { const a = mixer.clipAction(CLIPS[n]); a.enabled = true; a.setEffectiveWeight(0); a.play(); acts[n] = a; }
+  const mixer = new THREE.AnimationMixer(ch ? ch.model : root), acts = {}, CL = ch ? ch.clips : CLIPS;
+  for (const n of ANIMS) if (CL[n]) { const a = mixer.clipAction(CL[n]); a.enabled = true; a.setEffectiveWeight(0); a.play(); acts[n] = a; }
   for (const n of ['Jump_Start', 'Jump_Land', 'Hit_Knockback', 'Yes', 'Roll', 'Death01', 'LayToIdle', 'Punch_Jab', 'Punch_Cross', 'Punch_Enter', 'Hit_Head', 'Hit_Chest']) if (acts[n]) { acts[n].setLoop(THREE.LoopOnce, 1); acts[n].clampWhenFinished = true; }
-  const bones = {}; root.traverse((o) => { if (o.isBone) bones[o.name] = o; });
+  const bones = ch ? ch.bones : {}; if (!ch) root.traverse((o) => { if (o.isBone) bones[o.name] = o; });
   // repère de couleur au sol + marqueur de réception
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.55, 40), new THREE.MeshBasicMaterial({ color: COL[k], transparent: true, opacity: 0.85, depthWrite: false }));
   ring.rotation.x = -Math.PI / 2; ring.renderOrder = 3; S.scene.add(ring);
   const mark = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.44, 32), new THREE.MeshBasicMaterial({ color: COL[k], transparent: true, opacity: 0.0, depthWrite: false, depthTest: false }));
   mark.rotation.x = -Math.PI / 2; mark.renderOrder = 4; S.scene.add(mark);
   S.scene.add(g);
-  const c = { k, g, root, mixer, acts, bones, cur: null, w: {}, ring, mark, lastSt: -1, phase: 0, sm: new THREE.Vector3(), yaw: 0, err: new THREE.Vector3(), scale: 1 };
+  const c = { k, g, root, mixer, acts, bones, charId: ch ? charId : null, cur: null, w: {}, ring, mark, lastSt: -1, phase: 0, sm: new THREE.Vector3(), yaw: 0, err: new THREE.Vector3(), scale: 1 };
   // échelle : les rôdeurs mesurent ~1,8 m comme la capsule
   setAnim(c, 'Idle_Loop', 0);
   return c;
@@ -631,14 +633,16 @@ function lower(lvl) { // paliers : résolution, puis ombres plus petites, puis m
 
 /* ------------------------------ image ------------------------------ */
 function nearestPl(W, k) { let best = null, bd = 1e9; for (let j = 0; j < W.pl.length; j++) { if (j === k) continue; const d = Math.hypot(W.pl[j].x - W.pl[k].x, W.pl[j].z - W.pl[k].z) + Math.abs(W.pl[j].y - W.pl[k].y); if (d < bd) { bd = d; best = W.pl[j]; } } return best || W.pl[k]; }
-export function setRoster(n = 2) {
+// charge les personnages fournis et recible les animations du jeu sur leurs squelettes (appelé pendant l'écran de chargement)
+export async function prepareChars(ids) { for (const id of ids) { if (await Chars.load(id)) Chars.retarget(id, S.tpl.m, CLIPS, ANIMS); } }
+export function setRoster(n = 2, chars = null) {
   for (const c of S.cl || []) { S.scene.remove(c.g); S.scene.remove(c.ring); S.scene.remove(c.mark); }
-  S.cl = Array.from({ length: Math.max(2, Math.min(4, n)) }, (_, k) => makeClimber(k));
+  S.cl = Array.from({ length: Math.max(2, Math.min(4, n)) }, (_, k) => makeClimber(k, chars?.[k]));
   CAM.init = false; CAM.seen = false; CAM.zone = null;
 }
 const PO = { x: 0, y: 0, z: 0, yaw: 0 }, HA = new THREE.Vector3(), HB = new THREE.Vector3();
 export function frame(W, dt, view = {}) {
-  if (!S.ready || !S.cl || S.building) return;
+  if (!S.ready || !S.cl || S.building || S.cl.length < W.pl.length) return; // roster pas encore refait pour cette partie (chargement des personnages en cours)
   { const w = innerWidth || 1280, h = innerHeight || 720; if (w !== S.w || h !== S.h) { S.w = w; S.h = h; resize(); } } // taille de la fenêtre (aussi quand l'événement resize n'arrive pas)
   const t = (S.t = (S.t || 0) + dt);
   S.cloudMat.uniforms.uT.value = t;
