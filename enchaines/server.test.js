@@ -143,5 +143,29 @@ test('mode libre : 3 grimpeurs sans chaîne, entrées de chacun, arrivée class�
   for (const k of [0, 1, 2]) { Object.assign(W2.pl[k], { x: top2.x, y: top2.y, z: top2.z, vx: 0, vy: 0, vz: 0, cp: W2.level.checkpoints.length - 2 }); await wait(120); }
   await wait(300); const list2 = a.last.vote?.list; assert.ok(list2 && !a.last.vote.done, 'nouveau vote ouvert'); const k1 = starts();
   await wait(1200); assert.equal(starts(), k1 + 1, 'sans vote : la partie suivante démarre quand même'); assert.ok(list2.includes(a.last.start.course));
-  for (const x of [a, b, c, d]) x.ws.close(); stop();
+  for (const x of [a, b, c, d]) x.ws.close();
+});
+
+test('mode crazy : tir sur un adversaire, mort annoncée à tous, vote entre arènes uniquement', async () => {
+  const { server: srv } = await import('./server.js'); if (!srv.listening) srv.listen(18807); await wait(100);
+  const a = client('Ana'), b = client('Ben'); await a.ready; await b.ready;
+  a.send({ t: 'create', L: 6.5, mode: 'crazy' }); await wait(150);
+  const code = a.last.room.code; assert.equal(a.last.room.cfg.mode, 'crazy'); assert.equal(a.last.room.cfg.max, 4); assert.ok(rooms.get(code).cfg.course === 'depot' || rooms.get(code).cfg.course === 'toits');
+  b.send({ t: 'join', code }); await wait(150); a.send({ t: 'start' }); await wait(250);
+  assert.equal(a.last.start.mode, 'crazy'); assert.equal(a.last.start.s.pl.length, 2); assert.equal(a.last.start.s.ch.length, 0);
+  const W = rooms.get(code).W; assert.ok(W.crazy);
+  // Ana en (0, ., -20) vise Ben posé à 12 m : tête (hauteur 1,68 m ; l'épaule décale la balle de 0,45 m à droite)
+  Object.assign(W.pl[0], { x: -20, y: 0, z: -2, prot: 0, ay: 0 }); Object.assign(W.pl[1], { x: -20.45, y: 0, z: 10, prot: 0 });
+  W.level.bodies; // la carte du Dépôt a des conteneurs : on dégage le couloir de tir
+  for (const bd of W.bodies) if (bd.i > 0 && bd.mat === 'metal' && Math.abs(bd.px + 20) < 8) bd.on = false;
+  const ap = Math.atan2(1.68 - 1.5, 12), bits = 256;
+  for (let ct = 1; ct <= 30; ct += 2) { a.send({ t: 'i', a: [[ct, 0, 0, bits, 0, 0, 0, 0, ap], [ct + 1, 0, 0, bits, 0, 0, 0, 0, ap]] }); await wait(16); }
+  await wait(300);
+  const evs = [...a.msgs, ...b.msgs].filter((m) => m.t === 's').flatMap((m) => m.e);
+  assert.ok(evs.some((e) => e.k === 'kill' && e.p === 0 && e.v === 1 && e.head), 'la mort est annoncée'); assert.equal(W.pl[0].kills, 1);
+  assert.ok(b.msgs.some((m) => m.t === 's' && m.e.some((e) => e.k === 'kill')), 'Ben le reçoit aussi');
+  W.pl[0].kills = W.limit; await wait(300);
+  const end = a.last.end; assert.ok(end && end.crazy && end.rank[0].name === 'Ana' && end.rank[0].kills >= 15, 'classement');
+  await wait(100); assert.ok(a.last.vote.list.length >= 2 && a.last.vote.list.every((id) => ['depot', 'toits'].includes(id)), 'le vote ne propose que des arènes');
+  for (const x of [a, b]) x.ws.close(); stop();
 });
