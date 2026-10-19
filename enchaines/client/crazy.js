@@ -551,7 +551,12 @@ export function pose(cl, W, dt, rp, me) {
     const alive = !(p.dead > 0) && (p.st === ST.GROUND || p.st === ST.AIR);
     r.g.visible = alive; c.g.visible = true;
     c.ring.visible = true;
-    if (!alive) continue;
+    if (!alive) { c.czPost = null; continue; }
+    // les rotations ci-dessous sont RELATIVES (torsion du buste, tangage, doigts) : si l'animation en cours ne réécrit pas un os à chaque image (clip sans piste pour cet os), la rotation de l'image
+    // précédente s'y ajouterait indéfiniment (le buste tourne alors en boucle). On défait donc d'abord nos propres modifications sur les os que l'animation n'a pas réécrits.
+    const allB = c.boneList ||= [...new Set(Object.values(c.bones).filter(Boolean))];
+    if (c.czPost) { for (const [b, st] of c.czPost) if (b.quaternion.equals(st.after)) b.quaternion.copy(st.before); c.root.updateMatrixWorld(true); }
+    const pre = new Map(allB.map((b) => [b, b.quaternion.clone()]));
     const a = aimFor(k, p, dt), d = new THREE.Vector3().copy(aimDirV(a.yaw, a.pitch)), Rv = new THREE.Vector3(rightOf(a.yaw).x, 0, rightOf(a.yaw).z);
     // longueur des bras : les bras de ce modèle sont courts pour un fusil de 1,1 m ; on les allonge un peu (l'échelle suit l'axe de l'os)
     for (const s of ['l', 'r']) for (const n of ['upperarm_', 'lowerarm_']) { const b = c.bones[n + s]; if (b && !c.armScaled && !c.charId) b.scale.y = 1.16; }
@@ -600,6 +605,7 @@ export function pose(cl, W, dt, rp, me) {
       if (nR) { const trig = p.cd > KAR.FIRE_CD - 0.06 ? 0.7 : 0.18; curl(c, 'r', nR, { index: [trig, trig, trig * 0.5], middle: [1.15, 1.25, 0.9], ring: [1.2, 1.25, 0.9], pinky: [1.25, 1.25, 0.9], thumb: [0.45, 0.4, 0.2] }); }
       if (nL) curl(c, 'l', nL, { index: [0.95, 1.1, 0.7], middle: [1.1, 1.2, 0.9], ring: [1.15, 1.2, 0.9], pinky: [1.2, 1.2, 0.9], thumb: [0.25, 0.3, 0.15] });
     }
+    c.czPost = new Map(); for (const [b, q0] of pre) if (!b.quaternion.equals(q0)) c.czPost.set(b, { before: q0, after: b.quaternion.clone() });
   }
 }
 const aimDirV = (yaw, pitch) => { const o = aimDir(yaw, pitch); return new THREE.Vector3(o.x, o.y, o.z); };

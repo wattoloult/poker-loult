@@ -119,3 +119,16 @@ test('la Cour du Dragon : on monte l\'escalier de 2 m en marchant et les pavillo
   Object.assign(p, { x: 14, y: 0, z: 0, vx: 0, vz: 0 }); for (let i = 0; i < 360; i++) stepWorld(W, [{ ...IDLE, mx: 1, ay: -Math.PI / 2, ap: 0 }]);
   assert.ok(p.x < 21, 'bloqué par l\'enceinte : ' + p.x);
 });
+
+test('fuzz : quatre tireurs aux entrées aléatoires restent dans chaque arène (jamais sous le sol, jamais de valeur absurde)', () => {
+  for (const c of courseList(true, true)) {
+    const W = createWorld({ crazy: true, course: c.id, players: 4 }); let seed = 12345; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const ins = W.pl.map(() => ({ ...IDLE })); let jc = 0;
+    for (let i = 0; i < 6000; i++) {
+      if (i % 90 === 0) for (const I of ins) { Object.assign(I, { mx: rnd() * 2 - 1, mz: rnd() * 2 - 1, ay: rnd() * 6 - 3, ap: rnd() * 0.6 - 0.3, fire: rnd() < 0.5, scope: rnd() < 0.2, reload: rnd() < 0.1, slide: rnd() < 0.2 }); }
+      if (i % 40 === 0) for (const I of ins) if (rnd() < 0.5) I.jc = ++jc;
+      stepWorld(W, ins);
+      for (const p of W.pl) { assert.ok(Number.isFinite(p.x + p.y + p.z), `${c.id} valeur absurde`); assert.ok(p.dead > 0 || p.y > -2, `${c.id} sous le sol : ${p.y.toFixed(1)} (tick ${i})`); assert.ok(Math.abs(p.x) < 60 && Math.abs(p.z) < 60, `${c.id} sorti de l'arène : ${p.x.toFixed(0)},${p.z.toFixed(0)}`); }
+    }
+  }
+});
