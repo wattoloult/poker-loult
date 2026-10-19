@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 KEY=~/.ssh/loultparty_vps; HOST=root@loultparty.fr; TGZ=/tmp/enchaines-$(date +%Y%m%d-%H%M%S).tgz
 for f in client/*.js client/worlds/*.js core/*.js core/*/*.js server.js; do node --check "$f" || { echo "ERREUR DE SYNTAXE : $f"; exit 1; }; done
-tar --force-local -czf "$TGZ" --exclude=node_modules --exclude=tools --exclude=data --exclude=playtest --exclude='*.test.js' --exclude='*.md' index.html style.css client core vendor assets server.js package.json
+tar --force-local -czf "$TGZ" --exclude=node_modules --exclude=tools --exclude=data --exclude=playtest --exclude='*.test.js' --exclude='*.md' --exclude=assets/characters --exclude=assets/previews --exclude=assets/source --exclude=assets/marketing --exclude=assets/reports --exclude=assets/handoff --exclude=assets/scripts --exclude=assets/textures index.html style.css client core vendor assets server.js package.json
 # module de test privé : envoyé à part, rangé HORS des fichiers servis (/var/lib/enchaines)
 scp -i $KEY playtest/playtest.js $HOST:/tmp/enchaines-playtest.js
 echo "archive : $(du -h "$TGZ" | cut -f1)"
