@@ -2,6 +2,7 @@
 // culasse et rechargement animés au rythme exact de la simulation, douilles, balles traçantes, sang, interface de combat.
 // Ne décide RIEN : la simulation partagée (core/sim.js) tire, touche, tue ; ce module dessine ce qu'elle annonce (événements) et envoie la visée.
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as Scene from './scene.js';
 import * as Snd from './audio.js';
 import { ST, P, inside, groundBelow, CZ, crazyEye, crazySpread, rightOf } from '../core/sim.js';
@@ -14,6 +15,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 export const A = { yaw: 0, pitch: 0, scope: 0 }; // visée du joueur local (la SEULE source de ay / ap envoyés)
 export const cfg = { blood: true };
+export const dbg = {};
 const X = { on: false, W: null, G: null, me: null, rifles: [], aim: [], rec: [], feed: [], hitT: 0, hitHead: false, dmgT: 0, dmgAng: 0, banner: null, bannerT: 0, wasDead: false, camBack: 5.6, fov: 60, droplets: null, decals: [], pools: [], casings: [], tracers: [], puffs: [], mist: [], flashes: [], lastSnd: {} };
 // RÉGLAGES DE LA CAMÉRA (une seule source) : la caméra est TOUJOURS sur le rayon de visée du tireur (épaule CZ.SHOULDER à droite, CZ.CAMUP au-dessus des yeux, définis dans
 // core/sim.js car la balle part de ce rayon) ; ici : sa distance, son champ de vision et ses transitions.
@@ -47,7 +49,7 @@ function textures() { return TX ||= { splat: [0, 1, 2, 3, 4, 5].map(splatTex), h
 // repère du fusil : +z vers la bouche, +y vers le haut, +x vers la GAUCHE du tireur ; origine = axe du canon, au niveau du boîtier de culasse.
 // Longueur réelle du Kar98k : 1,11 m (crosse en z = −0,44, bouche en z = +0,67).
 export const RIFLE = {
-  butt: -0.44, muzzle: 0.67,
+  org: 0.5, butt: -0.44, muzzle: 0.67,
   gripR: new THREE.Vector3(-0.045, -0.07, -0.135),   // main droite : poignée de la crosse, tout près de la détente
   gripL: new THREE.Vector3(0.0, -0.088, 0.28),       // main gauche : SOUS le garde-main de bois, dans sa partie avant, en retrait de la zone nue du canon
   pivot: new THREE.Vector3(0, 0.022, -0.12),         // axe de la culasse
@@ -57,6 +59,19 @@ export const RIFLE = {
   R: { f: new THREE.Vector3(0.62, -0.62, 0.48), n: new THREE.Vector3(0.95, 0.25, 0.1) },
   L: { f: new THREE.Vector3(-0.92, 0.2, 0.34), n: new THREE.Vector3(0.05, 1, 0.05) },
 };
+// Kar98k réel (assets/weapons/kar98k.glb, en centimètres, canon vers +z, dessus +y, gauche du tireur +x). Même repère que ci-dessus ; origine = axe du canon, milieu du fusil.
+// Mesures prises sur le modèle : crosse z −55,5 cm, bouche z +55,5 cm, axe du canon à y = 3,8 cm, poignet de crosse derrière le pontet (z ≈ −31 cm), fût en bois jusqu'à z ≈ +28 cm,
+// lunette au-dessus du boîtier (z −28,7 … +6,5 cm), culasse Bolt_2 (tige + poignée) et percuteur Bolt_1 qui coulissent, détente séparée.
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const RIFLE_GLB = { org: 0.52, butt: -0.555, muzzle: 0.555, slideMax: 0.08, handleLen: 0.045,
+  gripR: V3(-0.03, -0.083, -0.31), gripL: V3(0.0, -0.05, 0.2), eject: V3(-0.03, 0.0, -0.14), pivot: V3(0, 0, -0.12),
+  R: { f: V3(0.6, -0.55, 0.55), n: V3(0.95, 0.2, 0.1) }, L: { f: V3(-0.92, 0.2, 0.3), n: V3(0.05, 1, 0.05) }, glb: true };
+let GLB = null; const BORE_CM = { x: 0.17, y: 3.8 };
+export async function load() { // appelé AVANT le départ (écran de chargement) : 53 Mo de textures PBR (3 × 4096² + 3 × 2048²), mises en cache par le navigateur
+  if (GLB || GLB === false) return GLB;
+  try { const g = await new GLTFLoader().loadAsync(new URL('../assets/weapons/kar98k.glb', import.meta.url).href); GLB = g.scene; Object.assign(RIFLE, RIFLE_GLB); } catch (e) { console.warn('Kar98k.glb indisponible, fusil provisoire', e); GLB = false; }
+  return GLB;
+}
 let MAT = null;
 function mats() {
   return MAT ||= {
@@ -69,7 +84,42 @@ function mats() {
     blood: new THREE.MeshStandardMaterial({ color: 0x5a0508, roughness: 0.16, metalness: 0.0 }),
   };
 }
+function buildClip(M) {
+  const clip = new THREE.Group(); clip.visible = false;
+  clip.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.012, 0.085), M.steel), { castShadow: true }));
+  for (let i = 0; i < 5; i++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.0062, 0.0068, 0.056, 8), M.brass); c.position.set(0, 0.034, -0.034 + i * 0.017); clip.add(c); const t = new THREE.Mesh(new THREE.ConeGeometry(0.0062, 0.02, 8), M.copper); t.position.set(0, 0.072, -0.034 + i * 0.017); clip.add(t); }
+  return clip;
+}
+// le vrai Kar98k : pièces mobiles repérées par leur nom dans le modèle (Bolt_2 = tige + poignée de culasse, Bolt_1 = percuteur, Trigger = détente)
+function buildGlbRifle() {
+  const M = mats(), g = new THREE.Group(), model = new THREE.Group(); g.add(model);
+  const wrap = new THREE.Group(); wrap.scale.setScalar(0.01); const root = GLB.clone(true); wrap.add(root); model.add(wrap); g.updateMatrixWorld(true);
+  const find = (n) => { let r = null; root.traverse((o) => { if (o.isMesh && o.name.startsWith(n)) r = o; }); return r; };
+  const b2 = find('Kar98k_Bolt_2'), b1 = find('Kar98k_Bolt_1'), trig = find('Kar98k_Trigger');
+  root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; for (const m of [].concat(o.material)) for (const k of ['map', 'normalMap', 'metalnessMap', 'roughnessMap']) if (m[k]) m[k].anisotropy = 8; } });
+  const out = { g, model, clip: buildClip(M), boltOpen: 0, handleA: -0.7, ax: 0, ay: 0, ball0: new THREE.Vector3(), lift: 0, slideZ: 0 };
+  if (b2 && b1) {
+    // axe de la culasse mesuré dans la géométrie : centre des sommets de la tige seule (z ∈ [−12, −6] cm) ; boule de la poignée = sommet le plus éloigné de l'axe
+    const pos = b2.geometry.attributes.position, v = new THREE.Vector3(); let sx = 0, sy = 0, n = 0;
+    for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(b2.matrixWorld); if (v.z > -0.12 && v.z < -0.06) { sx += v.x; sy += v.y; n++; } }
+    out.ax = n ? sx / n : 0; out.ay = n ? sy / n : 0.048; let best = 0;
+    for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(b2.matrixWorld); const d = Math.hypot(v.x - out.ax, v.y - out.ay); if (d > best) { best = d; out.ball0.copy(v); } }
+    const slide = new THREE.Group(), rot = new THREE.Group(); model.add(slide); rot.position.set(out.ax, out.ay, 0); slide.add(rot); model.updateMatrixWorld(true); rot.attach(b2); slide.attach(b1);
+    out.slide = slide; out.rot = rot;
+  }
+  if (trig) { const tg = new THREE.Group(); model.add(tg); tg.position.set(0, -0.012, -0.205); model.updateMatrixWorld(true); tg.attach(trig); out.trig = tg; }
+  model.position.set(-BORE_CM.x * 0.01, -BORE_CM.y * 0.01, 0); // l'axe du canon passe par l'origine du repère du fusil
+  out.clip.position.set(0, 0, 0); g.add(out.clip); g.matrixAutoUpdate = false;
+  out.setBolt = (a, s) => { // a : −0,7 (rabattue) … +1,3 (relevée à 90°) ; s : 0 … 1 (course arrière de la culasse)
+    out.lift = clamp((a + 0.7) / 2.0, 0, 1) * 1.6; out.slideZ = s; if (out.rot) { out.rot.rotation.z = -out.lift; out.slide.position.z = -s * RIFLE.slideMax; }
+  };
+  out.ball = (o) => { const dx = out.ball0.x - out.ax, dy = out.ball0.y - out.ay, c = Math.cos(-out.lift), sn = Math.sin(-out.lift);
+    return o.set(out.ax + dx * c - dy * sn - BORE_CM.x * 0.01, out.ay + dx * sn + dy * c - BORE_CM.y * 0.01, out.ball0.z - out.slideZ * RIFLE.slideMax); };
+  out.trigger = (k) => { if (out.trig) out.trig.position.z = -0.205 - 0.004 * k; };
+  return out;
+}
 function buildRifle() {
+  if (GLB) return buildGlbRifle();
   const M = mats(), g = new THREE.Group(), box = (w, h, d, m, x, y, z, rx = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.rotation.x = rx; o.castShadow = true; g.add(o); return o; };
   const cyl = (r, len, m, x, y, z, seg = 10) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, seg), m); o.rotation.x = Math.PI / 2; o.position.set(x, y, z); o.castShadow = true; g.add(o); return o; };
   // crosse et fût (bois)
@@ -93,7 +143,10 @@ function buildRifle() {
   for (let i = 0; i < 5; i++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.0062, 0.0068, 0.056, 8), M.brass); c.position.set(0, 0.034, -0.034 + i * 0.017); clip.add(c); const t = new THREE.Mesh(new THREE.ConeGeometry(0.0062, 0.02, 8), M.copper); t.position.set(0, 0.072, -0.034 + i * 0.017); clip.add(t); }
   g.traverse((o) => { if (o.isMesh) o.frustumCulled = false; });
   g.matrixAutoUpdate = false;
-  return { g, slide, handle, clip, boltOpen: 0, handleA: -0.7 };
+  const r = { g, slide, handle, clip, boltOpen: 0, handleA: -0.7 };
+  r.setBolt = (a, s) => { handleAngle(r, a); r.slide.position.z = RIFLE.pivot.z - s * RIFLE.slideMax; };
+  r.ball = (o) => ballLocal(r, o); r.trigger = () => {};
+  return r;
 }
 // la poignée de culasse : angle a (−0,7 = rabattue vers le bas et l'arrière, +1,3 = relevée) ; la tige part vers le côté DROIT (−x)
 const handleAngle = (r, a) => { r.handleA = a; r.handle.rotation.z = -a; };
@@ -224,6 +277,7 @@ export function onEvent(W, e, G) {
     case 'shot': {
       const d = mine ? 0 : camDist(e.x, e.y, e.z), r = X.rifles[e.p];
       Snd.gun('shot', { dist: d, pan: mine ? 0 : pan(e.x, e.y, e.z), v: mine ? 1 : 0.95 });
+      if (r?.muz) e = { ...e, x: r.muz.x, y: r.muz.y, z: r.muz.z }; // la flamme et la balle partent de la bouche du vrai canon
       muzzleFx(e); tracer(e);
       if (r) X.rec[e.p] = 1;
       if (mine) { A.pitch = clamp(A.pitch + 0.026, -1.25, 1.35); A.yaw = wrap(A.yaw + rnd(-0.003, 0.003)); Scene.shake(0.12); } else if (d < 60) Scene.shake(Math.max(0, 0.05 - d * 0.0008));
@@ -472,7 +526,7 @@ function aimFor(k, p, dt) {
 }
 // keyframes de la main droite pendant le rechargement : [t, repère] avec repère 'g' (poignée), 'h' (poignée de culasse), 'r' (sommet du boîtier : chargeur), 'p' (cartouchière à la ceinture)
 const RELOAD_R = [[0, 'g'], [0.12, 'h'], [0.3, 'h'], [0.52, 'p'], [0.86, 'r'], [1.75, 'r'], [2.0, 'h'], [2.3, 'h'], [2.5, 'g'], [2.7, 'g']];
-const RPOS = { g: RIFLE.gripR, r: new THREE.Vector3(-0.03, 0.05, -0.07), p: new THREE.Vector3(-0.28, -0.4, -0.3) };
+const RPOS = { get g() { return RIFLE.gripR; }, r: new THREE.Vector3(-0.03, 0.05, -0.07), p: new THREE.Vector3(-0.28, -0.4, -0.3) };
 function reloadAnim(r, el) { // état visuel de la culasse et de la lame-chargeur à l'instant `el` du rechargement (secondes)
   const up = sm(el / 0.16), back = sm((el - 0.16) / 0.1), fwd = sm((el - 2.02) / 0.16), down = sm((el - 2.2) / 0.1);
   const handle = lerp(-0.7, 1.3, up) , slide = back * (1 - fwd);
@@ -499,20 +553,22 @@ export function pose(cl, W, dt, rp, me) {
     for (const s of ['l', 'r']) for (const n of ['upperarm_', 'lowerarm_']) { const b = c.bones[n + s]; if (b && !c.armScaled) b.scale.y = 1.16; }
     c.armScaled = true;
     // état du fusil : recul, culasse, rechargement
-    const rec = X.rec[k] = Math.max(0, X.rec[k] - dt * 7), reloading = p.rl >= 0, cyc = p.cyc > 0 ? KAR.CYCLE - p.cyc : -1;
+    // dbg : fige l'animation à un instant donné (captures et vérifications) — { cyc: s depuis le tir } ou { rl: s depuis le début du rechargement }
+    const rlT = k === me && dbg.rl != null ? dbg.rl : p.rl, cycT = k === me && dbg.cyc != null ? dbg.cyc : p.cyc > 0 ? KAR.CYCLE - p.cyc : -1;
+    const rec = X.rec[k] = k === me && dbg.rec != null ? dbg.rec : Math.max(0, X.rec[k] - dt * 7), reloading = rlT >= 0, cyc = cycT;
     let handleA = -0.7, slideZ = 0, tilt = 0, hand = null, clipShow = false, clipU = 0, clipSink = 0;
-    if (reloading) { const s = reloadAnim(r, p.rl); handleA = s.handle; slideZ = s.slide; clipShow = s.clip; clipU = s.cu; clipSink = s.sink; tilt = 0.32 * Math.sin(Math.min(1, p.rl / 0.5) * Math.PI / 2) * (p.rl < 2.2 ? 1 : 1 - sm((p.rl - 2.2) / 0.4)); }
+    if (reloading) { const s = reloadAnim(r, rlT); handleA = s.handle; slideZ = s.slide; clipShow = s.clip; clipU = s.cu; clipSink = s.sink; tilt = 0.32 * Math.sin(Math.min(1, rlT / 0.5) * Math.PI / 2) * (rlT < 2.2 ? 1 : 1 - sm((rlT - 2.2) / 0.4)); }
     else if (cyc >= 0) { const s = cycleAnim(cyc); handleA = s.handle; slideZ = s.slide; hand = s.hand; tilt = 0.12 * Math.sin(Math.min(1, cyc / 0.5) * Math.PI); }
-    handleAngle(r, handleA); r.slide.position.z = RIFLE.pivot.z - slideZ * RIFLE.slideMax;
+    r.setBolt(handleA, slideZ); r.trigger(p.cd > KAR.FIRE_CD - 0.08 ? 1 : 0);
     r.clip.visible = clipShow;
     // position du fusil : l'axe du canon passe à droite du corps, à hauteur d'épaule ; recul en arrière et léger relèvement
     const eye = crazyEye(p), ex = rp[k].x, ey = rp[k].y + eye, ez = rp[k].z, up = _f.set(0, 1, 0);
     const zA = d.clone(), xA = new THREE.Vector3(-Rv.x, 0, -Rv.z), yA = new THREE.Vector3().crossVectors(zA, xA).normalize();
-    const kick = rec * 0.05, ang = rec * 0.04 + (reloading ? 0.06 * Math.sin(Math.min(1, p.rl / 0.4) * Math.PI / 2) : 0);
-    const org = new THREE.Vector3(ex, ey, ez).addScaledVector(Rv, CZ.BORE).addScaledVector(yA, -0.12).addScaledVector(zA, 0.5 - kick);
+    const kick = rec * 0.05, ang = rec * 0.04 + (reloading ? 0.06 * Math.sin(Math.min(1, rlT / 0.4) * Math.PI / 2) : 0);
+    const org = new THREE.Vector3(ex, ey, ez).addScaledVector(Rv, CZ.BORE).addScaledVector(yA, -0.12).addScaledVector(zA, RIFLE.org - kick);
     // roulis (rechargement : le fusil penche vers la gauche pour ouvrir la culasse) et tangage du recul
     _m.makeBasis(xA, yA, zA); _q1.setFromRotationMatrix(_m); _q2.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -ang); _q1.multiply(_q2); _q2.setFromAxisAngle(new THREE.Vector3(0, 0, 1), tilt); _q1.multiply(_q2);
-    RIFLE_WORLD.compose(org, _q1, new THREE.Vector3(1, 1, 1)); r.g.matrix.copy(RIFLE_WORLD); r.g.matrixWorld.copy(RIFLE_WORLD); r.g.matrixWorldNeedsUpdate = true; r.g.updateMatrixWorld(true);
+    RIFLE_WORLD.compose(org, _q1, new THREE.Vector3(1, 1, 1)); r.muz = (r.muz || new THREE.Vector3()).set(0, 0, RIFLE.muzzle + 0.04).applyMatrix4(RIFLE_WORLD); r.g.matrix.copy(RIFLE_WORLD); r.g.matrixWorld.copy(RIFLE_WORLD); r.g.matrixWorldNeedsUpdate = true; r.g.updateMatrixWorld(true);
     // buste : il suit la visée (tangage) et tourne un peu vers l'épaule du fusil
     const axisR = new THREE.Vector3(Rv.x, 0, Rv.z).normalize();
     for (const [bn, kf] of [['spine_01', 0.12], ['spine_02', 0.2], ['spine_03', 0.22], ['neck_01', 0.15], ['Head', 0.25]]) { const b = c.bones[bn]; if (b) rotWorld(b, axisR, a.pitch * kf - rec * 0.05); }
@@ -524,18 +580,18 @@ export function pose(cl, W, dt, rp, me) {
     // mains
     const toW = (v) => v.clone().applyMatrix4(RIFLE_WORLD), dirW = (v) => v.clone().transformDirection(RIFLE_WORLD);
     let tR = RIFLE.gripR.clone(), tL = RIFLE.gripL.clone();
-    if (reloading) { const el = p.rl; let i = 0; while (i < RELOAD_R.length - 2 && el >= RELOAD_R[i + 1][0]) i++; const [t0, k0] = RELOAD_R[i], [t1, k1] = RELOAD_R[i + 1], u = sm((el - t0) / (t1 - t0));
-      const pos = (kk) => (kk === 'h' ? ballLocal(r, RBL).clone().add(new THREE.Vector3(0.0, -0.01, 0)) : RPOS[kk].clone()); tR = pos(k0).lerp(pos(k1), u);
+    if (reloading) { const el = rlT; let i = 0; while (i < RELOAD_R.length - 2 && el >= RELOAD_R[i + 1][0]) i++; const [t0, k0] = RELOAD_R[i], [t1, k1] = RELOAD_R[i + 1], u = sm((el - t0) / (t1 - t0));
+      const pos = (kk) => (kk === 'h' ? r.ball(RBL).clone().add(new THREE.Vector3(0.0, -0.01, 0)) : RPOS[kk].clone()); tR = pos(k0).lerp(pos(k1), u);
       if (clipShow) { // la lame descend de la ceinture vers le sommet du boîtier, puis s'enfonce
         const from = RPOS.p.clone().add(new THREE.Vector3(0.0, 0.0, 0.0)), to = new THREE.Vector3(0, 0.02, -0.07), cp = from.clone().lerp(to, clipU); cp.y += 0.04 - clipSink * 0.05; r.clip.position.copy(cp); r.clip.rotation.set(0, 0, 0); } }
-    else if (hand != null && hand > 0) { const bl = ballLocal(r, RBL).clone(); tR = RIFLE.gripR.clone().lerp(bl, hand); }
+    else if (hand != null && hand > 0) { const bl = r.ball(RBL).clone(); tR = RIFLE.gripR.clone().lerp(bl, hand); }
     const fingR = RIFLE.R, fingL = RIFLE.L;
     const poleR = new THREE.Vector3().addScaledVector(Rv, 0.55).addScaledVector(up, -0.9).addScaledVector(zA, -0.25), poleL = new THREE.Vector3().addScaledVector(Rv, -0.3).addScaledVector(up, -0.95).addScaledVector(zA, -0.1);
     const B = c.bones;
     if (B.upperarm_r && B.lowerarm_r && B.hand_r) {
       const wR = toW(tR), wL = toW(tL);
       c.armMiss = [ik2(B.upperarm_l, B.lowerarm_l, B.hand_l, wL, poleL), ik2(B.upperarm_r, B.lowerarm_r, B.hand_r, wR, poleR)];
-      const handHoldingBolt = (reloading && p.rl < 2.4 && p.rl > 0.05 && (p.rl < 0.45 || (p.rl > 1.75 && p.rl < 2.4))) || (hand != null && hand > 0.3);
+      const handHoldingBolt = (reloading && rlT < 2.4 && rlT > 0.05 && (rlT < 0.45 || (rlT > 1.75 && rlT < 2.4))) || (hand != null && hand > 0.3);
       const nR = orientHand(c, 'r', dirW(fingR.f), dirW(handHoldingBolt ? new THREE.Vector3(0.1, 0.9, 0.3) : fingR.n)), nL = orientHand(c, 'l', dirW(fingL.f), dirW(fingL.n));
       if (nR) { const trig = p.cd > KAR.FIRE_CD - 0.06 ? 0.7 : 0.18; curl(c, 'r', nR, { index: [trig, trig, trig * 0.5], middle: [1.15, 1.25, 0.9], thumb: [0.45, 0.4, 0.2] }); }
       if (nL) curl(c, 'l', nL, { index: [0.95, 1.1, 0.7], middle: [1.1, 1.2, 0.9], thumb: [0.25, 0.3, 0.15] });
