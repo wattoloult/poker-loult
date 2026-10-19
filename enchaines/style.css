@@ -206,6 +206,7 @@ label.chk { flex-direction: row; align-items: center; gap: 8px; }
 
 .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 16px; z-index: 8; background: radial-gradient(ellipse at center, rgba(20, 12, 8, 0.45), rgba(5, 3, 2, 0.85)); }
 .overlay.on, #help.show { display: flex; }
+#end { z-index: 10; } /* au-dessus du chat du salon (sinon la ligne de chat intercepte les clics sur les boutons de vote) */
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .cols p { margin: 5px 0; font-weight: 600; }
 .cols i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; } .c0 { background: var(--p1); } .c1 { background: var(--p2); }

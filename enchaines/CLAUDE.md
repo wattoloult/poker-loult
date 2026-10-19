@@ -82,6 +82,10 @@ playtest/playtest.js MODULE DE TEST PRIVÉ (jamais servi en fichier) : panneau F
 - Serveur (server.js) : `r.cfg.mode`, `MAXP = {coop: 2, free: 4}`, sièges contigus au départ, entrées/instantanés en tableaux de N ; message `end {free:1, rank}`. Pas de record enregistré. Chat vocal en MAILLAGE (client/voice.js : une liaison WebRTC par autre grimpeur, `rtc {to}` relayé avec `from`).
 - Client : `G.free`, `G.seatIn[]` (entrées des autres, pour la prédiction), caméra qui suit SON grimpeur (le meneur pour un spectateur), classement en direct `#fstand`, étiquettes/jauge créées à la demande (`ensureHudEls`).
 - Test : `node --test core/free.test.js` (sim) et `server.test.js` (salon à 3 en mode libre). Parcours : bots WebSocket + 1 navigateur (voir l'historique du dépôt).
+- VOTE de la carte suivante (mode libre) : à la fin de la course le serveur envoie `vote {list, votes, left, done}` (toutes les cartes publiées) ; un clic = `vote {course}` (modifiable) ; après `ENCH_VOTE_MS` (10 s) la plus votée part,
+  égalité ou aucun vote = tirage au sort (ex æquo, sinon toutes) puis `startGame`. Client : `renderVote` (écran de fin `#e-vote`, au-dessus du chat : `#end { z-index: 10 }`).
+- Apparitions SÛRES (`placeNear`, `spotOk`) : jamais dans un objet ni dans un autre grimpeur (écart ≥ 2 rayons), recherche jusqu'à ±4 m ; un grimpeur déjà arrivé repart du point de passage d'avant (le sommet est posé sur une pièce mobile).
+  Test : `core/free.test.js` (tous les parcours, tous les points de passage, 2 à 4 grimpeurs).
 - Glissade = TACLE : `P.SLIDE_*` (plus longue, boostée, virage presque figé, `SLIDE_REC` de récupération), capsule basse (`P.HS`) pendant la glissade (on passe sous les obstacles de moins de ~1 m),
   reptation (`p.crawl`) si on ne peut pas se relever sous un plafond bas, `tackleHit` fauche les grimpeurs DEBOUT au sol sur la trajectoire (un saut l'évite), recharge `TACKLE_CD`.
 - Inertie en l'air : au-dessus de `AIR_MAX`, diriger FAIT TOURNER la vitesse (`AIR_TURN`, la norme est conservée). Second saut : n'est pas consommé quand le sol est tout proche (le saut tapé juste avant l'atterrissage part du sol).
