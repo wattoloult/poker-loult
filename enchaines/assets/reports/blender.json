@@ -1,0 +1,125 @@
+{
+  "object_count": 12,
+  "objects": [
+    {
+      "name": "Street",
+      "vertices": 124,
+      "faces": 91,
+      "triangles": 206,
+      "atlas_pixels": [
+        2048,
+        2048
+      ]
+    },
+    {
+      "name": "Arena_Floor",
+      "vertices": 44,
+      "faces": 32,
+      "triangles": 72,
+      "atlas_pixels": [
+        2048,
+        2048
+      ]
+    },
+    {
+      "name": "Building_B1",
+      "vertices": 1001,
+      "faces": 800,
+      "triangles": 2030,
+      "atlas_pixels": [
+        2048,
+        2048
+      ]
+    },
+    {
+      "name": "Building_B2",
+      "vertices": 294,
+      "faces": 249,
+      "triangles": 584,
+      "atlas_pixels": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "name": "Building_B3",
+      "vertices": 340,
+      "faces": 296,
+      "triangles": 676,
+      "atlas_pixels": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "name": "Building_B4",
+      "vertices": 45,
+      "faces": 37,
+      "triangles": 86,
+      "atlas_pixels": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "name": "Building_B5",
+      "vertices": 520,
+      "faces": 429,
+      "triangles": 1052,
+      "atlas_pixels": [
+        2048,
+        2048
+      ]
+    },
+    {
+      "name": "Building_B6",
+      "vertices": 292,
+      "faces": 252,
+      "triangles": 580,
+      "atlas_pixels": [
+        2048,
+        2048
+      ]
+    },
+    {
+      "name": "Building_B7",
+      "vertices": 138,
+      "faces": 108,
+      "triangles": 272,
+      "atlas_pixels": [
+        2048,
+        2048
+      ]
+    },
+    {
+      "name": "Building_B8",
+      "vertices": 619,
+      "faces": 529,
+      "triangles": 1234,
+      "atlas_pixels": [
+        512,
+        512
+      ]
+    },
+    {
+      "name": "Building_B9",
+      "vertices": 292,
+      "faces": 252,
+      "triangles": 580,
+      "atlas_pixels": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "name": "Stairs",
+      "vertices": 38,
+      "faces": 31,
+      "triangles": 72,
+      "atlas_pixels": [
+        1024,
+        1024
+      ]
+    }
+  ]
+}

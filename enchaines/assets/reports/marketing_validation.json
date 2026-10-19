@@ -1,0 +1,27 @@
+{
+  "combat_fight_arena_psx": {
+    "background_image": "Mountains_Sky_Backdrop.png",
+    "image_size": [
+      2172,
+      724
+    ],
+    "packed": true,
+    "engine": "BLENDER_EEVEE",
+    "camera_type": "ORTHO"
+  },
+  "combat_stage_eevee": {
+    "background_image": "Mountains_Sky_Backdrop.png",
+    "image_size": [
+      2172,
+      724
+    ],
+    "packed": true,
+    "engine": "BLENDER_EEVEE",
+    "camera_type": "PERSP"
+  },
+  "backdrop_glb": {
+    "objects": 1,
+    "triangles": 12,
+    "uv": true
+  }
+}

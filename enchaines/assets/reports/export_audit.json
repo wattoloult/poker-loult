@@ -1,0 +1,428 @@
+{
+  "blender_version": "3.5.1",
+  "source_object_count": 12,
+  "unique_atlas_count": 12,
+  "objects": [
+    {
+      "name": "Street",
+      "triangles": 206,
+      "components": 6,
+      "findings": [
+        {
+          "level": "FAULT",
+          "label": "Edges on 3+ faces",
+          "count": 2
+        },
+        {
+          "level": "FAULT",
+          "label": "T-junctions",
+          "count": 30
+        },
+        {
+          "level": "FAULT",
+          "label": "Doubled vertices",
+          "count": 22
+        },
+        {
+          "level": "FAULT",
+          "label": "Self-intersections",
+          "count": 24
+        },
+        {
+          "level": "NOTE",
+          "label": "Open holes",
+          "count": 1
+        },
+        {
+          "level": "NOTE",
+          "label": "Separate pieces",
+          "count": 5
+        },
+        {
+          "level": "NOTE",
+          "label": "N-gons",
+          "count": 8
+        },
+        {
+          "level": "NOTE",
+          "label": "Concave faces",
+          "count": 8
+        },
+        {
+          "level": "INFO",
+          "label": "Triangles after import",
+          "count": 206
+        }
+      ],
+      "atlas": [
+        2048,
+        2048
+      ]
+    },
+    {
+      "name": "Arena_Floor",
+      "triangles": 72,
+      "components": 2,
+      "findings": [
+        {
+          "level": "FAULT",
+          "label": "T-junctions",
+          "count": 12
+        },
+        {
+          "level": "FAULT",
+          "label": "Doubled vertices",
+          "count": 4
+        },
+        {
+          "level": "FAULT",
+          "label": "Self-intersections",
+          "count": 18
+        },
+        {
+          "level": "NOTE",
+          "label": "Open holes",
+          "count": 1
+        },
+        {
+          "level": "NOTE",
+          "label": "Separate pieces",
+          "count": 1
+        },
+        {
+          "level": "NOTE",
+          "label": "N-gons",
+          "count": 6
+        },
+        {
+          "level": "NOTE",
+          "label": "Concave faces",
+          "count": 6
+        },
+        {
+          "level": "INFO",
+          "label": "Triangles after import",
+          "count": 72
+        }
+      ],
+      "atlas": [
+        2048,
+        2048
+      ]
+    },
+    {
+      "name": "Stairs",
+      "triangles": 72,
+      "components": 1,
+      "findings": [
+        {
+          "level": "NOTE",
+          "label": "N-gons",
+          "count": 10
+        },
+        {
+          "level": "NOTE",
+          "label": "Concave faces",
+          "count": 10
+        },
+        {
+          "level": "INFO",
+          "label": "Triangles after import",
+          "count": 72
+        }
+      ],
+      "atlas": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "name": "Building_B1",
+      "triangles": 2030,
+      "components": 1,
+      "findings": [
+        {
+          "level": "NOTE",
+          "label": "N-gons",
+          "count": 213
+        },
+        {
+          "level": "NOTE",
+          "label": "Concave faces",
+          "count": 210
+        },
+        {
+          "level": "INFO",
+          "label": "Triangles after import",
+          "count": 2030
+        }
+      ],
+      "atlas": [
+        2048,
+        2048
+      ]
+    },
+    {
+      "name": "Building_B2",
+      "triangles": 584,
+      "components": 1,
+      "findings": [
+        {
+          "level": "NOTE",
+          "label": "N-gons",
+          "count": 62
+        },
+        {
+          "level": "NOTE",
+          "label": "Concave faces",
+          "count": 60
+        },
+        {
+          "level": "INFO",
+          "label": "Triangles after import",
+          "count": 584
+        }
+      ],
+      "atlas": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "name": "Building_B3",
+      "triangles": 676,
+      "components": 1,
+      "findings": [
+        {
+          "level": "NOTE",
+          "label": "N-gons",
+          "count": 57
+        },
+        {
+          "level": "NOTE",
+          "label": "Concave faces",
+          "count": 59
+        },
+        {
+          "level": "INFO",
+          "label": "Triangles after import",
+          "count": 676
+        }
+      ],
+      "atlas": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "name": "Building_B4",
+      "triangles": 86,
+      "components": 1,
+      "findings": [
+        {
+          "level": "NOTE",
+          "label": "N-gons",
+          "count": 15
+        },
+        {
+          "level": "NOTE",
+          "label": "Concave faces",
+          "count": 15
+        },
+        {
+          "level": "INFO",
+          "label": "Triangles after import",
+          "count": 86
+        }
+      ],
+      "atlas": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "name": "Building_B5",
+      "triangles": 1052,
+      "components": 1,
+      "findings": [
+        {
+          "level": "NOTE",
+          "label": "N-gons",
+          "count": 115
+        },
+        {
+          "level": "NOTE",
+          "label": "Concave faces",
+          "count": 113
+        },
+        {
+          "level": "INFO",
+          "label": "Triangles after import",
+          "count": 1052
+        }
+      ],
+      "atlas": [
+        2048,
+        2048
+      ]
+    },
+    {
+      "name": "Building_B6",
+      "triangles": 580,
+      "components": 1,
+      "findings": [
+        {
+          "level": "NOTE",
+          "label": "N-gons",
+          "count": 50
+        },
+        {
+          "level": "NOTE",
+          "label": "Concave faces",
+          "count": 50
+        },
+        {
+          "level": "INFO",
+          "label": "Triangles after import",
+          "count": 580
+        }
+      ],
+      "atlas": [
+        2048,
+        2048
+      ]
+    },
+    {
+      "name": "Building_B7",
+      "triangles": 272,
+      "components": 1,
+      "findings": [
+        {
+          "level": "NOTE",
+          "label": "N-gons",
+          "count": 31
+        },
+        {
+          "level": "NOTE",
+          "label": "Concave faces",
+          "count": 31
+        },
+        {
+          "level": "INFO",
+          "label": "Triangles after import",
+          "count": 272
+        }
+      ],
+      "atlas": [
+        2048,
+        2048
+      ]
+    },
+    {
+      "name": "Building_B8",
+      "triangles": 1234,
+      "components": 1,
+      "findings": [
+        {
+          "level": "NOTE",
+          "label": "N-gons",
+          "count": 141
+        },
+        {
+          "level": "NOTE",
+          "label": "Concave faces",
+          "count": 125
+        },
+        {
+          "level": "INFO",
+          "label": "Triangles after import",
+          "count": 1234
+        }
+      ],
+      "atlas": [
+        512,
+        512
+      ]
+    },
+    {
+      "name": "Building_B9",
+      "triangles": 580,
+      "components": 1,
+      "findings": [
+        {
+          "level": "NOTE",
+          "label": "N-gons",
+          "count": 50
+        },
+        {
+          "level": "NOTE",
+          "label": "Concave faces",
+          "count": 50
+        },
+        {
+          "level": "INFO",
+          "label": "Triangles after import",
+          "count": 580
+        }
+      ],
+      "atlas": [
+        1024,
+        1024
+      ]
+    }
+  ],
+  "glb_bytes": 793804,
+  "reimport_mesh_count": 12,
+  "reimport_image_sizes": [
+    [
+      512,
+      512
+    ],
+    [
+      1024,
+      1024
+    ],
+    [
+      1024,
+      1024
+    ],
+    [
+      1024,
+      1024
+    ],
+    [
+      1024,
+      1024
+    ],
+    [
+      1024,
+      1024
+    ],
+    [
+      2048,
+      2048
+    ],
+    [
+      2048,
+      2048
+    ],
+    [
+      2048,
+      2048
+    ],
+    [
+      2048,
+      2048
+    ],
+    [
+      2048,
+      2048
+    ],
+    [
+      2048,
+      2048
+    ]
+  ],
+  "reimport_has_uv": true,
+  "reimport_triangles": 7444
+}

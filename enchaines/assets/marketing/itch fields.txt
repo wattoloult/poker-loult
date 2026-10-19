@@ -1,0 +1,118 @@
+BASIC INFORMATION
+Creator:
+najjar320
+Title:
+COURTYARD — Free PSX Chinese-Inspired Arena
+Project URL slug:
+courtyard-psx-temple-fight-arena
+Proposed full URL (availability unverified):
+https://najjar320.itch.io/courtyard-psx-temple-fight-arena
+Short description / tagline (fewer than 120 characters):
+A free PSX courtyard arena: nine buildings, separate atlases, combat-view scenes and a painted mountain backdrop.
+Classification:
+Assets
+Kind of project:
+Downloadable
+Release status:
+Draft
+Custom noun:
+NOT APPLICABLE
+Genre:
+NOT APPLICABLE
+Tags (up to 10, comma-separated):
+3d, psx, low-poly, architecture, environment, asian, temple, arena, blender, glb
+
+ARTICLE FILE
+Page article path:
+marketing/itch-description.html
+
+MEDIA AND THEME
+Cover image path and dimensions:
+previews/arena_combat_stage.png, 1920 × 1080 px
+Banner/header path and dimensions:
+previews/arena_fighter_view.png, 1920 × 1080 px
+Background path, dimensions and repeat mode:
+UNDECIDED
+Screenshot/GIF files in upload order, captions and alt text:
+1. previews/arena_combat_stage.png — full courtyard; alt: ground-level view of the PSX court, timber hall and painted mountain backdrop.
+2. previews/b1_detail.png — central building; alt: three-level timber hall with inset stair bay and balconies.
+3. previews/map_top.png — layout; alt: top view of the paved arena and connecting streets.
+4. previews/atlas_contact_sheet.png — baked images; alt: twelve separate object texture atlases with dimensions.
+Video/trailer URL:
+UNDECIDED
+Page layout:
+Wide centered content with combat-stage header; local mockup: marketing/index.html
+Background/content/text/link/button/header colours:
+#151c1c / #202929 / #eee6ce / #d7b879 / #a6533e / #151c1c
+Fonts:
+UNDECIDED
+Custom CSS:
+UNDECIDED
+
+DOWNLOADS AND PRICING
+Price mode:
+Free
+Minimum price / currency:
+0 USD
+Suggested donation (if applicable):
+NOT APPLICABLE
+Upload path, display name, file type and size:
+exports/combat_fight_arena_psx_delivery.zip — COURTYARD PSX Temple Fight Arena — ZIP; size recorded in STATUS.md.
+Platform labels / compatibility actually checked:
+Blender 3.5.1 source; GLB reimport in Blender 3.5.1 checked. Other engines untested.
+Demo checkbox:
+UNDECIDED
+Per-file minimum price / bonus content:
+NOT APPLICABLE — all included files are free
+Download and install instructions:
+Extract ZIP. Open source/combat_stage_eevee.blend for the combat scene or source/combat_fight_arena_psx.blend for the overview in Blender 3.5.1 or import exports/combat_fight_arena_psx.glb. Use nearest texture filtering for PSX pixels.
+External download URL / store links:
+NOT APPLICABLE
+Pre-order / crowdfunding:
+NOT APPLICABLE
+
+METADATA
+Asset license and full terms location:
+Custom free asset license: personal and commercial use, modification for projects, no standalone asset redistribution. Full terms: LICENSE.txt.
+Asset formats, dimensions, count and other applicable asset metadata:
+12 environment objects plus one separate background card, 9 buildings, 1 arena, 1 street network, 1 stairs object; 12 unique baked atlases; Blender .blend, GLB, PNG, editable .btop and .btex. Map footprint about 40 × 34 m; 10 cm street walkway edges; 1 m arena walkway.
+Tools used / made with:
+Building Topology, Boneglass, Building Texturing, Blender 3.5.1, Smart Topology Classifier.
+Engine compatibility (verified vs untested):
+GLB reimport verified in Blender 3.5.1; game engines untested.
+Languages:
+English documentation
+Accessibility / inputs / players / session length / multiplayer:
+NOT APPLICABLE
+Generative AI disclosure (answer current editor categories truthfully):
+Review the live editor's current categories before publishing. Scripts and artwork were produced with AI assistance; the mountain/sky backdrop was generated with an image model.
+Adult content / sensitive content:
+None depicted.
+External links / support contact:
+UNDECIDED
+Credits / attribution:
+Original concept and guide by najjar320; original map production from user-supplied references.
+
+COMMUNITY AND VISIBILITY
+Comments / discussion board:
+UNDECIDED
+Visibility:
+Draft until publication is requested
+Unlisted / restricted-access settings:
+UNDECIDED
+Community or content warnings:
+NOT APPLICABLE
+Publish date / scheduling:
+UNDECIDED
+Account-specific or newly exposed fields:
+Verify in live itch.io editor before publication.
+Outstanding decisions:
+Publication authorization, community settings and any additional engine tests.
+
+SEO / GEO
+Natural descriptive title and summary, relevant tags, visible factual inventory,
+clear specifications and FAQ. No ranking guarantees or invented review claims.
+Reference:
+https://itch.io/docs/creators/getting-started
+Reference:
+https://itch.io/docs/creators/design

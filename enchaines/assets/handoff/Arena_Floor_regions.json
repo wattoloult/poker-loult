@@ -1,0 +1,46 @@
+{
+  "object": "Arena_Floor",
+  "uv": "UVMap",
+  "regions": [
+    {
+      "name": "Arena_Floor",
+      "u": 0,
+      "v": 0,
+      "w": 1,
+      "h": 1,
+      "axis": 2,
+      "sign": 1,
+      "faces": 1,
+      "area_m2": 4.0,
+      "centre3d": [
+        0,
+        0,
+        0
+      ],
+      "outline": [
+        [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            0,
+            1
+          ]
+        ]
+      ],
+      "origin_m": [
+        0,
+        0
+      ]
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+ "format": "building-topology",
+ "version": 1,
+ "metres_per_unit": 0.125,
+ "tidy": "weld",
+ "grid": {
+  "unit": "m",
+  "spacing": 0.01,
+  "major": 10,
+  "min_visible": 4.0,
+  "visible": true,
+  "snap": true,
+  "pinned": false
+ },
+ "at": {
+  "level": 0,
+  "step": 0
+ },
+ "groups": [],
+ "levels": [
+  {
+   "name": "",
+   "height": 0.0,
+   "steps": [
+    {
+     "name": "",
+     "shapes": [
+      {
+       "kind": "cube",
+       "uid": 4,
+       "centre": [
+        0.0,
+        520.08,
+        224.0
+       ],
+       "size": [
+        1920.0,
+        0.16,
+        640.0
+       ],
+       "colour": [
+        69,
+        123,
+        200
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "cuts": [],
+ "erasures": [],
+ "zones": [],
+ "marks": [],
+ "names": [],
+ "patches": [],
+ "layout": [],
+ "underlays": [],
+ "reference_sheet": [],
+ "tags": [
+  {
+   "name": "Main",
+   "colour": [
+    63,
+    107,
+    168
+   ],
+   "uid": 1,
+   "values": {}
+  },
+  {
+   "name": "Branch",
+   "colour": [
+    46,
+    139,
+    111
+   ],
+   "uid": 2,
+   "values": {}
+  },
+  {
+   "name": "Blocked",
+   "colour": [
+    192,
+    88,
+    79
+   ],
+   "uid": 3,
+   "values": {}
+  }
+ ],
+ "datums": []
+}
