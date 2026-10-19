@@ -1016,7 +1016,7 @@ const onBody = (W, b) => { let n = 0; for (const p of W.pl) if (p.st === ST.GROU
 const X = { ST, P, DT, HP, CH, ev: (W, k, o) => ev(W, k, o), clamp, onB: onBody, inside, groundBelow, bounds, spanOf, toAir: (p) => toAir(p) };
 
 /* ------------------------------ mode CRAZY : arène, fusil à verrou ------------------------------ */
-export const CZ = { LIMIT: 15, TIME: 300, RESPAWN: 3, PROT: 2, SHOULDER: 0.75, CAMUP: 0.35, BORE: 0.12, WALL_SLIDE: 3.2, WALL_CD: 0.22, SCOPE_SLOW: 0.55, WJ_OUT: 6.4, WJ_UP: 8.6,
+export const CZ = { LIMIT: 15, TIME: 300, RESPAWN: 3, PROT: 2, SHOULDER: 0.75, CAMUP: 0.35, BORE: 0.12, WALL_SLIDE: 3.2, WALL_CD: 0.22, WJ_MAX: 3, SCOPE_SLOW: 0.55, WJ_OUT: 6.4, WJ_UP: 8.6,
   // phases du cycle de culasse (s depuis le tir) et du rechargement (s depuis son début) : chacune émet un événement de son propre bruit
   BOLT: [[0.10, 'up'], [0.22, 'back'], [0.42, 'eject'], [0.60, 'fwd'], [0.80, 'down']], RELOAD_AT: [[0.25, 'open'], [0.85, 'clip'], [1.85, 'push'], [2.3, 'close']] };
 export const crazyEye = (p) => (p.slideT > 0 || p.crawl ? KAR.EYE_SLIDE : KAR.EYE);
@@ -1036,8 +1036,9 @@ function wallNormal(W, p) {
   const l = Math.hypot(nx, nz); return l > 0.01 ? { x: nx / l, z: nz / l } : null;
 }
 function wallJump(W, p, wx, wz) {
+  if ((p.wjN || 0) >= CZ.WJ_MAX) return false; // pas d'escalade infinie d'un mur : trois sauts muraux par envol
   const n = wallNormal(W, p); if (!n) return false;
-  p.buf = 0; p.wjCd = CZ.WALL_CD; p.cut = false; p.jHeld = true; p.dj = false;
+  p.wjN = (p.wjN || 0) + 1; p.buf = 0; p.wjCd = CZ.WALL_CD; p.cut = false; p.jHeld = true; p.dj = false;
   const dn = wx * n.x + wz * n.z, sx = wx - n.x * dn, sz = wz - n.z * dn; // on se laisse orienter le long du mur seulement
   p.vx = n.x * CZ.WJ_OUT + sx * 2.2; p.vz = n.z * CZ.WJ_OUT + sz * 2.2; p.vy = CZ.WJ_UP;
   ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z, wall: 1, nx: n.x, nz: n.z });
@@ -1160,6 +1161,7 @@ function stepCrazy(W, inputs) {
     const sl = p.scope ? CZ.SCOPE_SLOW : p.rl >= 0 ? 0.8 : 1;
     stepPlayer(W, p, { ...I, mx: (I.mx || 0) * sl, mz: (I.mz || 0) * sl, punch: false, kick: false, reset: false, cup: false, pull: false }, null);
     if (p.st === ST.GROUND || p.st === ST.AIR) p.yaw = p.ay; // le tireur regarde toujours où il vise
+    if (p.st !== ST.AIR) p.wjN = 0;
     stepCombat(W, p, I);
   }
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (!pl[i].dead && !pl[j].dead) collidePair(pl[i], pl[j]);

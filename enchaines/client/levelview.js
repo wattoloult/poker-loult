@@ -143,6 +143,25 @@ function backdrop(L, th, grp, world) {
   }
 }
 
+/* ------------------------------ décor modélisé fourni par un parcours (L.envGlb) : le modèle est affiché tel quel ------------------------------ */
+// Arène « Cour du Dragon » : pack d'environnement (GLB, textures PSX en atlas). Matériaux, textures et maillage d'origine, rien de simplifié ; seuls l'ombre portée et le filtrage anisotrope sont réglés ici.
+const ENV = {};
+export async function loadEnv(L) {
+  if (!L.envGlb || ENV[L.id]) return;
+  const ld = new GLTFLoader(), url = (p) => new URL('../' + p, import.meta.url).href;
+  const [g, bg] = await Promise.all([ld.loadAsync(url(L.envGlb)), L.envBackdrop ? ld.loadAsync(url(L.envBackdrop)).catch(() => null) : null]);
+  ENV[L.id] = { g, bg };
+}
+function addEnv(L, grp) {
+  const e = ENV[L.id]; if (!e) return;
+  const root = e.g.scene; root.traverse((o) => { if (!o.isMesh) return; o.castShadow = o.receiveShadow = true; for (const m of [].concat(o.material)) for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) if (m[k]) m[k].anisotropy = 8; });
+  grp.add(root);
+  // toile de fond peinte du pack (montagnes et ciel), très loin derrière l'arène ; sans brume, sans ombre
+  if (e.bg) { const b = e.bg.scene; b.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = false; for (const m of [].concat(o.material)) { m.fog = false; m.side = THREE.DoubleSide; } } }); grp.add(b); }
+  // au-delà de l'enceinte : un sol sombre, pour que l'arène ne flotte pas dans le vide
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x55574f, roughness: 1 })); g.rotation.x = -Math.PI / 2; g.position.set(0, -0.06, -12); g.receiveShadow = true; grp.add(g);
+}
+
 /* ------------------------------ construction ------------------------------ */
 // teinte du dessus / des flancs selon le matériau du monde : herbe (îles), mousse (jungle, ruines), sinon aucune
 function platTint(th, name) { const d = th.mats[name] || {}; if (d.grassTop) return { top: [0.68, 1.08, 0.5], side: [1.0, 0.9, 0.76] }; if (d.mossTop) return { top: [0.8, 1.05, 0.7], side: [0.95, 1.0, 0.9] }; return null; }
@@ -162,6 +181,7 @@ export function build(W) {
     if (b.roller) rollerMesh(b, o); else if (world === 'medieval') decorMedieval(b, o); else decorWorld(world, th, b, o);
     mechVisual(world, th, b, o);
   }
+  addEnv(L, grp);
   Mechs.build(W, grp);
   Decor.build(L, grp);
   S.wv = VIEWS[world] || null; S.wa = { THREE, S, LIB, PACK: PACK[world] || {}, place, matFor: (name) => matFor(th, name, world), sprite, linkRow, boxGeo, Sfx, HP, th };

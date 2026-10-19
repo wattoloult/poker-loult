@@ -102,6 +102,7 @@ function ballLocal(r, out) { const a = r.handleA; return out.set(RIFLE.pivot.x -
 
 /* ------------------------------ entrées ------------------------------ */
 export function look(dx, dy, sens = 1) {
+  if (Math.abs(dx) > 220 || Math.abs(dy) > 220) return; // saut de souris à la capture du pointeur : ignoré (sinon la visée part d'un coup au plafond)
   const z = 1 - A.scope * 0.82;
   A.yaw = wrap(A.yaw - dx * 0.0024 * sens * z); A.pitch = clamp(A.pitch - dy * 0.002 * sens * z, -1.25, 1.35);
 }
