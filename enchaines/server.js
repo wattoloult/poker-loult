@@ -31,6 +31,7 @@ function iceServers(id) {
   list.push({ urls: ['turn:' + TURN_HOST + ':3478?transport=udp', 'turn:' + TURN_HOST + ':3478?transport=tcp'], username, credential: crypto.createHmac('sha1', TURN_SECRET).update(username).digest('base64') });
   return list;
 }
+const MAXP = { coop: 2, free: 4 }; // sièges par mode : coop = deux grimpeurs reliés par la chaîne ; free = « mode libre », jusqu'à 4 grimpeurs, SANS chaîne, premier au sommet
 const SNAP_EVERY = 4, GRACE = 60, MAX_Q = 36, LENS = [4.5, 6.5, 9];
 fs.mkdirSync(DATA, { recursive: true });
 // classement par parcours : { idParcours: [ ... ] } (ancien format = liste de la Tour)
@@ -57,11 +58,13 @@ function roomView(r, you) {
     players: live(r).map((x) => ({ id: x.seat, name: x.name, offline: !!x.offline })), spectators: r.spect.size };
 }
 function pushRoom(r) { for (const p of r.people) send(p.ws, roomView(r, p.seat)); for (const ws of r.spect) send(ws, roomView(r, null)); }
-function seatFree(r) { const used = new Set(live(r).map((p) => p.seat)); return [0, 1].find((s) => !used.has(s)); }
+function seatFree(r) { const used = new Set(live(r).map((p) => p.seat)); for (let s = 0; s < r.max; s++) if (!used.has(s)) return s; }
+const canStart = (r) => (r.cfg.mode === 'free' ? live(r).length >= 2 && live(r).length <= 4 : live(r).length === 2);
 function create(ws, m) {
   leave(ws);
   const L = LENS.includes(+m.L) ? +m.L : 6.5, course = okCourse(ws, m.course);
-  const r = { code: newCode(), phase: 'lobby', cfg: { L, course }, people: [], spect: new Set(), host: ws.id, empty: 0, W: null, acc: 0, k: 0, ev: [] };
+  const mode = m.mode === 'free' ? 'free' : 'coop';
+  const r = { code: newCode(), phase: 'lobby', mode, max: MAXP[mode], cfg: { L, course, mode, max: MAXP[mode] }, people: [], spect: new Set(), host: ws.id, empty: 0, W: null, acc: 0, k: 0, ev: [] };
   rooms.set(r.code, r); seatIn(r, ws); pushRoom(r);
 }
 function seatIn(r, ws) {
@@ -81,7 +84,7 @@ function join(ws, m) {
     return;
   }
   leave(ws);
-  if (live(r).length < 2 && r.phase === 'lobby') { seatIn(r, ws); return pushRoom(r); }
+  if (live(r).length < r.max && r.phase === 'lobby') { seatIn(r, ws); return pushRoom(r); }
   if (r.spect.size >= 12) return send(ws, { t: 'err', m: 'Salon complet.' });
   r.spect.add(ws); ws.room = r; pushRoom(r); if (r.W) send(ws, startMsg(r, null));
 }
@@ -92,38 +95,42 @@ function leave(ws) {
   p.gone = true; p.ws = null;
   r.people = r.people.filter((x) => !x.gone);
   if (r.host === ws.id) r.host = r.people[0]?.sid ?? null;
-  if (r.phase === 'play' && r.people.length < 2) { r.phase = 'lobby'; r.W = null; cast(r, { t: 'room', ...roomView(r, null), phase: 'lobby' }); }
+  if (r.phase === 'play' && r.people.length < (r.cfg.mode === 'free' ? 1 : 2)) { r.phase = 'lobby'; r.W = null; cast(r, { t: 'room', ...roomView(r, null), phase: 'lobby' }); }
   if (!r.people.length && !r.spect.size) return closeRoom(r);
   pushRoom(r); send(ws, { t: 'left' });
 }
 function closeRoom(r) { rooms.delete(r.code); for (const ws of r.spect) ws.room = null; }
-function startMsg(r, seat) { return { t: 'start', seat, course: r.cfg.course, names: [0, 1].map((s) => r.people.find((p) => p.seat === s)?.name || 'Grimpeur ' + (s + 1)), L: r.cfg.L, s: snapWorld(r.W) }; }
+function startMsg(r, seat) { return { t: 'start', seat, mode: r.cfg.mode, course: r.cfg.course, names: r.W.pl.map((_, s) => r.people.find((p) => p.seat === s)?.name || 'Grimpeur ' + (s + 1)), L: r.cfg.L, s: snapWorld(r.W) }; }
 function startGame(r) {
-  r.W = createWorld({ L: r.cfg.L, course: r.cfg.course }); r.phase = 'play'; r.acc = 0; r.k = 0; r.ev = []; r.saved = false; r.run = []; // r.run : les entrées des deux grimpeurs pas à pas (replay des records)
+  const free = r.cfg.mode === 'free'; r.firstT = null;
+  if (free) live(r).forEach((p, i) => { p.seat = i; }); // sièges contigus 0..n-1 (un grimpeur de la sim par siège)
+  r.W = createWorld({ L: r.cfg.L, course: r.cfg.course, free, players: free ? live(r).length : undefined }); r.phase = 'play'; r.acc = 0; r.k = 0; r.ev = []; r.saved = false; r.run = free ? null : []; // r.run : les entrées des deux grimpeurs pas à pas (replay des records)
   for (const p of r.people) { p.q = []; p.last = null; p.ack = 0; p.fresh = true; }
   for (const p of r.people) send(p.ws, startMsg(r, p.seat));
   for (const ws of r.spect) send(ws, startMsg(r, null));
   pushRoom(r);
 }
-const KEEP = new Set(['lost', 'punch', 'down', 'checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
+const KEEP = new Set(['lost', 'punch', 'tackle', 'down', 'checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
 function update(r, dt) {
   if (r.phase !== 'play' || !r.W) return;
   r.acc += dt; let n = 0;
   while (r.acc >= DT && n++ < 30) {
     r.acc -= DT;
     // une entrée par grimpeur et par pas : file d'attente (rattrapage si elle s'allonge), sinon on répète la dernière
-    const ins = [IDLE, IDLE];
+    const ins = r.W.pl.map(() => IDLE);
     for (const p of r.people) {
       if (p.q.length > MAX_Q) p.q.splice(0, p.q.length - 8);
       const e = p.q.shift();
       if (e) { p.last = decIn(e); p.ack = e[0]; }
       if (p.offline) p.last = { ...(p.last || IDLE), mx: 0, mz: 0, jump: false };
-      ins[p.seat] = p.last || IDLE;
+      if (p.rstT > 0) { p.rstT -= DT; p.last = { ...(p.last || IDLE), reset: true }; } // retour au point de passage demandé depuis le menu (mode libre)
+      if (p.seat < ins.length) ins[p.seat] = p.last || IDLE;
     }
     recTick(r, ins); stepWorld(r.W, ins);
     for (const e of r.W.ev) if (KEEP.has(e.k)) r.ev.push(e);
     if (++r.k % SNAP_EVERY === 0) snap(r, ins);
-    if (r.W.done && !r.saved) { r.saved = true; record(r); }
+    if (r.cfg.mode === 'free' && !r.W.done && r.W.rank.length) { if (r.firstT == null) r.firstT = r.W.time; else if (r.W.time - r.firstT > 120) r.W.done = true; } // 2 minutes de grâce après le premier arrivé
+    if (r.W.done && !r.saved) { r.saved = true; if (r.cfg.mode === 'free') endFree(r); else record(r); }
   }
 }
 // enregistre le pas : séries d'entrées identiques regroupées (voir core/coop-run.js) ; au-delà de 300 000 séries on abandonne l'enregistrement
@@ -133,11 +140,16 @@ function recTick(r, ins) {
   if (l && l.length === 13 && l.every((v, k) => k === 0 || v === e[k])) l[0]++; else { r.run.push(e); if (r.run.length > 300000) r.run = null; }
 }
 function snap(r, ins) {
-  const w = snapWorld(r.W), ack = [0, 0];
-  for (const p of r.people) ack[p.seat] = p.ack;
+  const w = snapWorld(r.W), ack = ins.map(() => 0);
+  for (const p of r.people) if (p.seat < ack.length) ack[p.seat] = p.ack;
   const msg = JSON.stringify({ t: 's', w, ack, in: ins.map(encIn), e: r.ev });
   r.ev = [];
   for (const p of r.people) send(p.ws, msg); for (const ws of r.spect) send(ws, msg);
+}
+// mode libre : classement de la course (pas de record enregistré)
+function endFree(r) {
+  const rank = r.W.rank.map((seat) => ({ seat, name: r.people.find((p) => p.seat === seat)?.name || 'Grimpeur ' + (seat + 1), time: Math.round((r.W.pl[seat]?.finishT || 0) * 100) / 100 }));
+  cast(r, { t: 'end', free: 1, course: r.cfg.course, rank });
 }
 function record(r) { // classement par meilleur temps (le serveur a chronométré lui-même la montée)
   const names = [0, 1].map((s) => r.people.find((p) => p.seat === s)?.name || '?');
@@ -228,7 +240,7 @@ wss.on('connection', (ws) => {
       }
       case 'rtc': { // chat vocal : le serveur ne fait que relayer la négociation WebRTC entre les deux grimpeurs (l'audio passe en direct)
         if (!r || !p || typeof m.d !== 'object' || JSON.stringify(m.d).length > 12000) break;
-        const o = r.people.find((x) => x.seat !== p.seat && x.ws); if (o) send(o.ws, { t: 'rtc', d: m.d }); break;
+        const o = r.people.find((x) => x.ws && (Number.isInteger(m.to) ? x.seat === m.to : x.seat !== p.seat)); if (o && o !== p) send(o.ws, { t: 'rtc', from: p.seat, d: m.d }); break;
       }
       case 'pt': { // demande du module de test
         if (!ptOk(m.key)) { send(ws, { t: 'pt', ok: 0 }); break; }
@@ -236,15 +248,15 @@ wss.on('connection', (ws) => {
         ws.pt = true; send(ws, { t: 'pt', ok: 1, code }); break;
       }
       case 'board': { const id = COURSES[m.course] ? m.course : DEFAULT_COURSE; send(ws, { t: 'board', course: id, solo: m.solo ? 1 : 0, simV: SIM_V, list: boardOf(m.solo ? 'solo:' + id : id).slice(0, TOP) }); break; }
-      case 'list': send(ws, { t: 'rooms', list: [...rooms.values()].filter((x) => x.phase === 'lobby' && live(x).length < 2).slice(0, 20).map((x) => ({ code: x.code, host: live(x)[0]?.name || '?', n: live(x).length })) }); break;
+      case 'list': send(ws, { t: 'rooms', list: [...rooms.values()].filter((x) => x.phase === 'lobby' && live(x).length < x.max).slice(0, 20).map((x) => ({ code: x.code, host: live(x)[0]?.name || '?', n: live(x).length, max: x.max, mode: x.cfg.mode })) }); break;
       case 'create': create(ws, m); break;
       case 'join': join(ws, m); break;
       case 'leave': leave(ws); break;
-      case 'cfg': if (r && r.host === ws.id && r.phase === 'lobby') { if (LENS.includes(+m.L)) r.cfg.L = +m.L; if (m.course) r.cfg.course = okCourse(ws, m.course); pushRoom(r); } break;
-      case 'start': if (r && r.host === ws.id && live(r).length === 2) startGame(r); break;
-      case 'next': if (r && r.host === ws.id && r.phase === 'play' && live(r).length === 2) { r.cfg.course = okCourse(ws, m.course); startGame(r); pushRoom(r); } break; // portail de fin : parcours suivant
+      case 'cfg': if (r && r.host === ws.id && r.phase === 'lobby') { if (LENS.includes(+m.L)) r.cfg.L = +m.L; if (m.course) r.cfg.course = okCourse(ws, m.course); if ((m.mode === 'free' || m.mode === 'coop') && live(r).length <= MAXP[m.mode]) { r.cfg.mode = m.mode; r.cfg.max = r.max = MAXP[m.mode]; } pushRoom(r); } break;
+      case 'start': if (r && r.host === ws.id && canStart(r)) startGame(r); break;
+      case 'next': if (r && r.host === ws.id && r.phase === 'play' && canStart(r)) { r.cfg.course = okCourse(ws, m.course); startGame(r); pushRoom(r); } break; // portail de fin : parcours suivant
       case 'restart': if (r && r.host === ws.id && r.phase === 'play') startGame(r); break;
-      case 'cp': if (r && p && r.W) { r.W.resetHold[p.seat] = 1.01; r.run?.push(['cp', p.seat]); } break; // retour au point de passage demandé depuis le menu
+      case 'cp': if (r && p && r.W) { if (r.cfg.mode === 'free') p.rstT = 0.7; else { r.W.resetHold[p.seat] = 1.01; r.run?.push(['cp', p.seat]); } } break; // retour au point de passage demandé depuis le menu
       case 'i': {
         if (!p || !r.W || !Array.isArray(m.a)) break;
         for (const e of m.a.slice(0, 12)) if (Array.isArray(e) && e.length >= 6 && e.length <= 7 && Number.isInteger(e[0]) && e[0] > p.ack) { if (p.fresh) { p.fresh = false; p.q = []; } p.q.push(e); }
@@ -266,7 +278,7 @@ const timers = [
   setInterval(() => {
     const now = process.hrtime.bigint(), dt = Math.min(0.1, Number(now - lastTick) / 1e9); lastTick = now;
     for (const r of rooms.values()) {
-      for (const p of [...r.people]) if (p.offline && (p.offT += dt) > GRACE) { p.gone = true; r.people = r.people.filter((x) => x !== p); if (r.phase === 'play') { r.phase = 'lobby'; r.W = null; } if (r.host === p.oldSid) r.host = r.people[0]?.sid ?? null; pushRoom(r); }
+      for (const p of [...r.people]) if (p.offline && (p.offT += dt) > GRACE) { p.gone = true; r.people = r.people.filter((x) => x !== p); if (r.phase === 'play' && r.people.length < (r.cfg.mode === 'free' ? 1 : 2)) { r.phase = 'lobby'; r.W = null; } if (r.host === p.oldSid) r.host = r.people[0]?.sid ?? null; pushRoom(r); }
       if (!r.people.some((p) => p.ws) && !r.spect.size) { if ((r.empty += dt) > 30) { closeRoom(r); continue; } } else r.empty = 0;
       update(r, dt);
     }

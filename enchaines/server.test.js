@@ -59,7 +59,7 @@ test('salon à deux, départ, entrées, instantanés identiques', async () => {
   assert.equal(b2.last.start?.seat, 1, 'Bravo retrouve sa place');
   b2.send({ t: 'i', a: [[1, 1, 0, 0, 0, 0], [2, 1, 0, 0, 0, 0]] }); await wait(300);
   assert.ok(pb().ack >= 1 && pb().ack < 50, 'après reprise, ses entrées (ct repart de 1) sont acceptées, ack=' + pb().ack);
-  a.ws.close(); b2.ws.close(); stop();
+  a.ws.close(); b2.ws.close();
 });
 // speedrun solo : le serveur rejoue la partie (même physique) ; il refuse ce qui n'atteint pas le sommet
 test('speedrun solo : rejeu identique au jeu, arrivée chronométrée, partie incomplète refusée', async () => {
@@ -103,4 +103,28 @@ test('speedrun solo : rejeu identique au jeu, arrivée chronométrée, partie in
   assert.equal((await post({ course: 'tour', name: 'Tricheur', run })).ok, false, 'le serveur rejette une partie qui ne finit pas');
   assert.equal((await post({ course: 'inconnu', run })).why, 'parcours');
   server.close();
+});
+
+test('mode libre : 3 grimpeurs sans chaîne, entrées de chacun, arrivée classée, fin annoncée à tous', async () => {
+  const { server: srv } = await import('./server.js'); if (!srv.listening) srv.listen(18807); await wait(100); // le test précédent a fermé le serveur
+  const a = client('Ana'), b = client('Ben'), c = client('Cat'), d = client('Dan'); await a.ready; await b.ready; await c.ready; await d.ready;
+  a.send({ t: 'create', L: 6.5, mode: 'free' }); await wait(150);
+  const code = a.last.room.code; assert.equal(a.last.room.cfg.mode, 'free'); assert.equal(a.last.room.cfg.max, 4);
+  b.send({ t: 'join', code }); c.send({ t: 'join', code }); await wait(200);
+  assert.equal(a.last.room.players.length, 3);
+  d.send({ t: 'list' }); await wait(100); assert.ok(d.last.rooms.list.some((r) => r.code === code && r.mode === 'free' && r.max === 4), 'salon libre listé');
+  a.send({ t: 'start' }); await wait(250);
+  assert.equal(a.last.start.mode, 'free'); assert.equal(a.last.start.names.length, 3); assert.equal(c.last.start.seat, 2);
+  assert.equal(a.last.start.s.pl.length, 3); assert.equal(a.last.start.s.ch.length, 0, 'aucune chaîne');
+  for (let ct = 1; ct <= 100; ct += 2) { c.send({ t: 'i', a: [[ct, 0, 1, 0, 0, 0], [ct + 1, 0, 1, 0, 0, 0]] }); await wait(16); }
+  await wait(300);
+  const s = a.last.s; assert.equal(s.ack.length, 3); assert.ok(s.ack[2] >= 80, 'entrées du 3e acquittées : ' + s.ack[2]); assert.equal(s.in.length, 3);
+  const z0 = a.last.start.s.pl[2].z; assert.ok(s.w.pl[2].z - z0 > 3, 'le 3e a avancé seul : ' + (s.w.pl[2].z - z0)); assert.ok(Math.abs(s.w.pl[0].z - a.last.start.s.pl[0].z) < 0.5, 'les autres restent là');
+  // arrivées : Ben puis les autres
+  const W = rooms.get(code).W, top = W.level.checkpoints[W.level.checkpoints.length - 1];
+  for (const k of [1, 0, 2]) { const p = W.pl[k]; Object.assign(p, { x: top.x, y: top.y, z: top.z, vx: 0, vy: 0, vz: 0, cp: W.level.checkpoints.length - 2 }); await wait(120); }
+  await wait(400);
+  const end = a.last.end; assert.ok(end && end.free, 'classement annoncé'); assert.deepEqual(end.rank.map((r) => r.name), ['Ben', 'Ana', 'Cat']);
+  assert.ok(b.last.end && c.last.end, 'à tous');
+  for (const x of [a, b, c, d]) x.ws.close(); stop();
 });
