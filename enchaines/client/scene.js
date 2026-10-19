@@ -342,7 +342,7 @@ export function sprite(color, size) {
 
 /* ------------------------------ grimpeurs : pose ------------------------------ */
 const ST_ANIM = (p, spd) => {
-  if (p.st === ST.GROUND) return p.brace || p.haul || p.cup || p.pushT > 0 || p.slideT > 0 ? 'Crouch_Idle_Loop' : spd < 0.35 ? 'Idle_Loop' : spd < 2.6 ? 'Walk_Loop' : 'Jog_Fwd_Loop';
+  if (p.st === ST.GROUND) return p.brace || p.haul || p.cup || p.pushT > 0 || p.slideT > 0 ? 'Crouch_Idle_Loop' : spd < 0.35 ? 'Idle_Loop' : spd < 2.6 ? 'Walk_Loop' : spd < 7.0 ? 'Jog_Fwd_Loop' : 'Sprint_Loop'; // sprint (mode crazy, Maj) : vraie foulée de sprint
   if (p.st === ST.AIR) return p.knock > 0 ? 'Hit_Knockback' : p.vy > 2 && p.stT < 0.35 ? 'Jump_Start' : 'Jump_Loop';
   return 'Jump_Loop';
 };
@@ -366,10 +366,11 @@ function poseClimber(c, p, mate, W, dt, rp) {
   else if (p.downT > 0) {
     const want = p.downT > 0.95 ? 'Death01' : 'LayToIdle';
     if (c.cur !== want) { setAnim(c, want, 0.1, true); const ac = c.acts[want]; if (ac) { if (want === 'Death01') { ac.time = 1.45; ac.timeScale = 1.5; } else ac.timeScale = 1.53 / 0.95; } }
-  } else if (p.land > 0.15 && c.lastSt === ST.AIR && p.st === ST.GROUND && c.lastVy < -11) setAnim(c, 'Jump_Land', 0.06, true);
+  } else if (p.land > 0.15 && c.lastSt === ST.AIR && p.st === ST.GROUND && c.lastVy < (W.crazy ? -6.5 : -11)) setAnim(c, 'Jump_Land', 0.06, true); // mode crazy : réception marquée dès une chute de ~2 m
   else if (c.cur !== 'Jump_Land' || c.acts.Jump_Land.time > 0.35) setAnim(c, a, a === 'Jump_Start' ? 0.05 : 0.16);
   if (c.cur === 'Jog_Fwd_Loop') c.acts.Jog_Fwd_Loop.timeScale = Math.max(0.7, spd / 5.4);
   if (c.cur === 'Walk_Loop') c.acts.Walk_Loop.timeScale = Math.max(0.6, spd / 1.8);
+  if (c.cur === 'Sprint_Loop') c.acts.Sprint_Loop.timeScale = Math.max(0.8, spd / 7.6); // cadence de la foulée = vitesse réelle
   if (W.crazy && c.czRev && c.acts[c.cur] && (c.cur === 'Jog_Fwd_Loop' || c.cur === 'Walk_Loop')) c.acts[c.cur].timeScale *= -1; // marche arrière : la foulée est jouée à l'envers
   c.lastSt = p.st; c.lastVy = p.vy;
   c.mixer.update(S.hitstop > 0 ? dt * 0.08 : dt); // arrêt sur image de l'impact
@@ -386,7 +387,14 @@ function poseClimber(c, p, mate, W, dt, rp) {
   else if (c.flip) { c.flip.t += dt; const k = Math.min(1, c.flip.t / c.flip.dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; c.root.rotation.x = c.flip.dir * Math.PI * 2 * e; } // salto
   else if (slide) c.root.rotation.x += (-1.15 - c.root.rotation.x) * Math.min(1, dt * 16); // tacle : le buste part en arrière, jambes devant
   else if (p.st === ST.HANG) c.root.rotation.x += (0.13 - c.root.rotation.x) * Math.min(1, dt * 7); // accroché : la pesanteur plaque le bassin contre la paroi
-  else if (p.st !== ST.ROPE && c.root.rotation.x) c.root.rotation.x *= Math.max(0, 1 - dt * 10); // fin du balancement de liane / de la vrille
+  else if (W.crazy && p.st === ST.GROUND && !p.dead) { // mode crazy : le corps se penche dans l'accélération (avant/arrière) et dans les virages (côté), par l'accélération RÉELLE
+    const vx = p.vx - p.gvx, vz = p.vz - p.gvz, ax = (vx - (c.lvx ?? vx)) / Math.max(dt, 1e-3), az = (vz - (c.lvz ?? vz)) / Math.max(dt, 1e-3), fx = Math.sin(c.yaw), fz = Math.cos(c.yaw);
+    c.acf = (c.acf || 0) + ((ax * fx + az * fz) - (c.acf || 0)) * Math.min(1, dt * 8); c.acl = (c.acl || 0) + ((ax * fz - az * fx) - (c.acl || 0)) * Math.min(1, dt * 8);
+    const pitch = Math.max(-0.07, Math.min(0.13, c.acf * 0.006 + 0.03 * Math.min(1, spd / 6))), roll = Math.max(-0.14, Math.min(0.14, -c.acl * 0.006));
+    c.root.rotation.x += (pitch - c.root.rotation.x) * Math.min(1, dt * 10); c.root.rotation.z += (roll - c.root.rotation.z) * Math.min(1, dt * 10);
+  } else if (p.st !== ST.ROPE && c.root.rotation.x) c.root.rotation.x *= Math.max(0, 1 - dt * 10); // fin du balancement de liane / de la vrille
+  if (!(W.crazy && p.st === ST.GROUND) && c.root.rotation.z) c.root.rotation.z *= Math.max(0, 1 - dt * 10);
+  c.lvx = p.vx - p.gvx; c.lvz = p.vz - p.gvz;
   { const a = c.root.rotation.x, h = 0.95, drop = slide ? 0.62 * Math.min(1, Math.abs(a) / 1.15) : 0; if (p.st !== ST.ROPE && a) c.root.position.set(0, h - h * Math.cos(a) - drop, -h * Math.sin(a)); else c.root.position.set(0, 0, 0); }
   // poses procédurales : bras vers le bord, le mur ou la chaîne
   c.root.updateMatrixWorld(true);

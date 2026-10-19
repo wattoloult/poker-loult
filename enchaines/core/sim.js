@@ -112,10 +112,28 @@ function carryDelta(W, b, x, z, out) {
   out.x = PO.x + c * dx + s * dz - x; out.z = PO.z - s * dx + c * dz - z; out.y = PO.y - PO2.y + (b.sink ? b.vy * 0 : 0); out.yaw = dyaw;
   return out;
 }
+// GRILLE SPATIALE des volumes immobiles (grandes cartes seulement, > 160 volumes) : chaque test (sol, collisions, rebords) ne parcourt que les volumes des cases voisines, dans
+// l'ordre des indices (résultats identiques à un parcours complet). Les volumes mobiles sont toujours testés. Les petites cartes gardent le parcours complet, inchangé.
+const GC = 4;
+function buildGrid(W) {
+  if (W.bodies.length <= 160) { W.grid = null; return; }
+  const m = new Map(), dyn = [];
+  for (const b of W.bodies) { if (b.dyn) { dyn.push(b); continue; } const i0 = Math.floor((b.px - b.ex) / GC), i1 = Math.floor((b.px + b.ex) / GC), k0 = Math.floor((b.pz - b.ez) / GC), k1 = Math.floor((b.pz + b.ez) / GC);
+    for (let i = i0; i <= i1; i++) for (let k = k0; k <= k1; k++) { const key = i * 65536 + k; let c = m.get(key); if (!c) m.set(key, (c = [])); c.push(b); } }
+  W.grid = { m, dyn, stamp: new Uint32Array(W.bodies.length), n: 0, out: [] };
+}
+function near(W, x, z, r) {
+  const G = W.grid; if (!G) return W.bodies;
+  const out = G.out; out.length = 0; const n = ++G.n, i0 = Math.floor((x - r) / GC), i1 = Math.floor((x + r) / GC), k0 = Math.floor((z - r) / GC), k1 = Math.floor((z + r) / GC);
+  for (let i = i0; i <= i1; i++) for (let k = k0; k <= k1; k++) { const c = G.m.get(i * 65536 + k); if (c) for (const b of c) if (G.stamp[b.i] !== n) { G.stamp[b.i] = n; out.push(b); } }
+  for (const b of G.dyn) out.push(b);
+  if (out.length > 1) out.sort((a, b) => a.i - b.i);
+  return out.slice();
+}
 const local = (b, x, z, o) => { const dx = x - b.px, dz = z - b.pz; o.lx = b.c * dx - b.s * dz; o.lz = b.s * dx + b.c * dz; return o; };
 const L = { lx: 0, lz: 0 };
 export function inside(W, x, y, z, pad = 0, grid = false) { // le point est-il dans une boîte solide ? (grid : les grilles laissent passer la chaîne)
-  for (const b of W.bodies) {
+  for (const b of near(W, x, z, pad)) {
     if (!b.on || b.ghost || (grid && b.grid)) continue;
     if (Math.abs(x - b.px) > b.ex + pad || Math.abs(z - b.pz) > b.ez + pad || Math.abs(y - b.py) > b.hh + pad) continue;
     local(b, x, z, L);
@@ -126,7 +144,7 @@ export function inside(W, x, y, z, pad = 0, grid = false) { // le point est-il d
 // rayon vertical vers le bas : dessus de boîte le plus haut sous (x, y, z) dans la distance donnée
 export function groundBelow(W, x, y, z, dist) {
   let best = -Infinity, bb = null;
-  for (const b of W.bodies) {
+  for (const b of near(W, x, z, 0)) {
     if (!b.on || b.ghost) continue;
     const top = b.py + b.hh;
     if (top > y + 0.01 || top < y - dist || Math.abs(x - b.px) > b.ex || Math.abs(z - b.pz) > b.ez) continue;
@@ -151,6 +169,7 @@ export function createWorld(opts = {}) {
   // MODE CRAZY : arène, fusil à verrou, chacun pour soi, première équipe à CZ.LIMIT éliminations (ou le plus de victimes au bout de CZ.TIME s)
   if (opts.crazy) { W.crazy = true; W.free = true; W.alone = true; W.rank = []; W.nPl = clamp(Math.round(+opts.players || 2), 1, 4); W.limit = CZ.LIMIT; W.tmax = +opts.tmax || CZ.TIME; }
   spawnAt(W, 0);
+  buildGrid(W);
   return W;
 }
 export function spawnAt(W, cpIndex) {
@@ -264,7 +283,7 @@ function capsuleBox(b, x, y, z, r, h) {
 }
 // place pour se relever ? (sous un plafond bas, la glissade devient une reptation au lieu de se relever dans le plafond)
 function canStand(W, p) {
-  for (const b of W.bodies) {
+  for (const b of near(W, p.x, p.z, P.R + 0.05)) {
     if (!b.on || b.ghost || (p.thruT > 0 && b.i === p.thru) || b.hit) continue;
     if (Math.abs(p.x - b.px) > b.ex + P.R + 0.05 || Math.abs(p.z - b.pz) > b.ez + P.R + 0.05) continue;
     if (p.y > b.py + b.hh + 0.05 || p.y + P.H < b.py - b.hh - 0.05) continue;
@@ -276,7 +295,7 @@ function collidePlayer(W, p, groundOk = true) {
   let ground = null, gn = 0;
   for (let it = 0; it < 3; it++) {
     let any = false;
-    for (const b of W.bodies) {
+    for (const b of near(W, p.x, p.z, P.R + 0.05)) {
       if (!b.on || b.ghost || (p.thruT > 0 && b.i === p.thru)) continue; // on traverse la barre qu'on vient de lâcher
       if (Math.abs(p.x - b.px) > b.ex + P.R + 0.05 || Math.abs(p.z - b.pz) > b.ez + P.R + 0.05) continue;
       const hp = p.slideT > 0 ? P.HS : P.H; // glissade / tacle : on est bas (on passe sous les obstacles bas)
@@ -338,7 +357,7 @@ const FP = { x: 0, y: 0, z: 0 };
 // lo / hi / reach : fenêtre de prise (hauteur du bord au-dessus des pieds, distance devant le corps) ; par défaut celle des parcours d'ascension
 function findLedge(W, p, wx, wz, lo = P.GRAB_LO, hi = P.GRAB_HI, reach = P.GRAB_REACH) {
   let best = null, bd = 1e9;
-  for (const b of W.bodies) {
+  for (const b of near(W, p.x, p.z, 1.0)) {
     if (!b.on || b.ghost || b.nograb || b.hit) continue;
     const top = b.py + b.hh, rel = grabY(b) - p.y; // lip : on saisit le bord d'un plancher de balcon, on se hisse ensuite par-dessus son garde-corps (dessus de la boîte)
     if (rel < lo || rel > hi) continue;
@@ -387,7 +406,7 @@ function climbPose(W, p) {
   return fi;
 }
 function findClimb(W, p, wx, wz) {
-  for (const b of W.bodies) {
+  for (const b of near(W, p.x, p.z, 0.8)) {
     if (!b.on || !b.climb) continue;
     if (Math.abs(p.x - b.px) > b.ex + 0.8 || Math.abs(p.z - b.pz) > b.ez + 0.8) continue;
     if (p.y + 0.6 < b.py - b.hh || p.y + 0.4 > b.py + b.hh) continue;
@@ -634,6 +653,7 @@ function stepPlayer(W, p, I, mate) {
       // mode crazy : GLISSADE MURALE — en tombant contre un mur lisse en poussant vers lui, on ne s'y accroche pas : on glisse (chute freinée à WALL_SLIDE m/s) ; p.wsl = état
       // lu par le rendu (pose de glissade) avec la normale du mur (p.wnx, p.wnz)
       if (W.crazy) { p.wjCd = Math.max(0, (p.wjCd || 0) - dt); p.wsl = 0; if (p.vy < 0 && wl > 0.3) { const n = wallNormal(W, p); if (n && wx * n.x + wz * n.z < -0.3) { p.wsl = 1; p.wnx = n.x; p.wnz = n.z; if (p.vy < -CZ.WALL_SLIDE) p.vy = -CZ.WALL_SLIDE; } } }
+      if (W.crazy) stepWallRun(W, p, wx, wz, wl, dt);
       // grimper le long de la chaîne quand on pend dessous (maintenir « Tenir »)
       if (p.brace && p.dangling && p.sta > 0) { p.ropeUp = true; p.sta -= P.STA_ROPE * dt; }
     }
@@ -1035,7 +1055,7 @@ const onBody = (W, b) => { let n = 0; for (const p of W.pl) if (p.st === ST.GROU
 const X = { ST, P, DT, HP, CH, ev: (W, k, o) => ev(W, k, o), clamp, onB: onBody, inside, groundBelow, bounds, spanOf, toAir: (p) => toAir(p) };
 
 /* ------------------------------ mode CRAZY : arène, fusil à verrou ------------------------------ */
-export const CZ = { STEP: 0.16, ACC: 30, DEC: 26, SPRINT: 1.32, BACK: 0.8, GRAB_LO: 1.45, GRAB_HI: 2.3, GRAB_REACH: 0.28, VAULT_LO: 0.55, LIMIT: 15, TIME: 300, RESPAWN: 3, PROT: 2, SHOULDER: 0.75, CAMUP: 0.35, BORE: 0.12, WALL_SLIDE: 3.2, WALL_CD: 0.22, WJ_MAX: 3, SCOPE_SLOW: 0.55, ZOOM_T: 0.3, SCOPE_UP: -0.068, WJ_OUT: 6.4, WJ_UP: 8.6,
+export const CZ = { WR_MIN: 4.0, WR_V: 6.6, WR_T: 1.0, WR_UP: 2.2, WR_G: 6.0, STEP: 0.16, ACC: 30, DEC: 26, SPRINT: 1.32, BACK: 0.8, GRAB_LO: 1.45, GRAB_HI: 2.3, GRAB_REACH: 0.28, VAULT_LO: 0.55, LIMIT: 15, TIME: 300, RESPAWN: 3, PROT: 2, SHOULDER: 0.75, CAMUP: 0.35, BORE: 0.12, WALL_SLIDE: 3.2, WALL_CD: 0.22, WJ_MAX: 3, SCOPE_SLOW: 0.55, ZOOM_T: 0.3, SCOPE_UP: -0.068, WJ_OUT: 6.4, WJ_UP: 8.6,
   // phases du cycle de culasse (s depuis le tir) et du rechargement (s depuis son début) : chacune émet un événement de son propre bruit
   BOLT: [[0.10, 'up'], [0.22, 'back'], [0.42, 'eject'], [0.60, 'fwd'], [0.80, 'down']], RELOAD_AT: [[0.25, 'open'], [0.85, 'clip'], [1.85, 'push'], [2.3, 'close']] };
 export const crazyEye = (p) => (p.slideT > 0 || p.crawl ? KAR.EYE_SLIDE : KAR.EYE);
@@ -1054,10 +1074,44 @@ function wallNormal(W, p) {
   for (const [dx, dz] of WD) for (const h of [0.5, 1.25]) if (inside(W, p.x + dx * (P.R + 0.14), p.y + h, p.z + dz * (P.R + 0.14), 0)) { nx -= dx; nz -= dz; break; }
   const l = Math.hypot(nx, nz); return l > 0.01 ? { x: nx / l, z: nz / l } : null;
 }
+// COURSE MURALE (wall-run) : UNIQUEMENT sur un mur marqué (b.wallrun, finition ivoire au rendu ; b.wrFaces = faces permises). En l'air, collé au mur (à moins de 16 cm),
+// avec au moins WR_MIN m/s le long du mur et en poussant dans ce sens : on court sur le mur WR_T s au plus (petite montée puis descente lente), vitesse le long du mur
+// maintenue ; Espace = saut mural (on repart du mur). État à plat (p.wrB, p.wrT, p.wrTx, p.wrTz, p.wrVy) : il passe tel quel dans les instantanés.
+function wallRunFace(W, p) {
+  for (const b of near(W, p.x, p.z, 1)) {
+    if (!b.on || !b.wallrun || p.y + 0.3 < b.py - b.hh || p.y + 1.3 > b.py + b.hh) continue;
+    local(b, p.x, p.z, L);
+    for (let f = 0; f < 4; f++) {
+      if (b.wrFaces && !b.wrFaces.includes(f)) continue;
+      const [fx, fz] = FACE[f], fi = faceInfo(b, f), dist = fx ? fx * L.lx - fi.out : fz * L.lz - fi.out, u = fx ? L.lz : L.lx;
+      if (dist < P.R - 0.06 || dist > P.R + 0.16 || Math.abs(u) > fi.half - 0.25) continue;
+      return { b: b.i, nx: fi.nx, nz: fi.nz };
+    }
+  }
+  return null;
+}
+function stepWallRun(W, p, wx, wz, wl, dt) {
+  p.wrCd = Math.max(0, (p.wrCd || 0) - dt);
+  if (p.wrB >= 0) {
+    const w = wallRunFace(W, p);
+    if (!w || w.b !== p.wrB || p.wrT > CZ.WR_T || wl < 0.2) { p.wrB = -1; p.wrCd = 0.35; ev(W, 'wallrunEnd', { p: p.id }); return; }
+    p.wrT += dt; const along = Math.max(CZ.WR_V * 0.8, p.vx * p.wrTx + p.vz * p.wrTz);
+    p.vx = p.wrTx * along - w.nx * 0.6; p.vz = p.wrTz * along - w.nz * 0.6; // collé au mur, vitesse le long du mur conservée
+    p.wrVy -= CZ.WR_G * dt; p.vy = p.wrVy; p.wsl = 0; p.wnx = w.nx; p.wnz = w.nz;
+    return;
+  }
+  if (p.wrCd > 0 || wl < 0.3 || p.vy < -5) return;
+  const w = wallRunFace(W, p); if (!w) return;
+  let tx = -w.nz, tz = w.nx; const along = p.vx * tx + p.vz * tz, inA = (wx * tx + wz * tz) / wl;
+  if (Math.abs(along) < CZ.WR_MIN || Math.abs(inA) < 0.35 || Math.sign(inA) !== Math.sign(along)) return;
+  if (along < 0) { tx = -tx; tz = -tz; }
+  p.wrB = w.b; p.wrT = 0; p.wrTx = tx; p.wrTz = tz; p.wrVy = Math.max(p.vy, CZ.WR_UP); p.wnx = w.nx; p.wnz = w.nz;
+  ev(W, 'wallrun', { p: p.id, x: p.x, y: p.y, z: p.z });
+}
 function wallJump(W, p, wx, wz) {
   if ((p.wjN || 0) >= CZ.WJ_MAX) return false; // pas d'escalade infinie d'un mur : trois sauts muraux par envol
   const n = wallNormal(W, p); if (!n) return false;
-  p.wjN = (p.wjN || 0) + 1; p.buf = 0; p.wjCd = CZ.WALL_CD; p.cut = false; p.jHeld = true; p.dj = false;
+  p.wjN = (p.wjN || 0) + 1; p.buf = 0; p.wjCd = CZ.WALL_CD; if (p.wrB >= 0) { p.wrB = -1; p.wjN--; } p.wrCd = 0.4; // sortie de course murale : ne compte pas dans les trois sauts p.cut = false; p.jHeld = true; p.dj = false;
   const dn = wx * n.x + wz * n.z, sx = wx - n.x * dn, sz = wz - n.z * dn; // on se laisse orienter le long du mur seulement
   p.vx = n.x * CZ.WJ_OUT + sx * 2.2; p.vz = n.z * CZ.WJ_OUT + sz * 2.2; p.vy = CZ.WJ_UP;
   ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z, wall: 1, nx: n.x, nz: n.z });
@@ -1181,7 +1235,7 @@ function stepCrazy(W, inputs) {
     const sl = p.scope ? CZ.SCOPE_SLOW : p.rl >= 0 ? 0.8 : 1;
     stepPlayer(W, p, { ...I, mx: (I.mx || 0) * sl, mz: (I.mz || 0) * sl, sprint: !!I.brace && !p.scope && p.rl < 0, brace: false, punch: false, kick: false, reset: false, cup: false, pull: false }, null);
     if (p.st === ST.GROUND || p.st === ST.AIR) p.yaw = p.ay; // le tireur regarde toujours où il vise
-    if (p.st !== ST.AIR) { p.wjN = 0; p.wsl = 0; }
+    if (p.st !== ST.AIR) { p.wjN = 0; p.wsl = 0; p.wrB = -1; }
     stepCombat(W, p, I);
   }
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (!pl[i].dead && !pl[j].dead) collidePair(pl[i], pl[j]);

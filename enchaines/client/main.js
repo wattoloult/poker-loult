@@ -24,7 +24,7 @@ G.play = (id) => { G.course = id; return startLocal(); }; // tests / mode test
 G.tp = (i) => { if (G.mode !== 'local') return; G.W.cp = i; G.W.cpMax = Math.max(G.W.cpMax, i); spawnAt(G.W, i); Scene.onEvent(G.W, { k: 'respawn' }); };
 
 /* ------------------------------ réglages persistants ------------------------------ */
-const CFG = Object.assign({ name: '', vol: 0.8, sens: 1, invert: false, camLock: 0, camAuto: 0, vMusic: 1, vSfx: 1, vChain: 1, vVoice: 1, vMic: 1, devIn: '', devOut: '', keys: {} }, safe(() => JSON.parse(localStorage.getItem('ch-cfg')), {}));
+const CFG = Object.assign({ name: '', vol: 0.8, sens: 1, invert: false, camLock: 0, camAuto: 0, pkv: 0, vMusic: 1, vSfx: 1, vChain: 1, vVoice: 1, vMic: 1, devIn: '', devOut: '', keys: {} }, safe(() => JSON.parse(localStorage.getItem('ch-cfg')), {}));
 const saveCfg = () => safe(() => localStorage.setItem('ch-cfg', JSON.stringify(CFG)));
 
 /* ------------------------------ entrées ------------------------------ */
@@ -724,6 +724,7 @@ const hintKeys = (txt) => {
   return txt.replace(/\bV\b/g, L('pull')).replace(/\bF\b/g, L('use')).replace(/\bG\b/g, L('cup')).replace(/\bR\b/g, L('reset')).replace(/\b(Maj|Shift)\b/g, shift(BIND.brace[0]) || L('brace')).replace(/\b(Espace|Space)\b/g, L('jump'));
 };
 refreshKeys();
+$('#s-pkv') && ($('#s-pkv').value = String(CFG.pkv || 0)); Scene.S.pkvAlways = !!CFG.pkv; $('#s-pkv')?.addEventListener('change', (e) => { CFG.pkv = +e.target.value; Scene.S.pkvAlways = !!CFG.pkv; saveCfg(); });
 $('#s-camlock').value = String(CFG.camLock); $('#s-camlock').addEventListener('change', (e) => { CFG.camLock = +e.target.value; if (!CFG.camLock) document.exitPointerLock?.(); saveCfg(); });
 $('#s-camauto').checked = !!CFG.camAuto; Scene.S.camAuto = !!CFG.camAuto; $('#s-camauto').addEventListener('change', (e) => { CFG.camAuto = e.target.checked ? 1 : 0; Scene.S.camAuto = !!CFG.camAuto; saveCfg(); });
 const openSettings = () => { fillDevices(); refreshKeys(); $('#settings').classList.add('on'); };

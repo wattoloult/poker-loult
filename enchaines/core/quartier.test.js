@@ -59,8 +59,8 @@ function bot(x, y, z) {
   Object.assign(p, { x, y, z, vx: 0, vy: 0, vz: 0, prot: 0, st: ST.AIR, stT: 1 }); for (let i = 0; i < 30; i++) stepWorld(W, [{ ...IDLE, ay: 0 }]);
   const R = { W, p, log: [],
     // pousse dans la direction (dx, dz) ; jump : appuie une fois au début ; jusqu'à ce que cond(p) soit vrai (ou max secondes)
-    go(dx, dz, cond, max = 2, jump = false, again = null) {
-      const ay = Math.atan2(-dx, -dz); if (jump) jc++; let pressed = false, hold = jump ? 0.4 : 0; // la touche de saut reste enfoncée 0,4 s (relâchée tôt, le saut est coupé)
+    go(dx, dz, cond, max = 2, jump = false, again = null) { // on regarde où l'on va (sinon : marche arrière, plus lente)
+      const ay = Math.atan2(dx, dz); if (jump) jc++; let pressed = false, hold = jump ? 0.4 : 0; // la touche de saut reste enfoncée 0,4 s (relâchée tôt, le saut est coupé)
       for (let i = 0; i < Math.round(max / DT); i++) {
         if (again && !pressed && again(p)) { jc++; pressed = true; hold = 0.4; }
         stepWorld(W, [{ ...IDLE, mx: dx, mz: dz, jc, jump: hold > 0, ay, ap: 0 }]); t += DT; hold -= DT; if (cond(p)) { R.log.push(`${p.st} y=${p.y.toFixed(2)}`); return true; }
@@ -170,5 +170,31 @@ test('Quartier : points d\'accroche des cordes — posés sur du solide, arc de 
 
 test('Quartier : chaque pièce du pack a ses collisions, et le kit couvre tous les nœuds posés', () => {
   for (const it of L.env.layout) assert.ok(it.node === 'Arena_Floor' || Object.values(PIECES).some((p) => p.node === it.node), it.node);
-  assert.ok(L.bodies.length < 320, 'nombre de boîtes raisonnable pour 4 joueurs à 120 Hz : ' + L.bodies.length);
+  assert.ok(L.bodies.length < 600, 'nombre de boîtes raisonnable (grille spatiale) : ' + L.bodies.length);
+});
+
+// ---------- PARKOUR VISION : ce qui est marqué ivoire fonctionne, le reste non ----------
+test('Parkour Vision : la planche ivoire de B4 permet la course murale ; le mur nu du pavillon, juste en face, ne la permet pas', () => {
+  const run = (x, dirX) => { const W = createWorld({ crazy: true, course: 'quartier', players: 1 }), p = W.pl[0]; Object.assign(p, { x, y: 0, z: -22.5, vx: 0, vz: 0, st: ST.GROUND, prot: 0 });
+    let on = 0, z0 = null, z1 = null, ymin = 9;
+    for (let i = 0; i < 300; i++) { const I = { ...IDLE, mz: 1, mx: p.z > -19.6 ? dirX : 0, ay: 0, brace: true, jc: p.z > -19.9 ? 1 : 0, jump: p.z > -19.9 && p.z < -18.5 }; // sprint vers le sud, saut le long du mur
+      stepWorld(W, [I]); if (p.wrB >= 0) { on++; if (z0 == null) z0 = p.z; z1 = p.z; ymin = Math.min(ymin, p.y); } }
+    return { on: on / 120, len: z0 == null ? 0 : z1 - z0, ymin };
+  };
+  const a = run(-11.88, -0.3); assert.ok(a.on > 0.5 && a.len > 3.5 && a.ymin > 0.4, `course murale sur la planche : ${a.on.toFixed(2)} s, ${a.len.toFixed(1)} m (y min ${a.ymin.toFixed(2)})`);
+  const b = run(-7.4, 0.3); assert.ok(b.on === 0, 'pas de course murale sur un mur ordinaire');
+});
+
+test('Parkour Vision : la poutre-appui ivoire se saisit depuis le sol, on s\'y hisse, et de là on atteint la barre de la ruelle', () => {
+  const W = createWorld({ crazy: true, course: 'quartier', players: 1 }), p = W.pl[0]; Object.assign(p, { x: -9.3, y: 0, z: -13.9, vx: 0, vz: 0, st: ST.GROUND, prot: 0 });
+  let jc = 0; const go = (mx, mz, cond, n, jump) => { if (jump) jc++; for (let i = 0; i < n; i++) { stepWorld(W, [{ ...IDLE, mx, mz, jc, jump: jump && i < 48, ay: Math.atan2(mx, mz) }]); if (cond()) return true; } return false; };
+  assert.ok(go(1, 0, () => p.st === ST.HANG || (p.st === ST.GROUND && p.y > 2.2), 200, true), 'poutre saisie : ' + p.st + ' ' + p.y.toFixed(2));
+  if (p.st === ST.HANG) assert.ok(go(0, 0, () => p.st === ST.GROUND, 200, true));
+  assert.ok(p.y > 2.25 && W.bodies[p.gb]?.pk === 'appui', 'debout sur la poutre : ' + p.y.toFixed(2));
+  assert.ok(go(0, 1, () => p.st === ST.HANG && W.bodies[p.hang.b].bar, 200, true), 'barre saisie depuis la poutre : ' + p.st + ' ' + p.y.toFixed(2) + ' ' + p.z.toFixed(2));
+});
+
+test('Parkour Vision : seuls les éléments marqués portent une fonction (barre, course murale) ; tous les marqués sont réels et accessibles depuis le sol de la carte', () => {
+  for (const b of L.bodies) { if (b.bar) assert.equal(b.pk, 'barre'); if (b.wallrun) assert.equal(b.pk, 'wallrun'); }
+  const kinds = new Set(L.bodies.filter((b) => b.pk).map((b) => b.pk)); for (const k of ['wallrun', 'barre', 'appui', 'corniche']) assert.ok(kinds.has(k), 'type présent : ' + k);
 });

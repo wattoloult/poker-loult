@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as Scene from './scene.js';
 import * as Snd from './audio.js';
+import * as Quarter from './quarter.js';
 import { ST, P, inside, groundBelow, CZ, crazyEye, crazySpread, rightOf, ledgePoint } from '../core/sim.js';
 import { KAR, aimDir, rayBody } from '../core/weapon.js';
 
@@ -223,7 +224,7 @@ function buildHud(G) {
   <div id="cz-dead"><small></small><b></b><em></em></div>
   <div id="cz-banner"></div>
   <div id="cz-tags"></div>
-  <div id="cz-keys"><b>Mode Crazy</b><span><kbd>Souris</kbd> viser</span><span><kbd>Clic gauche</kbd> tirer</span><span><kbd>Clic droit</kbd> viser (on peut tirer en visant)</span><span><kbd>Maj</kbd> sprinter</span><span><kbd>R</kbd> recharger</span><span><kbd>Espace</kbd> sauter · contre un mur : re-saut</span><span><kbd>V</kbd> glisser</span><span><kbd>Tab</kbd> scores</span></div>
+  <div id="cz-keys"><b>Mode Crazy</b><span><kbd>Souris</kbd> viser</span><span><kbd>Clic gauche</kbd> tirer</span><span><kbd>Clic droit</kbd> viser (on peut tirer en visant)</span><span><kbd>Maj</kbd> sprinter</span><span><kbd>Q</kbd> vision parkour</span><span><kbd>R</kbd> recharger</span><span><kbd>Espace</kbd> sauter · contre un mur : re-saut</span><span><kbd>V</kbd> glisser</span><span><kbd>Tab</kbd> scores</span></div>
   <div id="cz-board"></div>`;
   X.tagEls = G.W.pl.map((_, k) => { const e = document.createElement('div'); e.className = 'czt t' + k; $('#cz-tags').appendChild(e); return e; });
   X.rounds = [...Array(KAR.AMMO)].map(() => { const e = document.createElement('i'); $('#cz-ammo .rounds').appendChild(e); return e; });
@@ -562,6 +563,9 @@ function gripLedge(c, p, W) {
 }
 // plaque de couche de la crosse par rapport à l'articulation de l'épaule droite (os upperarm_r), dans le repère de visée : en haut, à droite, vers l'avant (m)
 const BUTT = { up: 0.05, side: -0.05, fwd: -0.02 };
+// par personnage (l'os de l'épaule n'est pas au même endroit dans chaque squelette) : réglages MESURÉS dans le navigateur, crosse épaulée (points du fût à plus de 2 cm dans
+// le maillage déformé, sur 30) : Deadlock 12-20 → 4 (buste un peu plus de profil), Cyber 4 → 0, Anime 5 (réglage commun)
+const FIT = { deadlock: { butt: { up: 0.04, side: 0.06, fwd: 0.04 }, stance: 0.8 }, cyber: { butt: { up: 0.05, side: 0.03, fwd: -0.02 } } };
 // port bas (repos, course) : déplacement de la plaque de couche (m) et inclinaison du canon vers le bas (rad)
 const LOWREADY = { down: -0.14, side: 0.08, fwd: 0.06, pitch: 0.6 };
 const G0 = () => X.G;
@@ -601,7 +605,7 @@ export function pose(cl, W, dt, rp, me) {
     { // torsion du buste = écart entre le bassin (c.yaw, racine rendue) et la visée, répartie sur trois vertèbres
       const Y = _e.set(0, 1, 0), uL = c.bones.upperarm_l, uR = c.bones.upperarm_r;
       // cap voulu du buste = visée tournée de STANCE, jamais à plus de 80° du bassin ; cap actuel mesuré sur la ligne des épaules (l'animation de course tord elle-même le buste : on corrige l'écart réel, on n'ajoute pas une torsion fixe)
-      const want = c.yaw + clamp(wrap(a.yaw - (X.stance ?? STANCE) - c.yaw), -1.4, 1.4); let cur = want;
+      const want = c.yaw + clamp(wrap(a.yaw - (X.stance ?? FIT[c.charId]?.stance ?? STANCE) - c.yaw), -1.4, 1.4); let cur = want;
       if (uL && uR) { const pl = wpos(uL, new THREE.Vector3()), pr = wpos(uR, new THREE.Vector3()); cur = Math.atan2(pr.z - pl.z, -(pr.x - pl.x)); }
       const twist = clamp(wrap(want - cur), -1.6, 1.6);
       for (const [bn, kf] of [['spine_01', 0.25], ['spine_02', 0.4], ['spine_03', 0.35]]) { const b = c.bones[bn]; if (b) rotWorld(b, Y, twist * kf); }
@@ -615,7 +619,7 @@ export function pose(cl, W, dt, rp, me) {
     const orgEye = new THREE.Vector3(ex, ey, ez).addScaledVector(Rv, CZ.BORE).addScaledVector(yA, -0.12).addScaledVector(zA, RIFLE.org - kick);
     // le fusil est porté par le corps : crosse dans le creux de l'épaule droite (position réelle de l'os, donc il suit la foulée, le buste et le tangage) ; seule la visée à la lunette revient à la position exacte de l'œil (la balle part de là)
     const org = orgEye.clone(), uR = c.bones.upperarm_r;
-    if (uR) { const sh = wpos(uR, new THREE.Vector3()), zkk = k === me ? sm(A.zoom) : 0, BO = X.buttOff || BUTT; org.copy(sh).addScaledVector(yA, BO.up).addScaledVector(Rv, BO.side).addScaledVector(zA, -RIFLE.butt + BO.fwd - kick).lerp(orgEye, zkk); }
+    if (uR) { const sh = wpos(uR, new THREE.Vector3()), zkk = k === me ? sm(A.zoom) : 0, BO = X.buttOff || FIT[c.charId]?.butt || BUTT; org.copy(sh).addScaledVector(yA, BO.up).addScaledVector(Rv, BO.side).addScaledVector(zA, -RIFLE.butt + BO.fwd - kick).lerp(orgEye, zkk); }
     // roulis (rechargement : le fusil penche vers la gauche pour ouvrir la culasse) et tangage du recul
     _m.makeBasis(xA, yA, zA); _q1.setFromRotationMatrix(_m); _q2.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -ang); _q1.multiply(_q2); _q2.setFromAxisAngle(new THREE.Vector3(0, 0, 1), tilt); _q1.multiply(_q2);
     { // ÉTATS DU FUSIL : épaulé (visée, tir et 1,2 s après, culasse, rechargement) ; au repos et en course, PORTÉ BAS (canon vers le bas-avant, crosse sortie de l'épaule, le long
@@ -731,6 +735,9 @@ export function hud(W, dt, G) {
   for (const f of X.feed) f.t -= dt; if (X.feed.some((f) => f.t <= 0)) { X.feed = X.feed.filter((f) => f.t > 0); renderFeed(); }
   if (!me) return;
   const dead = me.dead > 0;
+  { // PARKOUR VISION : Q bascule le contour ivoire des éléments praticables ; réglage « toujours visible » (S.pkvAlways, menu Réglages)
+    const q = !!G.keysHeld?.has('KeyQ'); if (q && !X.qDown) X.pkv = !X.pkv; X.qDown = q; Quarter.setVision(!!(S.pkvAlways || X.pkv));
+  }
   // viseur : l'écart des traits suit la dispersion réelle du tir ; remplacé par la lunette
   // réticule FIXE au centre ; seul l'écart des traits indique la dispersion, borné (4 à 12 px) et lissé : il ne « respire » pas à chaque pas
   const spread = crazySpread(me), raw = (Math.tan(spread) / Math.tan((S.cam.fov * Math.PI) / 360)) * (innerHeight / 2), sc = sm(A.scope);

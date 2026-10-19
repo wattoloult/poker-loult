@@ -150,14 +150,14 @@ const ENV = {};
 export async function loadEnv(L) {
   if (!L.envGlb || ENV[L.id]) return;
   const ld = new GLTFLoader(), url = (p) => new URL('../' + p, import.meta.url).href;
-  const [g, bg] = await Promise.all([ld.loadAsync(url(L.envGlb)), L.envBackdrop ? ld.loadAsync(url(L.envBackdrop)).catch(() => null) : null]);
+  const [g, bg] = await Promise.all([ld.loadAsync(url(L.envGlb)), L.envBackdrop ? ld.loadAsync(url(L.envBackdrop)).catch(() => null) : null, L.env?.decor ? loadPack('japan').catch(() => null) : null]);
   ENV[L.id] = { g, bg };
 }
 function addEnv(L, grp) {
   const e = ENV[L.id]; if (!e) return;
   const root = e.g.scene; root.traverse((o) => { if (!o.isMesh) return; o.castShadow = o.receiveShadow = true; for (const m of [].concat(o.material)) for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) if (m[k]) m[k].anisotropy = 8; });
   root.userData.noSway = true; // jamais « au vent » : le nœud « Street » contient « tree », et c'est la racine de TOUTE l'arène qui tanguait (±2°, bug réel)
-  if (L.env) Quarter.build(L, grp, root); else grp.add(root); // arène réagencée (L.env) : les nœuds du pack sont posés un par un ; sinon le modèle tel quel
+  if (L.env) Quarter.build(L, grp, root, { prop: (k) => PACK.japan?.[k], place }); else grp.add(root); // arène réagencée (L.env) : les nœuds du pack sont posés un par un ; sinon le modèle tel quel
   // toile de fond peinte du pack (montagnes et ciel), très loin derrière l'arène ; sans brume, sans ombre
   if (e.bg) { const b = e.bg.scene; b.userData.noSway = true; b.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = false; for (const m of [].concat(o.material)) { m.fog = false; m.side = THREE.DoubleSide; } } }); grp.add(b); }
   // au-delà de l'enceinte : un sol sombre, pour que l'arène ne flotte pas dans le vide (L.env : posé par quarter.js)
