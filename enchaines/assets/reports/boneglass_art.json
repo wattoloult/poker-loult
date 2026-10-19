@@ -1,0 +1,338 @@
+{
+  "B1_front": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 16,
+    "final_colors": 14
+  },
+  "B1_side": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 16,
+    "final_colors": 14
+  },
+  "B1_roof": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 6,
+    "final_colors": 6
+  },
+  "B1_base": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 10,
+    "final_colors": 10
+  },
+  "B2_front": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 19,
+    "final_colors": 18
+  },
+  "B2_side": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 20,
+    "final_colors": 19
+  },
+  "B2_roof": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 6,
+    "final_colors": 6
+  },
+  "B2_base": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 10,
+    "final_colors": 10
+  },
+  "B3_front": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 19,
+    "final_colors": 18
+  },
+  "B3_side": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 18,
+    "final_colors": 17
+  },
+  "B3_roof": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 6,
+    "final_colors": 6
+  },
+  "B3_base": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 10,
+    "final_colors": 10
+  },
+  "B4_front": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 16,
+    "final_colors": 15
+  },
+  "B4_side": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 16,
+    "final_colors": 15
+  },
+  "B4_roof": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 6,
+    "final_colors": 6
+  },
+  "B4_base": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 10,
+    "final_colors": 10
+  },
+  "B5_front": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 20,
+    "final_colors": 19
+  },
+  "B5_side": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 20,
+    "final_colors": 18
+  },
+  "B5_roof": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 6,
+    "final_colors": 6
+  },
+  "B5_base": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 10,
+    "final_colors": 10
+  },
+  "B6_front": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 21,
+    "final_colors": 18
+  },
+  "B6_side": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 20,
+    "final_colors": 18
+  },
+  "B6_roof": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 6,
+    "final_colors": 6
+  },
+  "B6_base": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 10,
+    "final_colors": 10
+  },
+  "B7_front": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 15,
+    "final_colors": 14
+  },
+  "B7_side": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 18,
+    "final_colors": 15
+  },
+  "B7_roof": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 6,
+    "final_colors": 6
+  },
+  "B7_base": {
+    "pixels": [
+      1024,
+      1024
+    ],
+    "source_colors": 10,
+    "final_colors": 10
+  },
+  "B8_front": {
+    "pixels": [
+      256,
+      256
+    ],
+    "source_colors": 18,
+    "final_colors": 17
+  },
+  "B8_side": {
+    "pixels": [
+      256,
+      256
+    ],
+    "source_colors": 18,
+    "final_colors": 17
+  },
+  "B8_roof": {
+    "pixels": [
+      256,
+      256
+    ],
+    "source_colors": 6,
+    "final_colors": 6
+  },
+  "B8_base": {
+    "pixels": [
+      256,
+      256
+    ],
+    "source_colors": 10,
+    "final_colors": 10
+  },
+  "B9_front": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 19,
+    "final_colors": 18
+  },
+  "B9_side": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 19,
+    "final_colors": 18
+  },
+  "B9_roof": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 6,
+    "final_colors": 6
+  },
+  "B9_base": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 10,
+    "final_colors": 10
+  },
+  "Stairs_top": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 3,
+    "final_colors": 3
+  },
+  "Stairs_riser": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 3,
+    "final_colors": 3
+  },
+  "Stairs_side": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 4,
+    "final_colors": 4
+  },
+  "Stairs_base": {
+    "pixels": [
+      512,
+      512
+    ],
+    "source_colors": 3,
+    "final_colors": 3
+  },
+  "Street": {
+    "pixels": [
+      2048,
+      2048
+    ],
+    "source_colors": 4,
+    "final_colors": 4
+  },
+  "Arena_Floor": {
+    "pixels": [
+      2048,
+      2048
+    ],
+    "source_colors": 4,
+    "final_colors": 4
+  }
+}
