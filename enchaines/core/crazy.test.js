@@ -103,3 +103,19 @@ test('la balle touche ce qui est sous le viseur de la caméra, de près comme de
     assert.ok(ev.some((e) => e.k === 'dmg' && e.v === 1), `touché à ${dist} m`);
   }
 });
+
+test('saut mural : trois au plus par envol', () => {
+  const W = mk(1); const p = W.pl[0]; let n = 0;
+  Object.assign(p, { x: 5, y: 3, z: 69.5 - P.R - 0.05, vx: 0, vz: 1, vy: -2, st: ST.AIR, stT: 1, prot: 0 });
+  for (let i = 0; i < 40; i++) { Object.assign(p, { y: 3, vy: -2, z: 69.5 - P.R - 0.05, vz: 1, st: ST.AIR, stT: 1 }); p.wjCd = 0; stepWorld(W, [{ ...IDLE, mz: 1, jc: i + 1 }]); if (W.ev.some((e) => e.k === 'jump' && e.wall)) n++; }
+  assert.equal(n, CZ.WJ_MAX);
+});
+
+test('la Cour du Dragon : on monte l\'escalier de 2 m en marchant et les pavillons sont des murs', () => {
+  const W = createWorld({ crazy: true, course: 'cour', players: 1 }), p = W.pl[0];
+  Object.assign(p, { x: 0, y: 0, z: -4, vx: 0, vz: 0, prot: 0, st: ST.GROUND });
+  for (let i = 0; i < 600; i++) stepWorld(W, [{ ...IDLE, mz: -1, ay: Math.PI, ap: 0 }]);
+  assert.ok(p.y > 1.9 && p.y < 2.1, 'en haut des marches : ' + p.y);
+  Object.assign(p, { x: 14, y: 0, z: 0, vx: 0, vz: 0 }); for (let i = 0; i < 360; i++) stepWorld(W, [{ ...IDLE, mx: 1, ay: -Math.PI / 2, ap: 0 }]);
+  assert.ok(p.x < 21, 'bloqué par l\'enceinte : ' + p.x);
+});
