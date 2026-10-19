@@ -169,7 +169,7 @@ async function startLocal() {
   await ensureScene();
   show('loading');
   G.prep = true; setLoad(0.05, 'Construction du décor…');
-  G.mode = 'local'; G.me = null; G.demo = null; G.W = freshWorld(); G.names = G.solo ? [CFG.name || tr('Toi'), ''] : ['Grimpeur 1', 'Grimpeur 2'];
+  G.mode = 'local'; G.free = false; G.me = null; G.demo = null; G.W = freshWorld(); G.names = G.solo ? [CFG.name || tr('Toi'), ''] : ['Grimpeur 1', 'Grimpeur 2'];
   await Scene.buildLevel(G.W); Scene.setRoster(); G.acc = 0; G.done = false; Music.playWorld(G.W.level.world);
   await prepare(G.W); G.prep = false; G.last = performance.now();
   G.pt?.onStart?.();
@@ -181,7 +181,7 @@ async function startLocal() {
 function freshWorld() { const W = createWorld({ L: G.L, course: G.course }); if (G.solo) { W.alone = true; G.run = []; G.splits = []; G.forceReset = 0; } if (G.replay) { G.replay.i = 0; G.replay.k = 0; } return W; }
 const quant = (I) => decIn(encIn(0, I)); // entrées arrondies comme celles envoyées au serveur : le rejeu est identique au pas près
 function recStep(I) { const e = encIn(0, I), l = G.run[G.run.length - 1]; if (l && l.every((v, k) => k === 0 || v === e[k])) l[0]++; else { e[0] = 1; G.run.push(e); } }
-function stopGame() { Pings.clear(); if (G.replay?.prevL) G.L = G.replay.prevL; G.replay = null; $('#h-replay').classList.remove('on'); if (G.mode) setTimeout(backdrop, 0); G.mode = null; G.solo = false; G.W = null; $('#hud').classList.remove('on'); G.paused = false; $('#pause').classList.remove('on'); }
+function stopGame() { G.free = false; Pings.clear(); if (G.replay?.prevL) G.L = G.replay.prevL; G.replay = null; $('#h-replay').classList.remove('on'); if (G.mode) setTimeout(backdrop, 0); G.mode = null; G.solo = false; G.W = null; $('#hud').classList.remove('on'); G.paused = false; $('#pause').classList.remove('on'); }
 function togglePause(v) {
   G.paused = v ?? !G.paused; if (G.paused) document.exitPointerLock?.(); $('#pause').classList.toggle('on', G.paused);
   $('#p-restart').style.display = G.mode === 'online' && G.room && G.room.host !== G.room.you ? 'none' : '';

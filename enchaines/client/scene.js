@@ -570,7 +570,8 @@ function camera(W, rp, me, dt) {
   if (cand !== CAM.zone) { if (cand === CAM.cand) CAM.candT += dt; else { CAM.cand = cand; CAM.candT = 0; } if (CAM.candT > 0.4 || !CAM.seen) CAM.zone = cand; }
   CAM.seen = true;
   const zc = CAM.zone, md = MODES[zc?.mode || 'side'] || MODES.side; CAM.mode = zc?.mode || 'side';
-  const k = Math.min(1, dt * 0.9);
+  CAM.fastT = zc?.turn ? 2.5 : Math.max(0, (CAM.fastT || 0) - dt); // zone « turn » (et les 2,5 s qui suivent, pour le retour) : le cadrage se met en place vite
+  const k = Math.min(1, dt * (CAM.fastT > 0 ? 2.2 : 0.9));
   CAM.baseYaw = zc?.yaw ?? md.yaw; CAM.nomYaw = CAM.baseYaw + CAM.uyaw;
   CAM.zyaw += ((zc?.yaw ?? md.yaw) - CAM.zyaw) * k; CAM.zpitch += ((zc?.pitch ?? md.pitch) - CAM.zpitch) * k; CAM.zdist += ((md.dist + (zc?.dist || 0) * (zc?.mode === 'far' ? 1 : 0)) - CAM.zdist) * k;
   if (S.camAuto && performance.now() - (CAM.lastUser || 0) > 4000) { CAM.uyaw *= 1 - dt * 0.4; CAM.upitch *= 1 - dt * 0.4; } // (cadrage automatique seulement) il revient au réglage de la zone
