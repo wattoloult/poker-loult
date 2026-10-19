@@ -165,6 +165,15 @@ input[type=range] { padding: 0; accent-color: var(--ember); box-shadow: none; ba
 .tag { position: absolute; left: 0; top: 0; font: 700 14px 'Grenze'; padding: 1px 8px; border-radius: 3px; translate: -50% -100%; white-space: nowrap; color: #fff; border: 1px solid #000; }
 .tag.t0 { background: #8a4a16; } .tag.t1 { background: #1d5f8a; }
 #hud[data-mode="local"] .tag { display: none; }
+.tag.t2 { background: #2a7a3d; } .tag.t3 { background: #8a2a68; }
+#h-dot2 { background: #5ed67a; box-shadow: 0 0 10px #5ed67a; } #h-dot3 { background: #e86cc0; box-shadow: 0 0 10px #e86cc0; }
+#hud[data-mode="free"] :is(#h-ten, .hr span:nth-child(2)) { display: none; }
+#fstand { display: none; position: absolute; right: 14px; top: 96px; list-style: none; margin: 0; padding: 6px 10px; min-width: 190px; background: rgba(18, 12, 8, 0.62); border: 1px solid #000; border-radius: 4px; font: 700 15px 'Grenze'; color: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
+#hud[data-mode="free"] #fstand { display: block; }
+#fstand li { display: flex; align-items: center; gap: 8px; padding: 2px 0; } #fstand li i { width: 10px; height: 10px; border-radius: 50%; background: #fff; }
+#fstand li.t0 i { background: #ff9a3c; } #fstand li.t1 i { background: #46b8ff; } #fstand li.t2 i { background: #5ed67a; } #fstand li.t3 i { background: #e86cc0; }
+#fstand li.me span { text-decoration: underline; } #fstand li b { margin-left: auto; font-variant-numeric: tabular-nums; }
+.board li.me { color: var(--ember); } .board li em { font-style: normal; float: right; }
 /* speedrun solo : pas de chaîne ni de partenaire ; temps de passage à chaque point (vert = en avance sur le record, rouge = en retard) */
 #hud[data-mode="solo"] :is(#h-ten, #tag1, #h-dot1, #sta1, .hr span:nth-child(2)) { display: none; }
 #split { position: absolute; left: 50%; top: 66px; transform: translateX(-50%); display: flex; gap: 12px; align-items: baseline; font: 800 24px 'Grenze'; padding: 4px 16px; border-radius: 4px; background: var(--hide); box-shadow: var(--seam), 0 6px 16px rgba(0, 0, 0, 0.6); font-variant-numeric: tabular-nums; opacity: 0; pointer-events: none; }

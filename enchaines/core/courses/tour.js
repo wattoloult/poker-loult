@@ -21,6 +21,9 @@ plat(-2, 6.6, -4.5, 4, 4, { mat: 'stone', h: 1.2 });
 hint(-2, 6.6, -4.5, 'Si ton partenaire tombe, maintiens Maj : tu t\'arc-boutes et tu le retiens ; puis V pour le remonter (recule d\'abord du bord)');
 plat(-8, 7.4, -4.5, 4, 4, { mat: 'stone', h: 1.2 });
 plat(-12, 8.4, 0.5, 4, 4, { mat: 'wood' });
+// coin de la tour (7e plateforme -> la suivante) : le saut part vers l'AVANT (+z, vers la caméra) et on n'en jugeait pas la distance. La vue pivote à droite (caméra côté -x,
+// on avance vers la droite de l'écran) tant qu'on est dans le coin, puis revient au profil à l'arrivée sur les Piquets (zone `turn` : seule exception à « la caméra ne bouge jamais seule »).
+K.cam(-16, 6.0, -7.5, -5.4, 11.5, 3.0, { mode: 'side', yaw: -Math.PI / 2, pitch: 0.3, turn: 1 });
 /* ------------------------- zone 2 — Les Piquets (précision) ------------------------- */
 zone(2, "Les Piquets");
 block(-10, 3, 9.6, 6, 10, 6, { mat: 'brick' });

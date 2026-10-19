@@ -49,6 +49,7 @@
   <div class="card wide">
     <h2>Jouer en ligne</h2>
     <label>Ton pseudo <input id="o-name" maxlength="16" placeholder="Pseudo" autocomplete="nickname"></label>
+    <div id="o-mode" class="seg"><span>Mode</span><button data-m="coop" class="on">Coop · chaîne</button><button data-m="free">Libre · jusqu'à 4</button></div>
     <button id="o-create" class="big">Créer un salon</button>
     <div class="join"><input id="o-code" maxlength="6" placeholder="CODE"><button id="o-join">Rejoindre</button></div>
     <h3>Salons ouverts <button id="o-refresh" class="mini">↻</button></h3>
@@ -64,6 +65,7 @@
     <h2>Salon <b id="r-code">----</b></h2>
     <div class="join"><input id="r-link" readonly><button id="r-copy">Copier le lien</button></div>
     <ul id="r-players" class="players"></ul>
+    <div id="r-mode" class="seg"><span>Mode</span><button data-m="coop" class="on">Coop · chaîne</button><button data-m="free">Libre · jusqu'à 4</button></div>
     <label>Parcours <select id="r-course"></select></label>
     <div id="r-len" class="seg"><span>Chaîne</span><button data-l="4.5">Courte</button><button data-l="6.5">Normale</button><button data-l="9">Longue</button></div>
     <button id="r-start" class="big" disabled>Lancer l'ascension</button>
@@ -95,6 +97,7 @@
   <div id="h-bar"><i id="h-dot0"></i><i id="h-dot1"></i></div>
   <div id="h-ten"><span>Chaîne</span><div><i></i></div><em id="h-len"></em></div>
   <div id="h-hint"></div>
+  <ol id="fstand"></ol>
   <div id="zonecard"></div><div id="split"></div><div id="pings"></div><div id="h-replay"></div><div id="countdown"></div>
   <div id="wheel"><span data-k="here" class="n"><i>◎</i>Ici !</span><span data-k="go" class="e"><i>3·2·1</i>Top départ</span><span data-k="stop" class="s"><i>✋</i>STOP</span><span data-k="come" class="w"><i>➜</i>Viens !</span></div>
   <div class="sta" id="sta0"></div><div class="sta" id="sta1"></div>

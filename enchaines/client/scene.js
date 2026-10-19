@@ -13,7 +13,7 @@ export const _clips = () => CLIPS; // outils de mise au point (console)
 export const LIB = {}, TEX = {};
 const CLIPS = {};
 const V = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3(), Q = new THREE.Quaternion(), Q2 = new THREE.Quaternion();
-export const COL = [0xff9a3c, 0x46b8ff]; // couleurs des deux grimpeurs (interface, marqueurs)
+export const COL = [0xff9a3c, 0x46b8ff, 0x5ed67a, 0xe86cc0]; // couleurs des grimpeurs (interface, marqueurs) ; 3 et 4 : mode libre
 
 /* ------------------------------ démarrage ------------------------------ */
 export function init(canvas) {
@@ -199,8 +199,9 @@ function headOnly(mesh) {
 }
 const ANIMS = ['Idle_Loop', 'Walk_Loop', 'Jog_Fwd_Loop', 'Sprint_Loop', 'Jump_Start', 'Jump_Loop', 'Jump_Land', 'Crouch_Idle_Loop', 'NinjaJump_Idle_Loop', 'Hit_Knockback', 'Dance_Loop', 'Yes', 'Roll', 'Death01', 'LayToIdle', 'Punch_Jab', 'Punch_Cross', 'Punch_Enter', 'Hit_Head', 'Hit_Chest'];
 function makeClimber(k) {
-  const root = cloneSkinned(S.tpl[k ? 'f' : 'm']);
-  const tint = new THREE.Color(k ? 0xc4dcff : 0xffe2c4), glow = new THREE.Color(k ? 0x06213f : 0x3a1800);
+  const root = cloneSkinned(S.tpl[k % 2 ? 'f' : 'm']);
+  const TINT = [0xffe2c4, 0xc4dcff, 0xc9f3d2, 0xf7cbe6], GLOW = [0x3a1800, 0x06213f, 0x0a2f14, 0x3d0f2c];
+  const tint = new THREE.Color(TINT[k] ?? 0xffffff), glow = new THREE.Color(GLOW[k] ?? 0x101010);
   root.traverse((o) => {
     if (!o.isSkinnedMesh) return;
     const mats = (Array.isArray(o.material) ? o.material : [o.material]).map((m) => { if (!m.userData.ranger) return m; const c = m.clone(); c.color.copy(tint); c.emissive = glow; return c; });
@@ -347,6 +348,7 @@ function poseClimber(c, p, mate, W, dt, rp) {
   const spd = Math.hypot(p.vx - p.gvx, p.vz - p.gvz);
   let a = ST_ANIM(p, spd);
   if (p.st === ST.AIR && p.dangling) a = 'NinjaJump_Idle_Loop';
+  if (p.st === ST.HANG) a = 'Idle_Loop'; // accroché : buste droit, pas le dos cambré du saut
   if (W.done) a = c.k ? 'Dance_Loop' : 'Yes';
   // COUPS : début d'un coup = la simulation remet pT à zéro. Poing = vraie animation (jab du bras gauche / cross du bras droit, UAL Quaternius),
   // jouée d'un bout à l'autre ; pied = garde (Punch_Enter) + jambe posée image par image plus bas. Coup encaissé : Hit_Head / Hit_Chest bref.
@@ -373,11 +375,15 @@ function poseClimber(c, p, mate, W, dt, rp) {
   const wantYaw = koFly ? Math.atan2(-p.vx, -p.vz) : p.downT > 0 ? c.yaw : p.yaw;
   let dy = wantYaw - c.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); c.yaw += dy * Math.min(1, dt * (koFly ? 30 : 16));
   c.g.rotation.y = c.yaw;
-  const kick = c.atk?.kick ? kickPose(c.atk.t) : null;
+  const kick = c.atk?.kick ? kickPose(c.atk.t) : null, slide = p.st === ST.GROUND && p.slideT > 0 && !p.crawl && !p.ko;
+  if (c.flip && (p.st !== ST.AIR || c.flip.t >= c.flip.dur)) { c.flip = null; c.root.rotation.x = 0; }
   if (kick) c.root.rotation.x = kick.lean; // buste qui part en arrière pour équilibrer la jambe tendue
   else if (koFly) c.root.rotation.x = Math.max(-1.5, c.root.rotation.x - dt * 7.5 * (S.hitstop > 0 ? 0.1 : 1)); // vrille vers l'arrière, jusqu'à l'horizontale
+  else if (c.flip) { c.flip.t += dt; const k = Math.min(1, c.flip.t / c.flip.dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; c.root.rotation.x = c.flip.dir * Math.PI * 2 * e; } // salto
+  else if (slide) c.root.rotation.x += (-1.15 - c.root.rotation.x) * Math.min(1, dt * 16); // tacle : le buste part en arrière, jambes devant
+  else if (p.st === ST.HANG) c.root.rotation.x += (0.13 - c.root.rotation.x) * Math.min(1, dt * 7); // accroché : la pesanteur plaque le bassin contre la paroi
   else if (p.st !== ST.ROPE && c.root.rotation.x) c.root.rotation.x *= Math.max(0, 1 - dt * 10); // fin du balancement de liane / de la vrille
-  { const a = c.root.rotation.x, h = 0.95; if (p.st !== ST.ROPE && a) c.root.position.set(0, h - h * Math.cos(a), -h * Math.sin(a)); else c.root.position.set(0, 0, 0); }
+  { const a = c.root.rotation.x, h = 0.95, drop = slide ? 0.62 * Math.min(1, Math.abs(a) / 1.15) : 0; if (p.st !== ST.ROPE && a) c.root.position.set(0, h - h * Math.cos(a) - drop, -h * Math.sin(a)); else c.root.position.set(0, 0, 0); }
   // poses procédurales : bras vers le bord, le mur ou la chaîne
   c.root.updateMatrixWorld(true);
   // droite DU GRIMPEUR (face à fwd) : sans ce bon sens, la main gauche visait la droite (bras et jambes croisés à l'escalade)
@@ -386,7 +392,14 @@ function poseClimber(c, p, mate, W, dt, rp) {
   if (p.st === ST.HANG) {
     const sh = Math.sin(c.phase += dt * 6 * Math.abs(p.lat || 0)) * 0.12;
     armTo(c, 'l', at(-0.28 + sh, 2.05, 0.3)); armTo(c, 'r', at(0.28 + sh, 2.05, 0.3));
-    legTo(c, 'l', at(-0.15, -0.05, 0.12), 0.7); legTo(c, 'r', at(0.15, 0.0, 0.18), 0.7);
+    // les pieds PENDENT dans le vide et se balancent doucement (un peu de désordre entre les deux jambes)
+    c.sway = (c.sway || 0) + dt * 2.2; const s1 = Math.sin(c.sway), s2 = Math.sin(c.sway * 1.37 + 1.2);
+    legTo(c, 'l', at(-0.14, 0.02 + 0.03 * s2, 0.02 + 0.14 * s1), 0.7); legTo(c, 'r', at(0.15, 0.07, -0.03 + 0.14 * s2), 0.7);
+    // de temps en temps, un coup d'œil vers le bas (le vide)
+    c.lookT = (c.lookT ?? 2 + Math.random() * 3) - dt; if (c.lookT <= 0 && !c.look) { c.look = { t: 0, dur: 1.6 }; c.lookT = 4 + Math.random() * 5; }
+  } else if (slide) { // tacle : jambes tendues devant, bras en arrière pour l'équilibre
+    legTo(c, 'l', at(-0.17, 0.14, 0.95), 0.9); legTo(c, 'r', at(0.2, 0.22, 1.08), 0.9);
+    armTo(c, 'l', at(-0.42, 0.55, -0.5), 0.85); armTo(c, 'r', at(0.42, 0.5, -0.55), 0.85);
   } else if (p.st === ST.CLIMB) {
     c.phase += dt * 5.5 * (Math.abs(p.climbV || 0) + Math.abs(p.lat || 0) * 0.8);
     const s = Math.sin(c.phase), s2 = Math.cos(c.phase);
@@ -413,6 +426,7 @@ function poseClimber(c, p, mate, W, dt, rp) {
     const n = W.ch[p.id ? W.ch.length - 2 : 1]; const tgt = new THREE.Vector3(n.x, n.y, n.z);
     armTo(c, 'l', tgt, 0.8); armTo(c, 'r', tgt, 0.8);
   }
+  if (c.look) { c.look.t += dt; const k = Math.sin(Math.min(1, c.look.t / c.look.dur) * Math.PI), hd = c.bones.head || c.bones.Head; if (p.st !== ST.HANG || c.look.t >= c.look.dur) c.look = null; else if (hd) { hd.rotateX(0.75 * k); c.bones.neck_01?.rotateX(0.25 * k); } }
   if (kick) { // coup de pied de face : genou armé haut, jambe qui se détend à hauteur du torse, genou qui revient, pied qui se repose
     leg2(c, 'r', at(...kick.knee), at(...kick.foot), kick.w);
     armTo(c, 'r', at(0.28, 1.05 - 0.1 * kick.ext, -0.12 - 0.12 * kick.ext), 0.55 * kick.w); // le bras du côté de la jambe recule (équilibre)
@@ -433,6 +447,20 @@ function puff(x, y, z, n = 8, col = 0xd8c3a5, size = 0.5, up = 1) {
     S.fx.push({ o: s, t: 0, life: 0.6 + Math.random() * 0.3, v: new THREE.Vector3(Math.cos(a) * 2.2, up * (0.5 + Math.random()), Math.sin(a) * 2.2), grow: 1.8 });
   }
 }
+// POUSSIÈRE : bouffées molles qui montent, s'étirent et s'estompent, de la couleur du sol (glace : blanche, mousse : verdâtre, bois : brune, pierre : sable)
+function dustCol(W, p) { const m = W.bodies[p?.gb]?.mat || ''; return /ice|snow|crystal|frost/.test(m) ? 0xe6eef6 : /moss|grass|leaf|bamboo|jungle/.test(m) ? 0xa7b08a : /wood|plank|bark|log/.test(m) ? 0xbfa383 : 0xd6c3a6; }
+function dust(x, y, z, vx, vz, n, size, col, life = 1) {
+  for (let i = 0; i < n; i++) {
+    const s = sprite(col, size * (0.7 + Math.random() * 0.7)); s.material.blending = THREE.NormalBlending; s.material.opacity = 0.5;
+    s.position.set(x + (Math.random() - 0.5) * 0.35, y + 0.06 + Math.random() * 0.12, z + (Math.random() - 0.5) * 0.35); S.scene.add(s);
+    S.fx.push({ o: s, t: 0, life: life * (0.7 + Math.random() * 0.7), v: new THREE.Vector3(vx * (0.5 + Math.random() * 0.7) + (Math.random() - 0.5) * 1.5, 0.35 + Math.random() * 1.0, vz * (0.5 + Math.random() * 0.7) + (Math.random() - 0.5) * 1.5), grow: 1.15 });
+  }
+}
+// salto : en avant si l'élan va dans le sens du regard, en arrière sinon (rotation complète pendant le saut, purement visuelle)
+function startFlip(k, p) {
+  const c = S.cl?.[k]; if (!c) return; const fx = Math.sin(c.yaw), fz = Math.cos(c.yaw), v = (p.vx - (p.gvx || 0)) * fx + (p.vz - (p.gvz || 0)) * fz;
+  c.flip = { t: 0, dur: 0.66, dir: v < -1.2 ? -1 : 1 };
+}
 const CONF = [0xff9a3c, 0x46b8ff, 0xffd27a, 0xff5d8f, 0x7be08c];
 function confetti(x, y, z) {
   for (let i = 0; i < 6; i++) {
@@ -450,7 +478,9 @@ export function onEvent(W, e) {
   if (!S.ready) return;
   const p = e.p != null ? W.pl[e.p] : null;
   if (e.k === 'land' && p && e.v > 6) { puff(e.x, e.y, e.z, Math.min(14, 4 + e.v * 0.6), 0xd8c3a5, 0.45 + e.v * 0.03); if (e.v > 14) shake(Math.min(0.5, e.v * 0.02)); }
-  else if (e.k === 'jump' && p && !e.wall) puff(p.x, p.y, p.z, 4, 0xd8c3a5, 0.35, 0.4);
+  else if (e.k === 'jump' && p && !e.wall) { puff(p.x, p.y, p.z, 4, 0xd8c3a5, 0.35, 0.4); if (e.dj) startFlip(e.p, p); } // double saut : salto
+  else if (e.k === 'slide' && p) dust(e.x, e.y, e.z, -(e.dx || 0) * 2.4, -(e.dz || 0) * 2.4, 8, 0.5, dustCol(W, p), 1.1)
+  else if (e.k === 'tackle') { const v = S.cl?.[e.v]; if (v) { v.hit = { t: 0 }; setAnim(v, 'Hit_Chest', 0.03, true); } dust(e.x, e.y - 0.35, e.z, (e.ux || 0) * 3.2, (e.uz || 0) * 3.2, 18, 0.7, dustCol(W, p || W.pl[e.v]), 1.4); impact(e.x, e.y + 0.5, e.z, e.ux, e.uz); sparks(e.x, e.y + 0.6, e.z, 8); shake(0.4); S.hitstop = 0.07; }
   else if (e.k === 'jerk') { sparks(e.x, e.y, e.z, Math.min(18, 4 + e.v * 1.5)); shake(Math.min(0.35, e.v * 0.03)); }
   else if (e.k === 'grab' && p) sparks(p.x, p.y + 2, p.z, 3);
   else if (e.k === 'hit' && p) { sparks(e.x, e.y, e.z, 14); shake(0.3); }
@@ -458,7 +488,7 @@ export function onEvent(W, e) {
   else if (e.k === 'down' && p) { puff(e.x, e.y, e.z, 12, 0xd8c3a5, 0.55, 0.6); shake(0.18); stars(e.p); }
   else if (e.k === 'collapse') { const m = S.bodyMesh[e.b]; if (m) dropDebris(m); puff(e.x, e.y, e.z, 10, 0xb08a66, 0.6, -0.5); }
   else if (e.k === 'checkpoint') { const c = S.cps[e.cp]; if (c) { c.on = true; c.flash = 1.2; } puff(e.x, e.y, e.z, 16, 0xffd27a, 0.6, 2); }
-  else if (e.k === 'respawn') { S.camSnap = true; for (const c of S.cl || []) c.err.set(0, 0, 0); }
+  else if (e.k === 'respawn') { if (!W.free || e.p === S.me) S.camSnap = true; for (const c of S.cl || []) if (!W.free || e.p == null || S.cl[e.p] === c) c.err.set(0, 0, 0); }
 }
 // éclat blanc + onde de choc dans le sens du coup (sprites additifs, très courts)
 function impact(x, y, z, ux = 0, uz = 0) {
@@ -516,13 +546,12 @@ export function controlYaw(k, p, held) {
   if ((!p || p.st === 0) && (!held || user)) { let y = CAM.nomYaw ?? CAM.yaw; const b = CAM.baseYaw ?? 0; if (Math.abs(Math.atan2(Math.sin(y - b), Math.cos(y - b))) < 0.3) y = b; CAM.ctrl[k] = y; }
   return CAM.ctrl[k];
 }
-// blocs qui peuvent masquer la vue : volumineux (plus de 0,9 m dans les trois sens), pas les obstacles qui frappent, barres, lianes, planches, herses, plateaux tournants
-function camObstacles(W) {
-  if (CAM.obstFor !== W) { CAM.obstFor = W; CAM.obst = W.bodies.filter((b) => !(b.hit || b.bar || b.ghost || b.grid || b.dbseg || b.lever || b.plank || b.deco || b.herse || b.door || b.roller || b.alt || (b.move && b.move.k === 'rot')) && Math.min(b.hw * 2, b.hh * 2, b.hd * 2) >= 0.9); }
-  return CAM.obst;
-}
 function camera(W, rp, me, dt) {
-  const [a, b] = rp, wMe = me == null ? 0.5 : me === 0 ? 0.68 : 0.32;
+  let [a, b] = rp, wMe = me == null ? 0.5 : me === 0 ? 0.68 : 0.32;
+  if (W.free) { // mode libre : pas de cordée, la caméra suit son grimpeur (le meneur pour un spectateur)
+    let f = me; if (f == null || !rp[f]) { f = 0; for (let k = 1; k < W.pl.length; k++) if (W.pl[k].cp > W.pl[f].cp || (W.pl[k].cp === W.pl[f].cp && W.pl[k].y > W.pl[f].y)) f = k; }
+    a = b = rp[f]; wMe = 0.5;
+  }
   const sep = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
   // un grimpeur qui chute très bas : on garde l'autre au centre (la chute reste lisible sans perdre celui qui tient)
   let wa = wMe; if (a.y < b.y - 14) wa = Math.max(0.15, wa - 0.35); if (b.y < a.y - 14) wa = Math.min(0.85, wa + 0.35);
@@ -551,14 +580,8 @@ function camera(W, rp, me, dt) {
   const dist = Math.max(7, Math.min(30, 13 + Math.min(CAM.sep, 24) * 0.8 + (CAM.zoom || 0) + CAM.zdist));
   CAM.dist += Math.max(-7 * dt, Math.min(7 * dt, (dist - CAM.dist) * Math.min(1, dt * 2.5)));
   const yaw = CAM.yaw, pitch = CAM.pitch, dirx = Math.sin(yaw) * Math.cos(pitch), diry = Math.sin(pitch), dirz = Math.cos(yaw) * Math.cos(pitch);
-  // collision : la caméra ne traverse pas les gros blocs (falaise, murs, tours). On la rapproche vite (pour ne jamais voir l'intérieur) et on la rend lentement.
-  let dcol = 60;
-  { const obst = camObstacles(W), T = CAM.tgt, M = 0.35;
-    const inside = (b, x, y, z) => x > b.px - b.ex - M && x < b.px + b.ex + M && y > b.py - b.hh - M && y < b.py + b.hh + M && z > b.pz - b.ez - M && z < b.pz + b.ez + M;
-    const live = obst.filter((b) => !inside(b, T.x, T.y, T.z)); // un bloc qui contient déjà le point suivi (grimpeur collé à la paroi) ne compte pas
-    for (let t = 0.6; t <= CAM.dist && live.length; t += 0.35) { const x = T.x + dirx * t, y = T.y + diry * t, z = T.z + dirz * t; if (live.some((b) => inside(b, x, y, z))) { dcol = Math.max(2.6, t - 0.7); break; } } }
-  if (CAM.col === undefined || S.camSnap) CAM.col = dcol; else CAM.col += (dcol - CAM.col) * Math.min(1, dt * (dcol < CAM.col ? 14 : 2));
-  let d = Math.min(CAM.dist, CAM.col);
+  // PAS de collision avec le décor : la caméra traverse les murs (retour des joueurs : un mur entre elle et le grimpeur les gênait plus qu'il ne les aidait ; vu de l'intérieur, une boîte est transparente)
+  let d = CAM.dist;
   // repli de sécurité (avant : la POSITION était écrasée à z = -5, ce qui faisait basculer le regard) : on raccourcit le long du rayon, la direction ne change pas
   if (CAM.tgt.z > -5 && CAM.tgt.z + dirz * d < -5) d = Math.max(3, d * (CAM.tgt.z + 5) / (-dirz * d));
   const px = CAM.tgt.x + dirx * d, py = CAM.tgt.y + diry * d, pz = CAM.tgt.z + dirz * d;
@@ -603,9 +626,10 @@ function lower(lvl) { // paliers : résolution, puis ombres plus petites, puis m
 }
 
 /* ------------------------------ image ------------------------------ */
+function nearestPl(W, k) { let best = null, bd = 1e9; for (let j = 0; j < W.pl.length; j++) { if (j === k) continue; const d = Math.hypot(W.pl[j].x - W.pl[k].x, W.pl[j].z - W.pl[k].z) + Math.abs(W.pl[j].y - W.pl[k].y); if (d < bd) { bd = d; best = W.pl[j]; } } return best || W.pl[k]; }
 export function setRoster(n = 2) {
   for (const c of S.cl || []) { S.scene.remove(c.g); S.scene.remove(c.ring); S.scene.remove(c.mark); }
-  S.cl = [makeClimber(0), makeClimber(1)];
+  S.cl = Array.from({ length: Math.max(2, Math.min(4, n)) }, (_, k) => makeClimber(k));
   CAM.init = false; CAM.seen = false; CAM.zone = null;
 }
 const PO = { x: 0, y: 0, z: 0, yaw: 0 }, HA = new THREE.Vector3(), HB = new THREE.Vector3();
@@ -618,20 +642,25 @@ export function frame(W, dt, view = {}) {
   // grimpeurs (positions de rendu lissées)
   const rp = W.pl.map((p, k) => { const c = S.cl[k]; c.err.multiplyScalar(Math.max(0, 1 - dt * 12)); return { x: p.x + c.err.x, y: p.y + c.err.y, z: p.z + c.err.z }; });
   S.hitstop = Math.max(0, (S.hitstop || 0) - dt);
-  for (let k = 0; k < 2; k++) poseClimber(S.cl[k], W.pl[k], W.pl[1 - k], W, dt, rp[k]);
+  S.me = view.me;
+  for (let k = 0; k < W.pl.length; k++) poseClimber(S.cl[k], W.pl[k], W.free ? nearestPl(W, k) : W.pl[1 - k], W, dt, rp[k]);
+  for (let k = 0; k < W.pl.length; k++) { // traînée de poussière derrière un grimpeur qui glisse
+    const p = W.pl[k], c = S.cl[k];
+    if (p.slideT > 0 && p.st === ST.GROUND && !p.crawl && p.sv > 3) { c.dustT = (c.dustT || 0) - dt; while (c.dustT <= 0) { c.dustT += 0.035; dust(rp[k].x - p.sdx * 0.45, rp[k].y, rp[k].z - p.sdz * 0.45, -p.sdx * p.sv * 0.2, -p.sdz * p.sv * 0.2, 2, 0.4, dustCol(W, p), 0.95); } } else c.dustT = 0;
+  }
   stepStars(W, dt);
   // chaîne : courbe passant par les maillons de la simulation, attachée aux ceintures
   // maillons de rendu lissés : en ligne, l'instantané du serveur recale la chaîne 30 fois par seconde ; on la rejoint en douceur au lieu de sauter
   const C = W.ch, pts = S.curve.points, kc = S.chainInit ? Math.min(1, dt * 22) : 1; S.chainInit = true;
   for (let i = 0; i < C.length; i++) { const p = pts[i]; if (p.distanceToSquared(V.set(C[i].x, C[i].y, C[i].z)) > 9) p.copy(V); else p.lerp(V, kc); }
-  for (const k of [0, 1]) { const c = S.cl[k], belt = c.bones.pelvis; if (belt) { belt.getWorldPosition(V); pts[k ? C.length - 1 : 0].copy(V).add(V2.set(0, 0.02, 0)); } }
+  if (!W.free) for (const k of [0, 1]) { const c = S.cl[k], belt = c.bones.pelvis; if (belt) { belt.getWorldPosition(V); pts[k ? C.length - 1 : 0].copy(V).add(V2.set(0, 0.02, 0)); } }
   const len = S.curve.getLength(), n = Math.min(LINKS, Math.max(8, Math.round(len / 0.13)));
   for (let i = 0; i < n; i++) {
     const u = (i + 0.5) / n; S.curve.getPointAt(u, V); S.curve.getTangentAt(u, V2);
     Q.setFromUnitVectors(UPV, V2); Q2.setFromAxisAngle(V2, i % 2 ? Math.PI / 2 : 0); M4.compose(V, Q2.multiply(Q), SC); S.chain.setMatrixAt(i, M4);
   }
-  S.chain.count = W.alone ? 0 : n; S.chain.instanceMatrix.needsUpdate = true; // mode test solo : ni chaîne ni partenaire
-  S.cl[1].g.visible = !W.alone; S.cl[1].ring.visible = !W.alone;
+  S.chain.count = W.alone ? 0 : n; S.chain.instanceMatrix.needsUpdate = true; // mode test solo : ni chaîne ni partenaire ; mode libre : jamais de chaîne
+  { const hide = W.alone && !W.free; S.cl[1].g.visible = !hide; S.cl[1].ring.visible = !hide; }
   S.chainGhost.instanceMatrix = S.chain.instanceMatrix; S.chainGhost.count = W.alone ? 0 : n;
   // tension : la chaîne chauffe un peu (lisibilité)
   S.mat.chain.emissive.setRGB(W.ten * 0.35, W.ten * 0.12, 0);
@@ -643,7 +672,7 @@ export function frame(W, dt, view = {}) {
   }
   // arrivée au sommet : confettis et caméra qui tourne lentement autour de la cordée
   if (W.done) {
-    if (Math.random() < dt * 14) { const p = W.pl[Math.random() < 0.5 ? 0 : 1]; confetti(p.x, p.y + 2.5, p.z); }
+    if (Math.random() < dt * 14) { const p = W.pl[(Math.random() * W.pl.length) | 0]; confetti(p.x, p.y + 2.5, p.z); }
     CAM.uyaw += dt * 0.35; CAM.lastUser = performance.now();
   }
   stepFx(dt);

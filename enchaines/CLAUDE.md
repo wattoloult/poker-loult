@@ -75,6 +75,19 @@ playtest/playtest.js MODULE DE TEST PRIVÉ (jamais servi en fichier) : panneau F
 - Barres : on traverse la barre qu'on vient de lâcher (`thru`) ; placer les barres ~2 m au-dessus du point de départ.
 - Sur Windows, ne pas éditer ces fichiers avec un script Python qui contient `\n` ou `\'` (casse les chaînes JS) : Edit, sed, ou node.
 
+## Mode libre (jusqu'à 4 grimpeurs, SANS chaîne) et tacle
+- Salon créé avec `mode: 'free'` (menu « Libre · jusqu'à 4 » ; l'hôte peut le changer au salon avec `cfg {mode}`) : `createWorld({ free: true, players: n })` met `W.free = W.alone = true`
+  (règles solo : une plaque suffit, second saut en l'air, pas de courte échelle) ; `W.ch = []`, pas de chaîne. Chaque grimpeur a SON point de passage (`p.cp`), SA réapparition
+  (`respawnPlayer` : chute dans le vide ou R maintenu 0,5 s) ; `stepFree` dans sim.js. Premier arrivé = `W.rank[0]` (`p.done`, `p.finishT`) ; la partie finit quand tous ont fini, ou 2 min après le premier.
+- Serveur (server.js) : `r.cfg.mode`, `MAXP = {coop: 2, free: 4}`, sièges contigus au départ, entrées/instantanés en tableaux de N ; message `end {free:1, rank}`. Pas de record enregistré, pas de chat vocal.
+- Client : `G.free`, `G.seatIn[]` (entrées des autres, pour la prédiction), caméra qui suit SON grimpeur (le meneur pour un spectateur), classement en direct `#fstand`, étiquettes/jauge créées à la demande (`ensureHudEls`).
+- Test : `node --test core/free.test.js` (sim) et `server.test.js` (salon à 3 en mode libre). Parcours : bots WebSocket + 1 navigateur (voir l'historique du dépôt).
+- Glissade = TACLE : `P.SLIDE_*` (plus longue, boostée, virage presque figé, `SLIDE_REC` de récupération), capsule basse (`P.HS`) pendant la glissade (on passe sous les obstacles de moins de ~1 m),
+  reptation (`p.crawl`) si on ne peut pas se relever sous un plafond bas, `tackleHit` fauche les grimpeurs DEBOUT au sol sur la trajectoire (un saut l'évite), recharge `TACKLE_CD`.
+- Inertie en l'air : au-dessus de `AIR_MAX`, diriger FAIT TOURNER la vitesse (`AIR_TURN`, la norme est conservée). Second saut : n'est pas consommé quand le sol est tout proche (le saut tapé juste avant l'atterrissage part du sol).
+- Visuels (client/scene.js, purement cosmétiques) : poussière (`dust`, couleur du sol), pose de tacle, salto au second saut (`startFlip`), accroché à un bord : buste droit, pieds qui pendent et se balancent, coup d'œil vers le bas.
+- Caméra : AUCUNE collision avec le décor (elle traverse les murs) ; zone `turn` dans la Tour (coin de la 7e plateforme) qui pivote la vue à droite.
+
 ## Reste à faire / non vérifié
 - Parcours non publiés (7) : à jouer par le propriétaire en mode test, puis `published: true`.
 - Durées : les parcours font 20 à 38 étapes (≈ 4 à 10 min estimées), en dessous des 8-15 min visées : à allonger après retours de jeu.

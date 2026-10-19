@@ -77,3 +77,27 @@ test('mode libre : le premier au sommet est classé, la partie finit quand tous 
   W.pl[1].z = 6; W.pl[1].x = 0; run(W, 30, () => [IDLE, IDLE]);
   assert.deepEqual(W.rank, [0, 1]); assert.equal(W.done, true);
 });
+
+test('inertie en l\'air : avec de l\'élan au-dessus de la course, le virage fait TOURNER la vitesse', () => {
+  const W = createWorld({ level: testCourse(() => {}), free: true, players: 1 }); run(W, 60);
+  const p = W.pl[0]; p.y += 6; p.st = ST.AIR; p.vx = 0; p.vz = 10; p.vy = 0; p.stT = 1;
+  run(W, 36, () => [{ ...IDLE, mx: 1, mz: 0 }]);
+  assert.ok(p.vx > 5, 'la vitesse a tourné vers +x : vx=' + p.vx.toFixed(2));
+  assert.ok(Math.hypot(p.vx, p.vz) > 8, 'et garde son élan : ' + Math.hypot(p.vx, p.vz).toFixed(2));
+  assert.ok(p.vz < 7, 'elle ne file plus tout droit : vz=' + p.vz.toFixed(2));
+});
+
+test('saut tapé juste avant le sol : part DEPUIS le sol et laisse le double saut disponible', () => {
+  const W = createWorld({ level: testCourse(() => {}), free: true, players: 1 }); run(W, 60);
+  let jc = 0; const jumps = [];
+  const step = (jump) => { if (jump) jc++; stepWorld(W, [{ ...IDLE, jc, jump: !!jump }]); for (const e of W.ev) if (e.k === 'jump') jumps.push(e.dj ? 'dj' : 'sol'); };
+  step(true);                                           // 1er saut depuis le sol
+  for (let i = 0; i < 400 && !(W.pl[0].vy < -3 && W.pl[0].y < 0.5); i++) step(false); // on retombe
+  step(true);                                           // saut tapé à ~40 cm du sol, vitesse descendante
+  for (let i = 0; i < 30; i++) step(false);
+  assert.deepEqual(jumps, ['sol', 'sol'], 'les deux sont des sauts depuis le sol : ' + jumps);
+  assert.equal(W.pl[0].dj, false, 'le double saut n\'a pas été gaspillé');
+  for (let i = 0; i < 12; i++) step(false);
+  step(true);
+  assert.deepEqual(jumps, ['sol', 'sol', 'dj'], 'et il part bien en l\'air : ' + jumps);
+});

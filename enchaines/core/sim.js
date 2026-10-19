@@ -9,7 +9,7 @@ export const ST_NAME = ['sol', 'air', 'rebord', 'escalade', 'hisse', 'liane'];
 export const P = {
   R: 0.32, H: 1.75, WAIST: 1.0,                 // capsule verticale (pieds = origine), point d'attache de la chaîne
   RUN: 6.2, ACC: 52, DEC: 44, TURN: 14,         // course : vitesse, accélération, freinage, rotation du corps (rad/s)
-  AIR_ACC: 24, AIR_MAX: 6.4, AIR_DRAG: 0.4, AIR_BRAKE: 1.4, AIR_LAT: 0, SWING_ACC: 36,    // contrôle aérien façon « air strafing » : accélère vers la direction voulue tant que la vitesse dans cette direction < AIR_MAX
+  AIR_TURN: 3.8, AIR_ACC: 24, AIR_MAX: 6.4, AIR_DRAG: 0.4, AIR_BRAKE: 1.4, AIR_LAT: 0, SWING_ACC: 36,    // contrôle aérien façon « air strafing » : accélère vers la direction voulue tant que la vitesse dans cette direction < AIR_MAX
   JUMP: 8.6, G_UP: 23, G_DOWN: 30, G_CUT: 46, FALL_MAX: 30, // saut (apex ~1,6 m), pesanteur montée / descente / saut relâché tôt
   COYOTE: 0.12, BUFFER: 0.14,
   GRAB_LO: 0.8, GRAB_HI: 2.4, GRAB_REACH: 0.5, GRAB_VY: 9, GRAB_CD: 0.3, // fenêtre d'accroche des rebords (hauteur du bord au-dessus des pieds)
@@ -587,12 +587,16 @@ function stepPlayer(W, p, I, mate) {
       if (p.buf > 0 && cupBoost(W, p, mate)) { /* courte échelle en retombant sur les mains */ }
       else if (p.buf > 0 && p.coy > 0) { // coyote time : le saut part encore juste après avoir quitté le bord
         p.buf = 0; p.vy = P.JUMP; p.coy = 0; p.cut = false; p.jHeld = true; ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z });
-      } else if (W.alone && p.buf > 0 && !p.dj && p.stT > 0.08) { // MODE SOLO : un second saut en l'air remplace la courte échelle (passages prévus pour deux)
+      } else if (W.alone && p.buf > 0 && !p.dj && p.stT > 0.08 && !(p.vy < 0 && groundBelow(W, p.x, p.y + 0.02, p.z, Math.max(0.6, -p.vy * (P.BUFFER + 0.04))))) { // MODE SOLO : un second saut en l'air remplace la courte échelle (passages prévus pour deux)
         p.buf = 0; p.dj = true; p.vy = Math.max(p.vy, P.JUMP); p.cut = false; p.jHeld = true; ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z, dj: 1 });
       }
       // contrôle aérien : on accélère vers la direction voulue tant que la vitesse dans ce sens reste sous AIR_MAX (l'élan n'est jamais coupé)
       if (wl > 0.05) {
         // suspendu à la chaîne : on « pompe » le balancement plus fort (c'est ce qui permet d'atteindre une paroi lointaine)
+        if (!p.dangling && p.knock <= 0) { // avec de l'élan AU-DESSUS de la vitesse de course (saut glissé, tremplin, grand élan), le virage fait TOURNER la vitesse (elle garde sa norme) au lieu de la laisser filer tout droit
+          const sp = Math.hypot(p.vx - (p.gvx || 0), p.vz - (p.gvz || 0));
+          if (sp > P.AIR_MAX + 0.3) { const rx = p.vx - (p.gvx || 0), rz = p.vz - (p.gvz || 0), a0 = Math.atan2(rx, rz), d = Math.atan2(Math.sin(Math.atan2(wx, wz) - a0), Math.cos(Math.atan2(wx, wz) - a0)), t = clamp(d, -P.AIR_TURN * dt * Math.min(1, wl), P.AIR_TURN * dt * Math.min(1, wl)); p.vx = Math.sin(a0 + t) * sp + (p.gvx || 0); p.vz = Math.cos(a0 + t) * sp + (p.gvz || 0); }
+        }
         const sw = p.dangling ? P.SWING_ACC / P.AIR_ACC : 1, cur = p.vx * wx + p.vz * wz;
         const opp = cur < 0 ? P.AIR_BRAKE : 1; // demi-tour en l'air : on freine plus fort qu'on n'accélère (un virage raté se rattrape)
         const add = clamp(P.AIR_MAX * (p.dangling ? 1.2 : 1) * Math.min(1, wl) - cur, 0, P.AIR_ACC * sw * opp * dt * (p.knock > 0 ? 0.3 : 1));
