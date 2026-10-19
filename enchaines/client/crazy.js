@@ -16,6 +16,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 export const A = { yaw: 0, pitch: 0, scope: 0, zoom: 0 }; // visée du joueur local (la SEULE source de ay / ap envoyés)
 export const cfg = { blood: true };
 export const dbg = {};
+const DAMP = { pelvis: 0.5, spine_01: 0.7, spine_02: 0.75, spine_03: 0.75, neck_01: 0.9, Head: 0.9 };
 const X = { on: false, W: null, G: null, me: null, rifles: [], aim: [], rec: [], feed: [], hitT: 0, hitHead: false, dmgT: 0, dmgAng: 0, banner: null, bannerT: 0, wasDead: false, camBack: 5.6, fov: 60, droplets: null, decals: [], pools: [], casings: [], tracers: [], puffs: [], mist: [], flashes: [], lastSnd: {} };
 // RÉGLAGES DE LA CAMÉRA (une seule source) : la caméra est TOUJOURS sur le rayon de visée du tireur (épaule CZ.SHOULDER à droite, CZ.CAMUP au-dessus des yeux, définis dans
 // core/sim.js car la balle part de ce rayon) ; ici : sa distance, son champ de vision et ses transitions.
@@ -559,7 +560,7 @@ export function pose(cl, W, dt, rp, me) {
     const allB = c.boneList ||= [...new Set(Object.values(c.bones).filter(Boolean))];
     if (c.czPost) { for (const [b, st] of c.czPost) if (b.quaternion.equals(st.after)) b.quaternion.copy(st.before); c.root.updateMatrixWorld(true); }
     const pre = new Map(allB.map((b) => [b, b.quaternion.clone()]));
-    if (c.restQ) for (const n in c.restQ) { const b = c.bones[n]; if (b) b.quaternion.slerp(c.restQ[n], 0.9); } // tête et cou quasi immobiles (le clip de course les balance de gauche à droite) ; la visée les oriente ensuite
+    if (c.restQ && !dbg.noDamp) for (const n in c.restQ) { const b = c.bones[n]; if (b) b.quaternion.slerp(c.restQ[n], DAMP[n] ?? 0.8); } // le clip de course balance bassin, buste et tête de gauche à droite : on les ramène en grande partie à la pose de repos ; la visée les oriente ensuite
     const a = aimFor(k, p, dt), d = new THREE.Vector3().copy(aimDirV(a.yaw, a.pitch)), Rv = new THREE.Vector3(rightOf(a.yaw).x, 0, rightOf(a.yaw).z);
     // longueur des bras : les bras de ce modèle sont courts pour un fusil de 1,1 m ; on les allonge un peu (l'échelle suit l'axe de l'os)
     for (const s of ['l', 'r']) for (const n of ['upperarm_', 'lowerarm_']) { const b = c.bones[n + s]; if (b && !c.armScaled && !c.charId) b.scale.y = 1.16; }
@@ -573,15 +574,6 @@ export function pose(cl, W, dt, rp, me) {
     else if (cyc >= 0) { const s = cycleAnim(cyc); handleA = s.handle; slideZ = s.slide; hand = s.hand; tilt = 0.12 * Math.sin(Math.min(1, cyc / 0.5) * Math.PI); }
     r.setBolt(handleA, slideZ); r.trigger(p.cd > KAR.FIRE_CD - 0.08 ? 1 : 0);
     r.clip.visible = clipShow;
-    // position du fusil : l'axe du canon passe à droite du corps, à hauteur d'épaule ; recul en arrière et léger relèvement
-    const eye = crazyEye(p), ex = rp[k].x, ey = rp[k].y + eye, ez = rp[k].z, up = _f.set(0, 1, 0);
-    const zA = d.clone(), xA = new THREE.Vector3(-Rv.x, 0, -Rv.z), yA = new THREE.Vector3().crossVectors(zA, xA).normalize();
-    const kick = rec * 0.05, ang = rec * 0.04 + (reloading ? 0.06 * Math.sin(Math.min(1, rlT / 0.4) * Math.PI / 2) : 0);
-    const org = new THREE.Vector3(ex, ey, ez).addScaledVector(Rv, CZ.BORE).addScaledVector(yA, -0.12).addScaledVector(zA, RIFLE.org - kick);
-    // roulis (rechargement : le fusil penche vers la gauche pour ouvrir la culasse) et tangage du recul
-    _m.makeBasis(xA, yA, zA); _q1.setFromRotationMatrix(_m); _q2.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -ang); _q1.multiply(_q2); _q2.setFromAxisAngle(new THREE.Vector3(0, 0, 1), tilt); _q1.multiply(_q2);
-    RIFLE_WORLD.compose(org, _q1, new THREE.Vector3(1, 1, 1)); r.muz = (r.muz || new THREE.Vector3()).set(0, 0, RIFLE.muzzle + 0.04).applyMatrix4(RIFLE_WORLD); r.eye = (r.eye || new THREE.Vector3()).set(0, RIFLE.glb ? 0.052 : 0.03, RIFLE.glb ? -0.31 : -0.2).applyMatrix4(RIFLE_WORLD); // oculaire de la lunette
-    r.g.matrix.copy(RIFLE_WORLD); r.g.matrixWorld.copy(RIFLE_WORLD); r.g.matrixWorldNeedsUpdate = true; r.g.updateMatrixWorld(true);
     // buste : il suit la visée (tangage) et tourne un peu vers l'épaule du fusil
     const axisR = new THREE.Vector3(Rv.x, 0, Rv.z).normalize();
     for (const [bn, kf] of [['spine_01', 0.12], ['spine_02', 0.2], ['spine_03', 0.22], ['neck_01', 0.15], ['Head', 0.25]]) { const b = c.bones[bn]; if (b) rotWorld(b, axisR, a.pitch * kf - rec * 0.05); }
@@ -595,6 +587,18 @@ export function pose(cl, W, dt, rp, me) {
       { const dh = clamp(wrap(a.yaw - want), -0.9, 0.9); for (const [bn, kf] of [['neck_01', 0.35], ['Head', 0.45]]) { const b = c.bones[bn]; if (b) rotWorld(b, Y, dh * kf); } } // la tête regarde la visée
     }
     c.root.updateMatrixWorld(true);
+    // position du fusil : l'axe du canon passe à droite du corps, à hauteur d'épaule ; recul en arrière et léger relèvement
+    const eye = crazyEye(p), ex = rp[k].x, ey = rp[k].y + eye, ez = rp[k].z, up = _f.set(0, 1, 0);
+    const zA = d.clone(), xA = new THREE.Vector3(-Rv.x, 0, -Rv.z), yA = new THREE.Vector3().crossVectors(zA, xA).normalize();
+    const kick = rec * 0.05, ang = rec * 0.04 + (reloading ? 0.06 * Math.sin(Math.min(1, rlT / 0.4) * Math.PI / 2) : 0);
+    const orgEye = new THREE.Vector3(ex, ey, ez).addScaledVector(Rv, CZ.BORE).addScaledVector(yA, -0.12).addScaledVector(zA, RIFLE.org - kick);
+    // le fusil est porté par le corps : crosse dans le creux de l'épaule droite (position réelle de l'os, donc il suit la foulée, le buste et le tangage) ; seule la visée à la lunette revient à la position exacte de l'œil (la balle part de là)
+    const org = orgEye.clone(), uR = c.bones.upperarm_r;
+    if (uR) { const sh = wpos(uR, new THREE.Vector3()), zkk = k === me ? sm(A.zoom) : 0; org.copy(sh).addScaledVector(yA, 0.05).addScaledVector(Rv, -0.05).addScaledVector(zA, -RIFLE.butt - 0.02 - kick).lerp(orgEye, zkk); }
+    // roulis (rechargement : le fusil penche vers la gauche pour ouvrir la culasse) et tangage du recul
+    _m.makeBasis(xA, yA, zA); _q1.setFromRotationMatrix(_m); _q2.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -ang); _q1.multiply(_q2); _q2.setFromAxisAngle(new THREE.Vector3(0, 0, 1), tilt); _q1.multiply(_q2);
+    RIFLE_WORLD.compose(org, _q1, new THREE.Vector3(1, 1, 1)); r.muz = (r.muz || new THREE.Vector3()).set(0, 0, RIFLE.muzzle + 0.04).applyMatrix4(RIFLE_WORLD); r.eye = (r.eye || new THREE.Vector3()).set(0, RIFLE.glb ? 0.052 : 0.03, RIFLE.glb ? -0.31 : -0.2).applyMatrix4(RIFLE_WORLD); // oculaire de la lunette
+    r.g.matrix.copy(RIFLE_WORLD); r.g.matrixWorld.copy(RIFLE_WORLD); r.g.matrixWorldNeedsUpdate = true; r.g.updateMatrixWorld(true);
     // mains
     const toW = (v) => v.clone().applyMatrix4(RIFLE_WORLD), dirW = (v) => v.clone().transformDirection(RIFLE_WORLD);
     let tR = RIFLE.gripR.clone(), tL = RIFLE.gripL.clone();

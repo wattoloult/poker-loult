@@ -94,16 +94,21 @@ export function retarget(id, tpl, CLIPS, names) {
   const order = []; T.traverse((o) => order.push(o)); const restLocal = new Map(order.map((o) => [o, o.quaternion.clone()])); const restWorld = new Map(order.map((o) => [o, wquat(o)]));
   const boneToCanon = new Map(); for (const c of use) boneToCanon.set(tgt[c], c);
   const srcRoot = cloneSkinned(tpl); const srcB = {}; srcRoot.traverse((o) => { if (o.isBone) srcB[o.name] = o; });
+  // squelettes dont le bassin n'est PAS le parent du buste ni des cuisses (Valorant : « Splitter ») : sans suivi, le bassin tombe (mort, foulée) et le buste reste en l'air → corps coupé en deux, buste « allongé » en course
+  const under = (o, anc) => { for (let q = o; q; q = q.parent) if (q === anc) return true; return false; };
+  const detached = new Map(); if (tgt.pelvis && rest.t.pelvis) for (const c2 of ['spine_01', 'thigh_l', 'thigh_r']) if (tgt[c2] && rest.t[c2] && !under(tgt[c2], tgt.pelvis)) detached.set(tgt[c2], c2);
   const FPS = 30; let made = 0;
   for (const name of names) {
     const clip = CLIPS[name]; if (!clip) continue;
     const mixer = new THREE.AnimationMixer(srcRoot), act = mixer.clipAction(clip); act.play();
     const n = Math.max(2, Math.ceil(clip.duration * FPS) + 1), times = new Float32Array(n), qv = new Map(), pv = new Float32Array(n * 3);
     for (const b of boneToCanon.keys()) qv.set(b, new Float32Array(n * 4));
+    const dpos = new Map(); for (const b of detached.keys()) dpos.set(b, new Float32Array(n * 3));
     for (let f = 0; f < n; f++) {
       const t = Math.min(clip.duration, f / FPS); times[f] = t; mixer.setTime(t); srcRoot.updateMatrixWorld(true);
       const sp = {}, sq = {}; for (const c of use) { const b = srcB[srcBones[c].name]; sp[c] = wpos(b); sq[c] = wquat(b); }
-      const wq = new Map();
+      const wq = new Map(); let pPos = null, pQ = null;
+      if (detached.size) { pPos = rest.t.pelvis.p.clone().add(sp.pelvis.clone().sub(rest.s.pelvis.p).multiplyScalar(ratio)); pQ = sq.pelvis.clone().multiply(rest.s.pelvis.q.clone().invert()).multiply(rest.t.pelvis.q); }
       for (const o of order) {
         const par = o.parent && wq.get(o.parent), base = par ? par.clone().multiply(restLocal.get(o)) : restWorld.get(o).clone();
         const c = boneToCanon.get(o); let world = base;
@@ -121,6 +126,10 @@ export function retarget(id, tpl, CLIPS, names) {
           // rotation locale = (monde du parent)^-1 · monde voulu
           const pw = par || new THREE.Quaternion(); const local = pw.clone().invert().multiply(world); const a = qv.get(o); a[f * 4] = local.x; a[f * 4 + 1] = local.y; a[f * 4 + 2] = local.z; a[f * 4 + 3] = local.w;
           world = pw.clone().multiply(local); // (réinjecté : identique, évite la dérive numérique)
+          if (detached.has(o)) { // position du buste / de la cuisse : suit le bassin (position et orientation) comme s'il en était l'enfant
+            const c2 = detached.get(o), off = rest.t[c2].p.clone().sub(rest.t.pelvis.p).applyQuaternion(rest.t.pelvis.q.clone().invert()), wp = pPos.clone().add(off.applyQuaternion(pQ)), pm = o.parent ? o.parent.matrixWorld : null;
+            const lp = pm ? wp.sub(new THREE.Vector3().setFromMatrixPosition(pm)).applyQuaternion(pw.clone().invert()) : wp; const a2 = dpos.get(o); a2[f * 3] = lp.x; a2[f * 3 + 1] = lp.y; a2[f * 3 + 2] = lp.z;
+          }
           if (c === 'pelvis') { // déplacement du bassin : écart d'origine mis à l'échelle de la longueur des jambes, converti dans le repère du parent
             const d = sp.pelvis.clone().sub(rest.s.pelvis.p).multiplyScalar(ratio), target = rest.t.pelvis.p.clone().add(d), parM = o.parent ? o.parent.matrixWorld.clone().invert() : new THREE.Matrix4(), lp = target.applyMatrix4(parM);
             pv[f * 3] = lp.x; pv[f * 3 + 1] = lp.y; pv[f * 3 + 2] = lp.z;
@@ -130,6 +139,7 @@ export function retarget(id, tpl, CLIPS, names) {
       }
     }
     const tracks = []; for (const bone of boneToCanon.keys()) tracks.push(new THREE.QuaternionKeyframeTrack(`${bone.name}.quaternion`, times, qv.get(bone)));
+    for (const [b, arr] of dpos) tracks.push(new THREE.VectorKeyframeTrack(`${b.name}.position`, times, arr));
     const pelvis = tgt.pelvis; if (pelvis) tracks.push(new THREE.VectorKeyframeTrack(`${pelvis.name}.position`, times, pv));
     L.clips[name] = new THREE.AnimationClip(name, clip.duration, tracks); made++;
   }
@@ -144,7 +154,7 @@ export function instance(id) {
   const tgt = bonesOf(model, L.def.map), bones = { ...tgt };
   // alias des noms que le code de pose attend : Head / head, pelvis…
   bones.head = tgt.Head;
-  const rest = {}; for (const n of ['neck_01', 'Head']) if (tgt[n]) rest[n] = tgt[n].quaternion.clone(); // pose de repos (tête et cou) : le mode crazy y ramène la tête, la foulée de course ne la balance plus
+  const rest = {}; for (const n of ['pelvis', 'spine_01', 'spine_02', 'spine_03', 'neck_01', 'Head']) if (tgt[n]) rest[n] = tgt[n].quaternion.clone(); // pose de repos (bassin, buste, cou, tête) : le mode crazy y ramène en partie le haut du corps, la foulée de course ne le balance plus
   return { root, model, bones, clips: L.clips, def: L.def, rest };
 }
 export const ids = () => CHARS.map((c) => c.id);

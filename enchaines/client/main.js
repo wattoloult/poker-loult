@@ -304,7 +304,8 @@ function loop(now) {
     if (!G.paused || G.mode === 'online') {
       G.acc += dt; let n = 0;
       if (G.prep) G.acc = 0; // chargement : la simulation attend
-      while (!G.prep && G.acc >= DT && n++ < 24) { if (G.mode === 'local') stepLocal(); else stepOnline(); G.acc -= DT; }
+      while (!G.prep && G.acc >= DT && n++ < 24) { if (G.W.crazy) Scene.S.prev = G.W.pl.map((p) => [p.x, p.y, p.z]); if (G.mode === 'local') stepLocal(); else stepOnline(); G.acc -= DT; }
+      Scene.S.alpha = Math.min(1, G.acc / DT); // fraction de pas écoulée : l'affichage interpole entre le pas précédent et le courant (sinon saccades à 75/144 Hz)
       if (G.acc > DT * 4) G.acc = 0;
     } else pressed.clear();
     footsteps(G.W, dt);

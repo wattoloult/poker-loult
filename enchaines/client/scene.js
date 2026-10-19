@@ -648,7 +648,9 @@ export function frame(W, dt, view = {}) {
   S.cloudMat.uniforms.uT.value = t;
   LV.update(W, dt, t); Sfx.listen(S.cam);
   // grimpeurs (positions de rendu lissées)
-  const rp = W.pl.map((p, k) => { const c = S.cl[k]; c.err.multiplyScalar(Math.max(0, 1 - dt * 12)); return { x: p.x + c.err.x, y: p.y + c.err.y, z: p.z + c.err.z }; });
+  const rp = W.pl.map((p, k) => { const c = S.cl[k]; c.err.multiplyScalar(Math.max(0, 1 - dt * 12)); let x = p.x, y = p.y, z = p.z; const pv = W.crazy && S.prev?.length === W.pl.length ? S.prev[k] : null; // mode crazy : position interpolée entre le pas de simulation précédent et le courant
+    if (pv && Math.hypot(x - pv[0], y - pv[1], z - pv[2]) < 1.5) { const al = S.alpha ?? 1; x = pv[0] + (x - pv[0]) * al; y = pv[1] + (y - pv[1]) * al; z = pv[2] + (z - pv[2]) * al; }
+    return { x: x + c.err.x, y: y + c.err.y, z: z + c.err.z }; });
   S.hitstop = Math.max(0, (S.hitstop || 0) - dt);
   S.me = view.me;
   for (let k = 0; k < W.pl.length; k++) poseClimber(S.cl[k], W.pl[k], W.free ? nearestPl(W, k) : W.pl[1 - k], W, dt, rp[k]);
