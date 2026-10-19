@@ -79,7 +79,7 @@ playtest/playtest.js MODULE DE TEST PRIVÉ (jamais servi en fichier) : panneau F
 - Salon créé avec `mode: 'free'` (menu « Libre · jusqu'à 4 » ; l'hôte peut le changer au salon avec `cfg {mode}`) : `createWorld({ free: true, players: n })` met `W.free = W.alone = true`
   (règles solo : une plaque suffit, second saut en l'air, pas de courte échelle) ; `W.ch = []`, pas de chaîne. Chaque grimpeur a SON point de passage (`p.cp`), SA réapparition
   (`respawnPlayer` : chute dans le vide ou R maintenu 0,5 s) ; `stepFree` dans sim.js. Premier arrivé = `W.rank[0]` (`p.done`, `p.finishT`) ; la partie finit quand tous ont fini, ou 2 min après le premier.
-- Serveur (server.js) : `r.cfg.mode`, `MAXP = {coop: 2, free: 4}`, sièges contigus au départ, entrées/instantanés en tableaux de N ; message `end {free:1, rank}`. Pas de record enregistré, pas de chat vocal.
+- Serveur (server.js) : `r.cfg.mode`, `MAXP = {coop: 2, free: 4}`, sièges contigus au départ, entrées/instantanés en tableaux de N ; message `end {free:1, rank}`. Pas de record enregistré. Chat vocal en MAILLAGE (client/voice.js : une liaison WebRTC par autre grimpeur, `rtc {to}` relayé avec `from`).
 - Client : `G.free`, `G.seatIn[]` (entrées des autres, pour la prédiction), caméra qui suit SON grimpeur (le meneur pour un spectateur), classement en direct `#fstand`, étiquettes/jauge créées à la demande (`ensureHudEls`).
 - Test : `node --test core/free.test.js` (sim) et `server.test.js` (salon à 3 en mode libre). Parcours : bots WebSocket + 1 navigateur (voir l'historique du dépôt).
 - Glissade = TACLE : `P.SLIDE_*` (plus longue, boostée, virage presque figé, `SLIDE_REC` de récupération), capsule basse (`P.HS`) pendant la glissade (on passe sous les obstacles de moins de ~1 m),

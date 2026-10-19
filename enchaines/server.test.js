@@ -120,6 +120,10 @@ test('mode libre : 3 grimpeurs sans chaîne, entrées de chacun, arrivée class�
   await wait(300);
   const s = a.last.s; assert.equal(s.ack.length, 3); assert.ok(s.ack[2] >= 80, 'entrées du 3e acquittées : ' + s.ack[2]); assert.equal(s.in.length, 3);
   const z0 = a.last.start.s.pl[2].z; assert.ok(s.w.pl[2].z - z0 > 3, 'le 3e a avancé seul : ' + (s.w.pl[2].z - z0)); assert.ok(Math.abs(s.w.pl[0].z - a.last.start.s.pl[0].z) < 0.5, 'les autres restent là');
+  // chat vocal : la négociation WebRTC est relayée à la place visée (`to`), avec l'expéditeur (`from`) ; les autres ne la reçoivent pas
+  a.send({ t: 'rtc', to: 2, d: { s: { type: 'offer', sdp: 'x' } } }); await wait(150);
+  assert.equal(c.last.rtc?.from, 0, 'le 3e reçoit la négociation du 1er'); assert.ok(!b.last.rtc, 'pas le 2e');
+  b.send({ t: 'rtc', to: 0, d: { c: { candidate: 'y' } } }); await wait(150); assert.equal(a.last.rtc?.from, 1);
   // arrivées : Ben puis les autres
   const W = rooms.get(code).W, top = W.level.checkpoints[W.level.checkpoints.length - 1];
   for (const k of [1, 0, 2]) { const p = W.pl[k]; Object.assign(p, { x: top.x, y: top.y, z: top.z, vx: 0, vy: 0, vz: 0, cp: W.level.checkpoints.length - 2 }); await wait(120); }

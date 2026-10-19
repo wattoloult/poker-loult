@@ -319,7 +319,7 @@ setInterval(() => { const n = performance.now(); if (n - (G.raf || 0) > 120) try
 function hud(W, dt) {
   ensureHudEls(W.pl.length);
   $('#h-fps').textContent = Scene.S.fps ? Scene.S.fps + ' FPS' : ''; // compteur d'images par seconde
-  if (G.mode === 'online' && !G.free) { const lv = Voice.levels(); for (let k = 0; k < 2; k++) $('#tag' + k).classList.toggle('talk', (k === G.me ? lv.me : lv.partner) > 0.12); } // qui parle
+  if (G.mode === 'online') { const lv = Voice.levels(); for (let k = 0; k < W.pl.length; k++) $('#tag' + k)?.classList.toggle('talk', (k === G.me ? lv.me : lv.seats[k] ?? 0) > 0.12); } // qui parle
   const a = W.pl[0], b = W.pl[1] || a, mp = G.free ? W.pl[focusSeat(W)] : null; // mode libre : tout se lit sur SON grimpeur
   const top = mp ? mp.y : Math.max(a.y, b.y), C = LV().checkpoints, cpi = mp ? mp.cp : W.cp, cur = C[cpi] || C[0], nx = C[cpi + 1], low = mp ? mp.y + 0.5 : Math.min(a.y, b.y) + 0.5;
   const z = nx && nx.y > cur.y + 3 && low >= nx.y - 0.5 ? nx.zone : cur.zone; // zone du dernier point de passage (ou la suivante, déjà atteinte en hauteur)
@@ -465,10 +465,10 @@ function getNet() {
   net = createNet(() => CFG.name || 'Grimpeur');
   net.onState = (up) => { $('#netstate').textContent = up ? '' : tr('Connexion au serveur…'); };
   net.on('room', (m) => { G.room = m; net.setRoom(m.code); renderRoom(m); if (m.phase === 'lobby' && !G.mode) show('room'); chatShow(true);
-    if (m.you != null && m.players.length === 2 && m.cfg.mode !== 'free') Voice.start(net, m.you); else Voice.stop(); }); // chat vocal : liaison directe dès que le salon a ses deux grimpeurs
+    if (m.you != null && m.players.length >= 2) Voice.start(net, m.you, m.players.map((q) => q.id)); else Voice.stop(); }); // chat vocal : une liaison directe avec chacun des autres grimpeurs du salon
   net.on('chat', (m) => chatAdd(m));
   net.on('mark', (m) => { if (G.mode === 'online' && m.seat !== G.me) Pings.show(m.k, m.seat, m.x, m.y, m.z); }); // ping du partenaire
-  net.on('rtc', (m) => Voice.onSignal(m.d));
+  net.on('rtc', (m) => Voice.onSignal(m.d, m.from));
   net.on('rooms', (m) => renderRooms(m.list));
   net.on('hi', (m) => { Voice.setIce(m.ice); if (G.pt?.key) net.send({ t: 'pt', key: G.pt.key }); if (document.body.dataset.screen === 'board') askBoard(); if (document.body.dataset.screen === 'online') net.send({ t: 'list' }); });
   net.on('err', (m) => { if (net.auto) { net.auto = false; net.setRoom(null); G.room = null; return; } toast(m.m); }); // reprise automatique sur un salon disparu : silence
@@ -481,7 +481,7 @@ function getNet() {
     G.W = applySnap(createWorld({ L: m.L, course: G.course, free: G.free, players: G.free ? m.names.length : undefined }), m.s); G.ct = 0; G.pend = []; G.out = []; G.partnerIn = IDLE; G.done = false; slot[0].jc = slot[0].dc = slot[0].uc = 0;
     const W = G.W; await Scene.buildLevel(W); if (G.W !== W) return; Scene.setRoster(W.pl.length); Music.playWorld(W.level.world); // partie quittée pendant le chargement : on s'arrête là
     await prepare(W); if (G.W !== W) return; G.prep = false; G.last = performance.now(); G.acc = 0;
-    show(null); $('#hud').classList.add('on'); $('#hud').dataset.mode = G.free ? 'free' : 'online'; $('#end').classList.remove('on'); const mic = $('#mic'); if (mic) mic.style.display = G.free ? 'none' : ''; // pas de chat vocal en mode libre (liaison directe à deux seulement)
+    show(null); $('#hud').classList.add('on'); $('#hud').dataset.mode = G.free ? 'free' : 'online'; $('#end').classList.remove('on');
     $('#help').classList.add('show'); setTimeout(() => $('#help').classList.remove('show'), 9000);
   });
   net.on('s', (m) => {
