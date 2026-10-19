@@ -31,6 +31,7 @@ function iceServers(id) {
   list.push({ urls: ['turn:' + TURN_HOST + ':3478?transport=udp', 'turn:' + TURN_HOST + ':3478?transport=tcp'], username, credential: crypto.createHmac('sha1', TURN_SECRET).update(username).digest('base64') });
   return list;
 }
+const VOTE_MS = +process.env.ENCH_VOTE_MS || 10000; // mode libre : durée du vote de la carte suivante
 const MAXP = { coop: 2, free: 4 }; // sièges par mode : coop = deux grimpeurs reliés par la chaîne ; free = « mode libre », jusqu'à 4 grimpeurs, SANS chaîne, premier au sommet
 const SNAP_EVERY = 4, GRACE = 60, MAX_Q = 36, LENS = [4.5, 6.5, 9];
 fs.mkdirSync(DATA, { recursive: true });
@@ -80,7 +81,7 @@ function join(ws, m) {
     if (back.ws && back.ws !== ws) back.ws.room = null;
     Object.assign(back, { ws, sid: ws.id, offline: false, q: [], fresh: true, ack: 0 }); ws.room = r; // ack à 0 : le client repart de 0 sur le 'start' (sinon le serveur ignorerait ses entrées jusqu'à rattraper l'ancien compteur = grimpeur figé)
     if (r.host === back.oldSid) r.host = ws.id;
-    pushRoom(r); if (r.W) send(ws, startMsg(r, back.seat));
+    pushRoom(r); if (r.W) send(ws, startMsg(r, back.seat)); if (r.vote) send(ws, voteMsg(r));
     return;
   }
   leave(ws);
@@ -102,7 +103,7 @@ function leave(ws) {
 function closeRoom(r) { rooms.delete(r.code); for (const ws of r.spect) ws.room = null; }
 function startMsg(r, seat) { return { t: 'start', seat, mode: r.cfg.mode, course: r.cfg.course, names: r.W.pl.map((_, s) => r.people.find((p) => p.seat === s)?.name || 'Grimpeur ' + (s + 1)), L: r.cfg.L, s: snapWorld(r.W) }; }
 function startGame(r) {
-  const free = r.cfg.mode === 'free'; r.firstT = null;
+  const free = r.cfg.mode === 'free'; r.firstT = null; r.vote = null;
   if (free) live(r).forEach((p, i) => { p.seat = i; }); // sièges contigus 0..n-1 (un grimpeur de la sim par siège)
   r.W = createWorld({ L: r.cfg.L, course: r.cfg.course, free, players: free ? live(r).length : undefined }); r.phase = 'play'; r.acc = 0; r.k = 0; r.ev = []; r.saved = false; r.run = free ? null : []; // r.run : les entrées des deux grimpeurs pas à pas (replay des records)
   for (const p of r.people) { p.q = []; p.last = null; p.ack = 0; p.fresh = true; }
@@ -150,6 +151,22 @@ function snap(r, ins) {
 function endFree(r) {
   const rank = r.W.rank.map((seat) => ({ seat, name: r.people.find((p) => p.seat === seat)?.name || 'Grimpeur ' + (seat + 1), time: Math.round((r.W.pl[seat]?.finishT || 0) * 100) / 100 }));
   cast(r, { t: 'end', free: 1, course: r.cfg.course, rank });
+  startVote(r);
+}
+// VOTE de la carte suivante (mode libre) : toutes les cartes publiées, 10 s ; la plus votée gagne ; égalité ou aucun vote : tirage au sort parmi les ex æquo (ou toutes)
+const voteMsg = (r, done = null) => ({ t: 'vote', list: r.vote.list, votes: r.vote.votes, left: Math.max(0, r.vote.endsAt - Date.now()), done });
+function startVote(r) {
+  r.vote = { list: Object.keys(COURSES).filter((id) => COURSES[id].published), votes: {}, endsAt: Date.now() + VOTE_MS };
+  cast(r, voteMsg(r));
+}
+function resolveVote(r) {
+  const v = r.vote; if (!v) return; r.vote = null;
+  const seats = new Set(live(r).map((p) => p.seat)), tally = {};
+  for (const [s, c] of Object.entries(v.votes)) if (seats.has(+s) && v.list.includes(c)) tally[c] = (tally[c] || 0) + 1; // seuls les grimpeurs encore là comptent
+  const best = Math.max(0, ...Object.values(tally)), pool = best > 0 ? Object.keys(tally).filter((c) => tally[c] === best) : v.list;
+  const course = pool[crypto.randomInt(pool.length)];
+  r.cfg.course = course; cast(r, { t: 'vote', list: v.list, votes: v.votes, left: 0, done: course });
+  if (canStart(r)) startGame(r); else { r.phase = 'lobby'; r.W = null; pushRoom(r); }
 }
 function record(r) { // classement par meilleur temps (le serveur a chronométré lui-même la montée)
   const names = [0, 1].map((s) => r.people.find((p) => p.seat === s)?.name || '?');
@@ -256,6 +273,7 @@ wss.on('connection', (ws) => {
       case 'start': if (r && r.host === ws.id && canStart(r)) startGame(r); break;
       case 'next': if (r && r.host === ws.id && r.phase === 'play' && canStart(r)) { r.cfg.course = okCourse(ws, m.course); startGame(r); pushRoom(r); } break; // portail de fin : parcours suivant
       case 'restart': if (r && r.host === ws.id && r.phase === 'play') startGame(r); break;
+      case 'vote': if (r && p && r.vote && r.vote.list.includes(m.course)) { r.vote.votes[p.seat] = m.course; cast(r, voteMsg(r)); } break;
       case 'cp': if (r && p && r.W) { if (r.cfg.mode === 'free') p.rstT = 0.7; else { r.W.resetHold[p.seat] = 1.01; r.run?.push(['cp', p.seat]); } } break; // retour au point de passage demandé depuis le menu
       case 'i': {
         if (!p || !r.W || !Array.isArray(m.a)) break;
@@ -281,6 +299,7 @@ const timers = [
       for (const p of [...r.people]) if (p.offline && (p.offT += dt) > GRACE) { p.gone = true; r.people = r.people.filter((x) => x !== p); if (r.phase === 'play' && r.people.length < (r.cfg.mode === 'free' ? 1 : 2)) { r.phase = 'lobby'; r.W = null; } if (r.host === p.oldSid) r.host = r.people[0]?.sid ?? null; pushRoom(r); }
       if (!r.people.some((p) => p.ws) && !r.spect.size) { if ((r.empty += dt) > 30) { closeRoom(r); continue; } } else r.empty = 0;
       update(r, dt);
+      if (r.vote && Date.now() >= r.vote.endsAt) resolveVote(r);
     }
   }, 4),
 ];

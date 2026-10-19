@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import WebSocket from 'ws';
 
-process.env.PORT = '18807'; process.env.DATA_DIR = path.join(os.tmpdir(), 'enchaines-test-' + process.pid);
+process.env.ENCH_VOTE_MS = '700'; process.env.PORT = '18807'; process.env.DATA_DIR = path.join(os.tmpdir(), 'enchaines-test-' + process.pid);
 const { stop, rooms } = await import('./server.js');
 const { layChain } = await import('./core/sim.js');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -130,5 +130,18 @@ test('mode libre : 3 grimpeurs sans chaîne, entrées de chacun, arrivée class�
   await wait(400);
   const end = a.last.end; assert.ok(end && end.free, 'classement annoncé'); assert.deepEqual(end.rank.map((r) => r.name), ['Ben', 'Ana', 'Cat']);
   assert.ok(b.last.end && c.last.end, 'à tous');
+  // vote de la carte suivante : ouvert pour tous, 2 votes différents = égalité = tirage au sort entre les deux ; la partie suivante démarre toute seule
+  await wait(100); assert.ok(a.last.vote && a.last.vote.list.length >= 2 && c.last.vote, 'le vote est ouvert pour tous');
+  const [X, Y] = a.last.vote.list, starts = () => a.msgs.filter((m) => m.t === 'start').length, k0 = starts();
+  a.send({ t: 'vote', course: X }); b.send({ t: 'vote', course: Y }); await wait(150);
+  assert.equal(c.last.vote.votes[0], X); assert.equal(c.last.vote.votes[1], Y);
+  await wait(1200); assert.equal(starts(), k0 + 1, 'la partie suivante est lancée');
+  assert.ok([X, Y].includes(a.last.start.course), 'carte tirée parmi les ex æquo : ' + a.last.start.course); assert.equal(a.last.vote.done, a.last.start.course);
+  assert.equal(a.last.start.s.pl.length, 3, 'les 3 grimpeurs sont repartis');
+  // sans aucun vote : une carte au hasard parmi toutes
+  const W2 = rooms.get(code).W, top2 = W2.level.checkpoints[W2.level.checkpoints.length - 1];
+  for (const k of [0, 1, 2]) { Object.assign(W2.pl[k], { x: top2.x, y: top2.y, z: top2.z, vx: 0, vy: 0, vz: 0, cp: W2.level.checkpoints.length - 2 }); await wait(120); }
+  await wait(300); const list2 = a.last.vote?.list; assert.ok(list2 && !a.last.vote.done, 'nouveau vote ouvert'); const k1 = starts();
+  await wait(1200); assert.equal(starts(), k1 + 1, 'sans vote : la partie suivante démarre quand même'); assert.ok(list2.includes(a.last.start.course));
   for (const x of [a, b, c, d]) x.ws.close(); stop();
 });

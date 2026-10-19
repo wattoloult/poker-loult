@@ -166,11 +166,12 @@ export function spawnAt(W, cpIndex) {
 }
 // une place d'apparition doit avoir un sol fixe à hauteur du point de passage et rien de solide dans le corps du grimpeur ; sinon on prend
 // la place sûre la plus proche autour du point (avant : réapparition dans une planche mobile du Pont de la vallée, ou au-dessus du vide)
-function spotOk(W, x, y, z) {
-  const g = groundBelow(W, x, y + 0.6, z, 1.4);
-  if (!g || g.b.move || g.b.crumble || g.b.sink || Math.abs(g.y - y) >= 0.7 || inside(W, x, g.y + 0.5, z, P.R - 0.05) || inside(W, x, g.y + 1.4, z, P.R - 0.05)) return null;
+function spotOk(W, x, y, z, loose = false) { // loose : accepte aussi une plateforme mobile / friable / qui s'enfonce (point de passage posé dessus), mais jamais dans un objet
+  const g = groundBelow(W, x, y + 0.6, z, loose ? 2.4 : 1.4);
+  if (!g || (!loose && (g.b.move || g.b.crumble || g.b.sink)) || Math.abs(g.y - y) >= (loose ? 1.8 : 0.7) || inside(W, x, g.y + 0.5, z, P.R - 0.05) || inside(W, x, g.y + 1.4, z, P.R - 0.05)) return null;
   // ni dans la course d'un obstacle mobile (mur coulissant, pilon, plateforme qui passe) : sa boîte élargie de son amplitude
-  for (const b of W.bodies) { const m = b.move; if (!m || b.ghost || m.k !== 'lin') continue; const bx = b.x ?? b.px, by = b.y ?? b.py, bz = b.z ?? b.pz;
+  // (loose : la plateforme mobile sur laquelle on se pose ne compte pas dans la course des obstacles mobiles)
+  for (const b of W.bodies) { const m = b.move; if (!m || b.ghost || m.k !== 'lin' || (loose && b === g.b)) continue; const bx = b.x ?? b.px, by = b.y ?? b.py, bz = b.z ?? b.pz;
     if (Math.abs(x - bx) < b.w / 2 + Math.abs(m.ax || 0) + P.R && Math.abs(z - bz) < b.d / 2 + Math.abs(m.az || 0) + P.R && g.y + P.H > by - b.h / 2 - Math.abs(m.ay || 0) && g.y < by + b.h / 2 + Math.abs(m.ay || 0)) return null; }
   return g.y;
 }
@@ -189,15 +190,18 @@ function safeSpots(W, cp, dx) {
   }
   if (moved) layChain(W);
 }
-// mode libre : un emplacement libre au pied du point de passage, au plus près de l'emplacement souhaité (px, pz), à 0,75 m des autres
+// mode libre : un emplacement SÛR au pied du point de passage, au plus près de l'emplacement souhaité (px, pz) : sol franc (pas de plateforme mobile / friable / qui s'enfonce),
+// ni dans un objet (capsule libre), ni dans un autre grimpeur (écart d'au moins 2 rayons). On cherche de plus en plus loin (±4 m, y compris sur les plateformes voisines à la même hauteur).
 function placeNear(W, cp, px, pz, taken) {
-  let best = null;
-  for (const ox of [0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, -2.0]) for (const oz of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8]) {
-    const x = px + ox, z = pz + oz, y = spotOk(W, x, cp.y, z);
-    if (y == null || taken.some((q) => Math.hypot(q.x - x, q.z - z) < 0.75)) continue;
-    const d = Math.hypot(ox, oz); if (!best || d < best.d) best = { x, y, z, d };
+  const cand = [];
+  for (let ox = -4; ox <= 4.001; ox += 0.5) for (let oz = -3; oz <= 3.001; oz += 0.6) cand.push([ox, oz, Math.hypot(ox, oz)]);
+  cand.sort((a, b) => a[2] - b[2]);
+  for (const [gap, loose] of [[0.8, false], [0.68, false], [0.8, true], [0.68, true]]) for (const [ox, oz] of cand) {
+    const x = px + ox, z = pz + oz, y = spotOk(W, x, cp.y, z, loose);
+    if (y == null || taken.some((q) => Math.hypot(q.x - x, q.z - z) < gap)) continue;
+    return { x, y, z };
   }
-  return best || { x: px, y: cp.y, z: pz };
+  return { x: cp.x, y: cp.y, z: cp.z }; // dernier recours : le point de passage lui-même (posé par le concepteur du parcours)
 }
 function spawnFree(W) {
   const cp = W.level.checkpoints[0], n = W.nPl; W.pl = []; W.ch = []; W.rank = []; W.rLock = []; W.done = false;
@@ -209,7 +213,8 @@ function spawnFree(W) {
 }
 // mode libre : retour d'UN grimpeur à son dernier point de passage (les autres continuent)
 export function respawnPlayer(W, p) {
-  const cp = W.level.checkpoints[p.cp] || W.level.checkpoints[0], at = placeNear(W, cp, cp.x + (p.id - 1.5) * 0.5, cp.z, W.pl.filter((q) => q !== p));
+  const cps = W.level.checkpoints, idx = cps[p.cp]?.finish ? Math.max(0, p.cp - 1) : p.cp; // arrivé puis retombé : on repart du point d'avant (le sommet est souvent posé sur une pièce mobile)
+  const cp = cps[idx] || cps[0], at = placeNear(W, cp, cp.x + (p.id - 1.5) * 0.5, cp.z, W.pl.filter((q) => q !== p));
   Object.assign(p, { x: at.x, y: at.y, z: at.z, vx: 0, vy: 0, vz: 0, st: ST.GROUND, stT: 0, gb: -1, gvx: 0, gvy: 0, gvz: 0, hang: null, climb: null, mantle: null, rope: null, brace: false, knock: 0, ko: false, downT: 0, pT: null,
     slideT: 0, crawl: false, recT: 0, sta: 1, yaw: cp.yaw ?? Math.PI, peakY: at.y, onMate: false, fell: false });
 }

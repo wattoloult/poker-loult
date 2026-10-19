@@ -275,6 +275,8 @@ body[data-screen="room"] #chat { left: 50%; transform: translateX(-50%); bottom:
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .chips button { padding: 5px 10px; font: 700 13px 'Grenze', serif; background: #15120f; border: 1px solid #000; border-left: 4px solid var(--wc, #888); border-radius: 3px; color: var(--bone2); cursor: pointer; }
 .chips button.on { background: #2a211a; color: #fff5e0; box-shadow: 0 0 0 1px var(--ember); }
+.chips button.won { background: #3a2c14; color: #fff; box-shadow: 0 0 0 2px #e8b84a, 0 0 14px rgba(232, 184, 74, 0.5); }
+.chips button b { margin-left: 4px; color: var(--ember); }
 .board-card .sub { margin: 6px 0 6px; font: 800 18px 'Grenze', serif; color: #fff5e0; }
 .board li.r1 span { color: #ffd34d; } .board li.r2 span { color: #d6dde6; } .board li.r3 span { color: #d9955a; }
 .board li.r1 { border-color: #6b5316; } .board li.empty { opacity: 0.45; }

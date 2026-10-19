@@ -303,7 +303,7 @@ function loop(now) {
     Scene.frame(G.W, dt, { me: G.me });
     Scene.debugDraw(G.W, G.debug);
     hud(G.W, dt); Pings.update(G.W, dt, G.mode === 'online' ? G.me : 0);
-    if (G.W.done && !G.done) { G.done = true; const W0 = G.W; setTimeout(() => (G.free ? showFreeEnd(W0) : showEnd(W0)), G.free ? 1800 : 4500); }
+    if (G.W.done && !G.done) { G.done = true; const W0 = G.W; setTimeout(() => (G.free ? showFreeEnd(W0) : showEnd(W0)), G.free ? 600 : 4500); }
   }
 }
 // une exception dans une image ne doit JAMAIS figer le jeu : on replanifie d'abord, on signale l'erreur (une fois par message) au serveur
@@ -403,10 +403,22 @@ function showFreeEnd(W) {
   $('#end .stats').style.display = 'none'; $('#e-sub').style.display = 'none'; $('#end h3').textContent = tr('Classement');
   $('#e-board').innerHTML = W.rank.map((k, i) => row(k, i)).join('') + W.pl.map((_, k) => k).filter((k) => !W.rank.includes(k)).map((k) => row(k, -1)).join('');
   const lead = G.room && G.room.host === G.room.you;
-  $('#e-again').textContent = tr('Rejouer'); $('#e-again').style.display = lead ? '' : 'none'; $('#e-next').style.display = 'none'; $('#end').classList.add('on');
+  $('#e-again').style.display = 'none'; $('#e-next').style.display = 'none'; $('#end').classList.add('on'); renderVote(); // la carte suivante se décide par le vote
 }
+// vote de la carte suivante : toutes les cartes, un clic = son vote (modifiable), 10 s ; la plus votée part, égalité ou aucun vote = au hasard (décidé par le serveur)
+function renderVote() {
+  const v = G.vote, box = $('#e-vote'); if (!v || !G.free) { box.style.display = 'none'; return; }
+  box.style.display = ''; const mine = v.votes[G.me], count = {}; for (const c of Object.values(v.votes)) count[c] = (count[c] || 0) + 1;
+  $('#e-vlist').innerHTML = v.list.map((id) => { const c = getCourse(id); return `<button data-vote="${id}" class="${mine === id ? 'on' : ''}${v.done === id ? ' won' : ''}" style="--wc:${WCOL[c.world] || '#888'}">${esc(tr(c.name))}${count[id] ? ` <b>${count[id]}</b>` : ''}</button>`; }).join('');
+  voteTick();
+}
+function voteTick() {
+  const v = G.vote; if (!v || !$('#e-vcount')) return;
+  $('#e-vcount').textContent = v.done ? tr('Prochaine carte : {0}', tr(getCourse(v.done).name)) : tr('Prochaine carte dans {0} s — vote !', Math.max(0, Math.ceil((v.left - (performance.now() - v.t0)) / 1000)));
+}
+setInterval(voteTick, 250);
 function showEnd(W) {
-  $('#end .stats').style.display = ''; $('#end h2').textContent = tr('Sommet atteint'); $('#end h3').textContent = tr('Top 5 · meilleurs temps');
+  $('#e-vote').style.display = 'none'; $('#end .stats').style.display = ''; $('#end h2').textContent = tr('Sommet atteint'); $('#end h3').textContent = tr('Top 5 · meilleurs temps');
   if (G.replay) {
     $('#e-medal').innerHTML = `<i class="rec">${tr('Replay')}</i>`; $('#e-time').textContent = fmt(W.time); $('#e-falls').textContent = W.falls; $('#e-resets').textContent = W.resets;
     $('#e-names').textContent = G.replay.name; $('#e-saves').parentElement.style.display = 'none'; $('#e-sub').style.display = 'none'; $('#e-next').style.display = 'none'; $('#e-again').style.display = '';
@@ -476,7 +488,7 @@ function getNet() {
   net.on('start', async (m) => {
     await ensureScene();
     show('loading'); G.prep = true; setLoad(0.05, 'Construction du décor…');
-    G.mode = 'online'; G.demo = null; G.me = m.seat; G.names = m.names; G.L = m.L; G.free = m.mode === 'free'; G.seatIn = [];
+    G.mode = 'online'; G.demo = null; G.me = m.seat; G.names = m.names; G.L = m.L; G.free = m.mode === 'free'; G.seatIn = []; G.vote = null; $('#e-vote').style.display = 'none';
     G.course = m.course || DEFAULT_COURSE; setTimeout(() => $('#fade').classList.remove('on'), 400);
     G.W = applySnap(createWorld({ L: m.L, course: G.course, free: G.free, players: G.free ? m.names.length : undefined }), m.s); G.ct = 0; G.pend = []; G.out = []; G.partnerIn = IDLE; G.done = false; slot[0].jc = slot[0].dc = slot[0].uc = 0;
     const W = G.W; await Scene.buildLevel(W); if (G.W !== W) return; Scene.setRoster(W.pl.length); Music.playWorld(W.level.world); // partie quittée pendant le chargement : on s'arrête là
@@ -499,6 +511,7 @@ function getNet() {
     desyncWatch(W, me, before, m);
     if (m.e?.length) handleEvents(W, m.e, true);
   });
+  net.on('vote', (m) => { G.vote = { ...m, t0: performance.now() }; if ($('#end').classList.contains('on')) renderVote(); }); // mode libre : vote de la carte suivante
   net.on('end', (m) => { if (!m.free) renderBoard(m.board, m.rank); }); // mode libre : le classement est construit depuis le monde (showFreeEnd)
   net.on('board', (m) => { if ((m.solo || 0) !== G.bSolo || m.course !== G.bCourse) return; if (m.simV) SIMV = m.simV; renderRecords(m.list); });
   return net;
@@ -604,6 +617,7 @@ document.addEventListener('click', (e) => {
   const id = b.id;
   if (id === 'm-local') showCourses('local');
   else if (id === 'm-solo') showCourses('solo');
+  else if (b.dataset.vote) { if (G.vote && !G.vote.done) { net?.send({ t: 'vote', course: b.dataset.vote }); G.vote.votes[G.me] = b.dataset.vote; renderVote(); } }
   else if (b.dataset.replay) { if (G.mode === 'online' && G.room) window.open(location.pathname + '?replay=' + b.dataset.replay, '_blank'); else watchReplay(b.dataset.replay); } // en salon : le replay s'ouvre dans un autre onglet (la partie en cours n'est pas coupée)
   // (les pastilles des Records ont aussi data-course : elles ne font que changer le classement affiché, jamais lancer une partie)
   else if (b.dataset.course && !b.closest('#board')) { G.replay = null; G.course = b.dataset.course; safe(() => localStorage.setItem('ch-course', G.course)); if (G.pick === 'local' || G.pick === 'solo') { G.solo = G.pick === 'solo'; startLocal(); } }

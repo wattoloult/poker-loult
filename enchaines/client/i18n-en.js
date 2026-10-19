@@ -254,4 +254,5 @@ export const EN = {
   "recommence aussitôt. Le chrono part au premier mouvement ; le serveur rejoue la montée avant de la classer.": "restarts instantly. The clock starts on your first move; the server replays the climb before ranking it.",
   "Mode": "Mode", "Coop · chaîne": "Co-op · chain", "Libre · jusqu'à 4": "Free · up to 4", "Place libre…": "Free slot…", "Lancer la course": "Start the race", "libre": "free",
   "{0} arrive n°{1} !": "{0} finishes #{1}!", "Fin de la course": "Race over", "Classement": "Ranking", "pas arrivé": "did not finish", "Rejouer": "Play again",
+  "Prochaine carte · vote": "Next map · vote", "Prochaine carte dans {0} s — vote !": "Next map in {0}s — vote!", "Prochaine carte : {0}": "Next map: {0}",
 };

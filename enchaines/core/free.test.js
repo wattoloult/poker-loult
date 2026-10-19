@@ -115,3 +115,19 @@ test('mode libre : poing et coup de pied touchent le grimpeur en face, pas les a
     assert.ok(W.pl[1].downT > 0 || W.pl[1].ko || W.pl[1].knock > 0 || W.pl[1].z > -6.5, kind + ' : il est projeté');
   }
 });
+
+test('apparitions sûres : jamais dans un objet ni dans un autre grimpeur (tous les parcours, tous les points de passage, jusqu\'à 4)', async () => {
+  const { COURSES } = await import('./worlds.js'), { respawnPlayer } = await import('./sim.js');
+  const bad = []; let total = 0;
+  const check = (W, tag) => {
+    const before = W.pl.map((p) => [p.x, p.y, p.z]); for (let i = 0; i < 4; i++) stepWorld(W, W.pl.map(() => IDLE));
+    W.pl.forEach((p, j) => { total++; if (Math.hypot(p.x - before[j][0], p.y - before[j][1], p.z - before[j][2]) > 0.12) bad.push(tag + ' j' + j); }); // un recalage au premier pas = chevauchement résolu par la collision
+  };
+  for (const id of Object.keys(COURSES)) {
+    for (const n of [2, 3, 4]) check(createWorld({ course: id, free: true, players: n }), id + ' départ n=' + n);
+    for (let k = 0; k < COURSES[id].checkpoints.length; k++) {
+      const W = createWorld({ course: id, free: true, players: 4 }); for (const p of W.pl) p.cp = k; for (const p of W.pl) respawnPlayer(W, p); check(W, id + ' cp' + k);
+    }
+  }
+  assert.ok(total > 400); assert.deepEqual(bad, [], 'apparitions à problème : ' + bad.slice(0, 6));
+});
