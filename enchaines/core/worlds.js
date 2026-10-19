@@ -10,6 +10,7 @@ import horloge, * as M_mech from './courses/mech.js';
 import col, * as M_ice from './courses/ice.js';
 import toit, * as M_summit from './courses/summit.js';
 import odyssee from './courses/greek.js';
+import depot, * as M_arena from './courses/arena.js';
 
 export const WORLDS = [
   { id: 'medieval', name: 'Le Royaume médiéval', blurb: 'Remparts, tours, ponts de pierre et villages suspendus', music: 'medieval' },
@@ -24,9 +25,10 @@ export const WORLDS = [
 ];
 export const COURSES = {};
 // un fichier de monde peut exporter d'autres parcours : export const more = [ ... ] (ajoutés juste après le sien)
-const MORE = { canopee: M_jungle, torii: M_japan, mine: M_deep, iles: M_sky, horloge: M_mech, col: M_ice, toit: M_summit };
-for (const c of [tour, remparts, canopee, torii, mine, iles, horloge, col, odyssee, toit]) { COURSES[c.id] = c; for (const x of MORE[c.id]?.more || []) COURSES[x.id] = x; }
-export const courseList = (all = false) => Object.values(COURSES).filter((c) => all || c.published);
+const MORE = { canopee: M_jungle, torii: M_japan, mine: M_deep, iles: M_sky, horloge: M_mech, col: M_ice, toit: M_summit, depot: M_arena };
+for (const c of [tour, remparts, canopee, torii, mine, iles, horloge, col, odyssee, toit, depot]) { COURSES[c.id] = c; for (const x of MORE[c.id]?.more || []) COURSES[x.id] = x; }
+// les arènes du mode crazy (c.crazy) n'apparaissent jamais dans la liste des parcours d'ascension ; crazy = true donne seulement les arènes
+export const courseList = (all = false, crazy = false) => Object.values(COURSES).filter((c) => !!c.crazy === crazy && (all || c.published));
 export const getCourse = (id) => COURSES[id] || tour;
 // parcours suivant (ordre des mondes) : celui où mène le portail de fin
 export const nextCourse = (id, all = false) => { const l = courseList(all), i = l.findIndex((c) => c.id === id); return i >= 0 ? l[i + 1] || null : null; };

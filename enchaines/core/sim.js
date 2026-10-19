@@ -26,6 +26,7 @@ export const CH = { N: 12, L: 6.5, MIN: 1.6, ITER: 16, NODE_G: 0.6, DAMP: 0.996,
 export const ABYSS = -30;
 
 import { BIOMES, EXT } from './biomes/index.js';
+import { KAR, rayBody, rayCapsule, aimDir } from './weapon.js';
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const approach = (v, t, d) => (v < t ? Math.min(t, v + d) : Math.max(t, v - d));
 
@@ -147,6 +148,8 @@ export function createWorld(opts = {}) {
   W.Lc = W.L;
   // MODE LIBRE (jusqu'à 4 grimpeurs, SANS chaîne, chacun pour soi, premier au sommet) : règles « solo » (une plaque suffit, second saut) mais coups et tacles entre grimpeurs
   if (opts.free) { W.free = true; W.alone = true; W.rank = []; W.nPl = clamp(Math.round(+opts.players || 2), 1, 4); }
+  // MODE CRAZY : arène, fusil à verrou, chacun pour soi, première équipe à CZ.LIMIT éliminations (ou le plus de victimes au bout de CZ.TIME s)
+  if (opts.crazy) { W.crazy = true; W.free = true; W.alone = true; W.rank = []; W.nPl = clamp(Math.round(+opts.players || 2), 1, 4); W.limit = CZ.LIMIT; W.tmax = CZ.TIME; }
   spawnAt(W, 0);
   return W;
 }
@@ -204,6 +207,7 @@ function placeNear(W, cp, px, pz, taken) {
   return { x: cp.x, y: cp.y, z: cp.z }; // dernier recours : le point de passage lui-même (posé par le concepteur du parcours)
 }
 function spawnFree(W) {
+  if (W.crazy) return spawnCrazy(W);
   const cp = W.level.checkpoints[0], n = W.nPl; W.pl = []; W.ch = []; W.rank = []; W.rLock = []; W.done = false;
   for (let i = 0; i < n; i++) {
     const at = placeNear(W, cp, cp.x + (i - (n - 1) / 2) * 1.1, cp.z, W.pl);
@@ -592,6 +596,7 @@ function stepPlayer(W, p, I, mate) {
       if (p.buf > 0 && cupBoost(W, p, mate)) { /* courte échelle en retombant sur les mains */ }
       else if (p.buf > 0 && p.coy > 0) { // coyote time : le saut part encore juste après avoir quitté le bord
         p.buf = 0; p.vy = P.JUMP; p.coy = 0; p.cut = false; p.jHeld = true; ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z });
+      } else if (W.crazy && p.buf > 0 && (p.wjCd || 0) <= 0 && p.stT > 0.05 && wallJump(W, p, wx, wz)) { /* saut mural (mode crazy) */
       } else if (W.alone && p.buf > 0 && !p.dj && p.stT > 0.08 && !(p.vy < 0 && groundBelow(W, p.x, p.y + 0.02, p.z, Math.max(0.6, -p.vy * (P.BUFFER + 0.04))))) { // MODE SOLO : un second saut en l'air remplace la courte échelle (passages prévus pour deux)
         p.buf = 0; p.dj = true; p.vy = Math.max(p.vy, P.JUMP); p.cut = false; p.jHeld = true; ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z, dj: 1 });
       }
@@ -614,6 +619,7 @@ function stepPlayer(W, p, I, mate) {
       if (!I.jump) p.jHeld = false;
       const g = p.vy > 0 ? (p.jHeld || p.noCut ? P.G_UP : P.G_CUT) : P.G_DOWN; // propulsé (tremplin, piston) : pas de saut coupé
       p.vy = Math.max(-P.FALL_MAX, p.vy - g * dt);
+      if (W.crazy) { p.wjCd = Math.max(0, (p.wjCd || 0) - dt); if (p.vy < -CZ.WALL_SLIDE && wl > 0.3) { const n = wallNormal(W, p); if (n && wx * n.x + wz * n.z < -0.3) p.vy = -CZ.WALL_SLIDE; } } // glissade le long d'un mur
       // grimper le long de la chaîne quand on pend dessous (maintenir « Tenir »)
       if (p.brace && p.dangling && p.sta > 0) { p.ropeUp = true; p.sta -= P.STA_ROPE * dt; }
     }
@@ -670,7 +676,7 @@ function uStep(b, f, fi, d) { const ax = FACE[f][0] ? b.s : b.c, az = FACE[f][0]
 function roomAbove(W, b, f, u) { facePoint(b, f, u, -0.4, b.py + b.hh + 1.0, FP); return !inside(W, FP.x, FP.y, FP.z); }
 const atkHit = (p) => (p.pK ? P.KICK_HIT : p.pSide ? 0.26 : 0.2); // instant de l'impact du coup en cours
 function punchHit(W, p, m) {
-  if (!m || (W.alone && !W.free) || W.solo || m.ko || m.downT > 0) return;
+  if (!m || W.crazy || (W.alone && !W.free) || W.solo || m.ko || m.downT > 0) return;
   if (m.st !== ST.GROUND && m.st !== ST.AIR) return; // accroché, en paroi, en liane : on ne le décroche pas d'un coup
   const dx = m.x - p.x, dz = m.z - p.z, h = Math.hypot(dx, dz), fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
   if (h > (p.pK ? P.KICK_R : P.PUNCH_R) || Math.abs(m.y - p.y) > 1.3 || (h > 0.2 && (dx * fx + dz * fz) / h < 0.35)) return;
@@ -681,7 +687,7 @@ function punchHit(W, p, m) {
 }
 // TACLE : la glissade fauche les grimpeurs DEBOUT sur le sol devant soi (un saut bien placé l'évite). Le tacleur perd de l'élan, la victime est projetée puis reste au sol.
 function tackleHit(W, p, m) {
-  if (!m || W.solo || (W.alone && !W.free) || m.ko || m.downT > 0 || m.st !== ST.GROUND || (p.tackleCd || 0) > 0 || p.sv < P.RUN * 0.9) return;
+  if (!m || W.crazy || W.solo || (W.alone && !W.free) || m.ko || m.downT > 0 || m.st !== ST.GROUND || (p.tackleCd || 0) > 0 || p.sv < P.RUN * 0.9) return;
   const dx = m.x - p.x, dz = m.z - p.z, h = Math.hypot(dx, dz);
   if (h > P.TACKLE_R || Math.abs(m.y - p.y) > 0.6 || (h > 0.15 && (dx * p.sdx + dz * p.sdz) / h < 0.35)) return;
   m.vx = p.sdx * P.TACKLE_V + (p.gvx || 0); m.vz = p.sdz * P.TACKLE_V + (p.gvz || 0); m.vy = P.TACKLE_VY; toAir(m); m.coy = 0; m.noCut = true;
@@ -1008,7 +1014,155 @@ function shadowMate(W) {
 // outils du moteur prêtés aux modules de monde (core/biomes)
 const onBody = (W, b) => { let n = 0; for (const p of W.pl) if (p.st === ST.GROUND && p.gb === b.i) n++; return n; };
 const X = { ST, P, DT, HP, CH, ev: (W, k, o) => ev(W, k, o), clamp, onB: onBody, inside, groundBelow, bounds, spanOf, toAir: (p) => toAir(p) };
+
+/* ------------------------------ mode CRAZY : arène, fusil à verrou ------------------------------ */
+export const CZ = { LIMIT: 15, TIME: 300, RESPAWN: 3, PROT: 2, SHOULDER: 0.45, WALL_SLIDE: 3.2, WALL_CD: 0.22, SCOPE_SLOW: 0.55, WJ_OUT: 6.4, WJ_UP: 8.6,
+  // phases du cycle de culasse (s depuis le tir) et du rechargement (s depuis son début) : chacune émet un événement de son propre bruit
+  BOLT: [[0.10, 'up'], [0.22, 'back'], [0.42, 'eject'], [0.60, 'fwd'], [0.80, 'down']], RELOAD_AT: [[0.25, 'open'], [0.85, 'clip'], [1.85, 'push'], [2.3, 'close']] };
+export const crazyEye = (p) => (p.slideT > 0 || p.crawl ? KAR.EYE_SLIDE : KAR.EYE);
+// droite de l'écran pour un cap donné (caméra tournée vers (sin yaw, cos yaw), y vers le haut)
+export const rightOf = (yaw) => ({ x: -Math.cos(yaw), z: Math.sin(yaw) });
+// dispersion angulaire (rad) : nulle en visant à l'arrêt, petite à la hanche, forte en courant ou en l'air
+export function crazySpread(p) {
+  const sp = Math.hypot(p.vx - (p.gvx || 0), p.vz - (p.gvz || 0)); // la vitesse due à une plateforme mobile ne compte pas
+  const base = p.scope ? 0 : 0.006, mv = Math.min(1, sp / P.RUN) * (p.scope ? 0.012 : 0.03), air = p.st === ST.AIR ? (p.scope ? 0.03 : 0.045) : 0;
+  return base + mv + air;
+}
+const WD = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7071, 0.7071], [0.7071, -0.7071], [-0.7071, 0.7071], [-0.7071, -0.7071]];
+// normale (horizontale, unitaire, vers l'extérieur du mur) si un mur touche le grimpeur, sinon null
+function wallNormal(W, p) {
+  let nx = 0, nz = 0;
+  for (const [dx, dz] of WD) for (const h of [0.5, 1.25]) if (inside(W, p.x + dx * (P.R + 0.14), p.y + h, p.z + dz * (P.R + 0.14), 0)) { nx -= dx; nz -= dz; break; }
+  const l = Math.hypot(nx, nz); return l > 0.01 ? { x: nx / l, z: nz / l } : null;
+}
+function wallJump(W, p, wx, wz) {
+  const n = wallNormal(W, p); if (!n) return false;
+  p.buf = 0; p.wjCd = CZ.WALL_CD; p.cut = false; p.jHeld = true; p.dj = false;
+  const dn = wx * n.x + wz * n.z, sx = wx - n.x * dn, sz = wz - n.z * dn; // on se laisse orienter le long du mur seulement
+  p.vx = n.x * CZ.WJ_OUT + sx * 2.2; p.vz = n.z * CZ.WJ_OUT + sz * 2.2; p.vy = CZ.WJ_UP;
+  ev(W, 'jump', { p: p.id, x: p.x, y: p.y, z: p.z, wall: 1, nx: n.x, nz: n.z });
+  return true;
+}
+function resetCombat(p) {
+  p.hp = KAR.HP; p.ammo = KAR.AMMO; p.cd = 0; p.cyc = 0; p.ejected = true; p.rl = -1; p.scope = false; p.dead = 0; p.lastBy = -1; p.lastByT = 0;
+}
+// la place d'apparition la plus éloignée des adversaires vivants (égalité : la première) ; les points de passage du parcours servent de places
+function pickSpawn(W, p) {
+  const cps = W.level.checkpoints, foes = W.pl.filter((q) => q !== p && !q.dead);
+  let best = 0, bd = -1;
+  cps.forEach((c, i) => { let d = 1e9; for (const q of foes) d = Math.min(d, Math.hypot(q.x - c.x, q.z - c.z) + Math.abs(q.y - c.y) * 0.5); if (!foes.length) d = (i * 7 + p.id * 5) % cps.length; if (d > bd) { bd = d; best = i; } });
+  return cps[best];
+}
+function placeAt(W, p, c) {
+  Object.assign(p, { x: c.x, y: c.y, z: c.z, vx: 0, vy: 0, vz: 0, st: ST.GROUND, stT: 0, gb: -1, gvx: 0, gvy: 0, gvz: 0, hang: null, climb: null, mantle: null, rope: null, brace: false, knock: 0, ko: false, downT: 0, pT: null,
+    slideT: 0, crawl: false, recT: 0, sta: 1, yaw: c.yaw ?? Math.PI, ay: c.yaw ?? Math.PI, ap: 0, peakY: c.y, onMate: false, fell: false, dj: false, wjCd: 0 });
+}
+function spawnCrazy(W) {
+  W.pl = []; W.ch = []; W.rank = []; W.rLock = []; W.done = false; W.time = 0;
+  for (let i = 0; i < W.nPl; i++) {
+    const p = newPlayer(i, 0, 0, 0); p.cp = 0; p.done = false; p.kills = 0; p.deaths = 0; p.prot = CZ.PROT; resetCombat(p);
+    placeAt(W, p, pickSpawn(W, p)); W.pl.push(p);
+  }
+  resetMechanisms(W); W.ten = 0; W.taut = 0; W.cp = 0;
+}
+function respawnCrazy(W, p) {
+  resetCombat(p); placeAt(W, p, pickSpawn(W, p)); p.prot = CZ.PROT; ev(W, 'spawn', { p: p.id, x: p.x, y: p.y, z: p.z });
+}
+function killPlayer(W, v, by, head, dx, dy, dz) {
+  if (v.dead > 0) return;
+  v.dead = CZ.RESPAWN; v.hp = 0; v.deaths++; v.scope = false; v.rl = -1; v.cyc = 0; v.slideT = 0; v.crawl = false; v.st = ST.AIR; v.hang = v.climb = v.mantle = null;
+  const k = by != null && by !== v.id ? W.pl[by] : null; if (k) k.kills++;
+  ev(W, 'kill', { p: by ?? -1, v: v.id, head: head ? 1 : 0, x: v.x, y: v.y + 1, z: v.z, dx, dy, dz, w: 'kar' });
+}
+function fireShot(W, p) {
+  const ay = p.ay, ap = p.ap, sp = crazySpread(p);
+  // dispersion déterministe (même tirage chez tous) : un point dans un disque autour de la visée
+  const h = Math.imul(W.tick * 31 + p.id * 977 + p.ammo, 2654435761) >>> 0, a = ((h & 0xffff) / 65536) * Math.PI * 2, r = (((h >>> 16) & 0xffff) / 65536) ** 0.5 * sp;
+  const d = aimDir(ay + Math.cos(a) * r, clamp(ap + Math.sin(a) * r, -1.45, 1.45)), R = rightOf(ay), eye = crazyEye(p);
+  const ox = p.x + R.x * CZ.SHOULDER, oy = p.y + eye, oz = p.z + R.z * CZ.SHOULDER;
+  let tw = KAR.RANGE, nx = 0, ny = 1, nz = 0, surf = 0;
+  for (const b of W.bodies) {
+    if (!b.on || b.ghost || b.ex === undefined) continue;
+    if (Math.abs(ox - b.px) - b.ex > KAR.RANGE || Math.abs(oz - b.pz) - b.ez > KAR.RANGE) continue;
+    const hit = rayBody(b, ox, oy, oz, d.x, d.y, d.z, tw); if (hit && hit.t < tw) { tw = hit.t; nx = hit.nx; ny = hit.ny; nz = hit.nz; surf = 1; }
+  }
+  let tp = -1, victim = null;
+  for (const q of W.pl) {
+    if (q === p || q.dead > 0 || q.prot > 0) continue;
+    const Hq = q.slideT > 0 || q.crawl ? P.H * 0.55 : P.H, t = rayCapsule(ox, oy, oz, d.x, d.y, d.z, q.x, q.y + P.R, q.y + Hq - P.R, q.z, P.R + 0.08, tw);
+    if (t >= 0 && (tp < 0 || t < tp)) { tp = t; victim = q; }
+  }
+  const mx = ox + R.x * 0.0 + d.x * 0.9, my = oy - 0.12 + d.y * 0.9, mz = oz + d.z * 0.9; // bouche du canon (≈ 0,9 m devant l'épaule)
+  let t = tw, kind = surf;
+  if (victim && tp <= tw) {
+    t = tp; kind = 2; const hx = ox + d.x * t, hy = oy + d.y * t, hz = oz + d.z * t, Hq = victim.slideT > 0 || victim.crawl ? P.H * 0.55 : P.H, rel = (hy - victim.y) / Hq;
+    const zone = rel >= KAR.HEAD_FROM ? 2 : rel < KAR.LEG_TO ? 0 : 1, dmg = zone === 2 ? KAR.DMG_HEAD : zone === 1 ? KAR.DMG_BODY : KAR.DMG_LEG;
+    victim.hp -= dmg; victim.lastBy = p.id; victim.lastByT = W.time; victim.vx += d.x * 1.2; victim.vz += d.z * 1.2;
+    ev(W, 'hit', { p: p.id, v: victim.id, zone, dmg, x: hx, y: hy, z: hz, dx: d.x, dy: d.y, dz: d.z, hp: Math.max(0, victim.hp) });
+    if (victim.hp <= 0) killPlayer(W, victim, p.id, zone === 2, d.x, d.y, d.z);
+  }
+  ev(W, 'shot', { p: p.id, x: mx, y: my, z: mz, ex: ox + d.x * t, ey: oy + d.y * t, ez: oz + d.z * t, kind, nx, ny, nz, dx: d.x, dy: d.y, dz: d.z });
+}
+function stepCombat(W, p, I) {
+  const dt = DT;
+  p.prot = Math.max(0, (p.prot || 0) - dt); p.cd = Math.max(0, p.cd - dt);
+  const free = p.st === ST.GROUND || p.st === ST.AIR;
+  // cycle de culasse après un tir : lever, reculer (la douille saute), avancer, verrouiller
+  if (p.cyc > 0) {
+    const e0 = KAR.CYCLE - p.cyc; p.cyc = Math.max(0, p.cyc - dt); const e1 = KAR.CYCLE - p.cyc;
+    for (const [t, s] of CZ.BOLT) if (e0 < t && e1 >= t) {
+      ev(W, 'bolt', { p: p.id, s });
+      if (s === 'eject') { const R = rightOf(p.ay), d = aimDir(p.ay, p.ap), eye = crazyEye(p), h = Math.imul(W.tick + p.id * 131, 2246822519) >>> 0, j = (h & 255) / 255;
+        ev(W, 'casing', { p: p.id, x: p.x + R.x * (CZ.SHOULDER + 0.1) + d.x * 0.35, y: p.y + eye - 0.12 + d.y * 0.35, z: p.z + R.z * (CZ.SHOULDER + 0.1) + d.z * 0.35,
+          vx: R.x * (2.0 + j) + p.vx * 0.5, vy: 2.4 + ((h >>> 8) & 255) / 255, vz: R.z * (2.0 + j) + p.vz * 0.5 }); }
+    }
+    if (!p.cyc) p.ejected = true;
+  }
+  // rechargement : ouvrir la culasse, glisser la lame, pousser les cartouches, refermer
+  if (p.rl >= 0) {
+    if (!free) p.rl = -1; // accroché, hissé : le rechargement est interrompu
+    else {
+      const e0 = p.rl; p.rl += dt;
+      for (const [t, s] of CZ.RELOAD_AT) if (e0 < t && p.rl >= t) ev(W, 'reload', { p: p.id, s });
+      if (p.rl >= KAR.RELOAD) { p.rl = -1; p.ammo = KAR.AMMO; }
+    }
+  }
+  p.scope = !!I.scope && free && p.rl < 0;
+  if (!free) return;
+  const want = !!I.reload && p.ammo < KAR.AMMO, empty = p.ammo <= 0 && I.fire;
+  if ((want || empty) && p.rl < 0 && p.cyc <= 0) { p.rl = 0; p.scope = false; }
+  else if (I.fire && p.rl < 0) {
+    if (p.ammo <= 0) { if (!p.dryHeld) ev(W, 'dry', { p: p.id }); }
+    else if (p.cd <= 0 && p.cyc <= 0) { p.ammo--; p.cd = KAR.FIRE_CD; p.cyc = KAR.CYCLE; p.ejected = false; fireShot(W, p); }
+  }
+  p.dryHeld = !!I.fire;
+}
+function stepCrazy(W, inputs) {
+  const pl = W.pl, n = pl.length;
+  if (!W.started) { W.started = true; ev(W, 'go'); }
+  if (!W.done) W.time += DT;
+  for (let i = 0; i < n; i++) {
+    const p = pl[i], I = inputs[i] || IDLE;
+    if (p.dead > 0) { p.dead -= DT; p.vx = p.vz = 0; if (p.dead <= 0 && !W.done) respawnCrazy(W, p); continue; }
+    p.ay = Number.isFinite(I.ay) ? I.ay : p.ay; p.ap = clamp(Number.isFinite(I.ap) ? I.ap : p.ap, -1.45, 1.45);
+    const sl = p.scope ? CZ.SCOPE_SLOW : p.rl >= 0 ? 0.8 : 1;
+    stepPlayer(W, p, { ...I, mx: (I.mx || 0) * sl, mz: (I.mz || 0) * sl, punch: false, kick: false, reset: false, cup: false, pull: false }, null);
+    if (p.st === ST.GROUND || p.st === ST.AIR) p.yaw = p.ay; // le tireur regarde toujours où il vise
+    stepCombat(W, p, I);
+  }
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (!pl[i].dead && !pl[j].dead) collidePair(pl[i], pl[j]);
+  for (const p of pl) if (!p.dead && (p.st === ST.AIR || p.st === ST.GROUND)) { const g = collidePlayer(W, p); if (g && p.st === ST.AIR && p.vy <= g.vy + 0.5) setGround(W, p, g); }
+  for (const p of pl) if (!p.dead && p.y < W.level.abyss) { ev(W, 'abyss', { p: p.id }); const by = p.lastBy >= 0 && W.time - p.lastByT < 6 ? p.lastBy : null; killPlayer(W, p, by, false, 0, 0, 0); }
+  if (!W.done && (pl.some((p) => p.kills >= W.limit) || W.time >= W.tmax)) {
+    W.done = true; W.rank = pl.map((p) => p.id).sort((a, b) => pl[b].kills - pl[a].kills || pl[a].deaths - pl[b].deaths || a - b);
+    ev(W, 'end', { rank: W.rank.slice() });
+  }
+  W.cp = 0; W.best = 0;
+  return W;
+}
+
 function stepFree(W, inputs) {
+  if (W.crazy) return stepCrazy(W, inputs);
   const pl = W.pl, n = pl.length, cps = W.level.checkpoints;
   if (!W.started && pl.some((p, i) => { const I = inputs[i] || IDLE; return Math.hypot(I.mx || 0, I.mz || 0) > 0.2 || I.jc !== p.jc; })) { W.started = true; ev(W, 'go'); }
   if (W.started && !W.done) W.time += DT;
