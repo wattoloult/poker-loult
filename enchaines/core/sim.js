@@ -283,6 +283,9 @@ function collidePlayer(W, p, groundOk = true) {
       if (p.y > b.py + b.hh + 0.05 || p.y + hp < b.py - b.hh - 0.05) continue;
       if (!capsuleBox(b, p.x, p.y, p.z, P.R, hp)) continue;
       any = true;
+      // MONTÉE DE MARCHE (crazy) : au sol, un contact de côté avec une marche de 16 cm au plus (escalier, dalles d'un toit, liseré) pose le pied dessus au lieu d'arrêter
+      // le grimpeur (sinon chaque marche annulait la vitesse : escalier de 2 m en 5 s)
+      if (W.crazy && p.st === ST.GROUND && groundOk && !b.hit && CN.y > -0.3 && b.py + b.hh - p.y > 0.005 && b.py + b.hh - p.y <= CZ.STEP && !inside(W, p.x, b.py + b.hh + 1.2, p.z, P.R - 0.05)) { p.y = b.py + b.hh; ground = b; gn = 1; continue; }
       p.x += CN.x * CN.d; p.y += CN.y * CN.d; p.z += CN.z * CN.d;
       // vitesse relative à la surface : on retire la part qui rentre dedans
       const rvx = p.vx - b.vx, rvy = p.vy - b.vy, rvz = p.vz - b.vz, vn = rvx * CN.x + rvy * CN.y + rvz * CN.z;
@@ -332,12 +335,13 @@ function facePoint(b, f, u, off, y, o) {
 }
 const FP = { x: 0, y: 0, z: 0 };
 // cherche un rebord saisissable devant le joueur (en l'air, mains dans la fenêtre, on pousse vers lui)
-function findLedge(W, p, wx, wz) {
+// lo / hi / reach : fenêtre de prise (hauteur du bord au-dessus des pieds, distance devant le corps) ; par défaut celle des parcours d'ascension
+function findLedge(W, p, wx, wz, lo = P.GRAB_LO, hi = P.GRAB_HI, reach = P.GRAB_REACH) {
   let best = null, bd = 1e9;
   for (const b of W.bodies) {
     if (!b.on || b.ghost || b.nograb || b.hit) continue;
     const top = b.py + b.hh, rel = grabY(b) - p.y; // lip : on saisit le bord d'un plancher de balcon, on se hisse ensuite par-dessus son garde-corps (dessus de la boîte)
-    if (rel < P.GRAB_LO || rel > P.GRAB_HI) continue;
+    if (rel < lo || rel > hi) continue;
     if (p.vy > 0 && p.y + (p.vy * p.vy) / (2 * P.G_UP) > top + 0.05) continue; // on passera au-dessus : on atterrira dessus plutôt que s'y pendre
     if (Math.abs(p.x - b.px) > b.ex + 1 || Math.abs(p.z - b.pz) > b.ez + 1) continue;
     local(b, p.x, p.z, L);
@@ -352,7 +356,7 @@ function findLedge(W, p, wx, wz) {
     for (let f = 0; f < 4; f++) {
       const [fx, fz] = FACE[f], fi = faceInfo(b, f);
       const dist = fx ? fx * L.lx - fi.out : fz * L.lz - fi.out, u = fx ? L.lz : L.lx;
-      if (dist < P.R - 0.05 - (b.eave || 0) || dist > P.R + P.GRAB_REACH || Math.abs(u) > fi.half - 0.12) continue; // eave : rebord d'un toit qui déborde du mur, saisi depuis le pied du mur
+      if (dist < P.R - 0.05 - (b.eave || 0) || dist > P.R + reach || Math.abs(u) > fi.half - 0.12) continue; // eave : rebord d'un toit qui déborde du mur, saisi depuis le pied du mur
       const push = -(wx * fi.nx + wz * fi.nz), into = -(p.vx * fi.nx + p.vz * fi.nz);
       if (push < 0.35 && into < 1.2) continue;
       // la main tombe sur un vrai bord : rien au-dessus du bord ni juste devant
@@ -363,6 +367,11 @@ function findLedge(W, p, wx, wz) {
     }
   }
   return best;
+}
+// point de prise réel du bord auquel on pend (rendu : les mains s'y posent) : milieu des mains sur l'arête, normale sortante, tangente (vers la droite du grimpeur face au mur)
+export function ledgePoint(W, p) {
+  const h = p.hang || p.mantle; if (!h) return null; const b = W.bodies[h.b]; if (!b) return null; const fi = faceInfo(b, h.f);
+  facePoint(b, h.f, h.u, 0, grabY(b), FP); return { x: FP.x, y: FP.y, z: FP.z, nx: fi.nx, nz: fi.nz, tx: fi.nz, tz: -fi.nx, top: b.py + b.hh };
 }
 const grabY = (b) => (b.lip !== undefined ? b.py - b.hh + b.lip : b.py + b.hh); // hauteur des mains quand on pend à ce rebord
 function hangPose(W, p) { // position du corps suspendu à partir du bord (suit la boîte si elle bouge)
@@ -549,6 +558,7 @@ function stepPlayer(W, p, I, mate) {
         p.slideT = P.SLIDE_T; p.crawl = false; p.sv = Math.max(sp0, P.RUN) * P.SLIDE_BOOST; ev(W, 'slide', { p: p.id, x: p.x, y: p.y, z: p.z, dx: p.sdx, dz: p.sdz });
       }
       let spd = P.RUN * (p.recT > 0 ? 0.55 : 1); // juste après une glissade : on se relève (plus lent)
+      if (W.crazy && wl > 0.1) { const fw = (wx * Math.sin(p.ay || 0) + wz * Math.cos(p.ay || 0)) / wl; spd *= I.sprint && fw > 0.5 ? CZ.SPRINT : fw < -0.3 ? CZ.BACK : 1; } // crazy : sprint (Maj, vers l'avant), marche arrière plus lente
       let tx = wx * spd, tz = wz * spd;
       if (p.brace) { tx *= 0.25; tz *= 0.25; } // arc-bouté : on avance à petits pas
       if (p.haul) { tx *= P.HAUL_MOVE; tz *= P.HAUL_MOVE; } // on tire à deux mains : la chaîne nous attire vers le vide 
@@ -566,7 +576,7 @@ function stepPlayer(W, p, I, mate) {
           if (-along > cap) { tx += ux * (-along - cap); tz += uz * (-along - cap); }
         }
       }
-      const rvx = p.vx - p.gvx, rvz = p.vz - p.gvz, k = (tx * rvx + tz * rvz > 0 ? P.ACC : P.DEC) * dt * (p.knock > 0 ? 0.15 : 1) * (W.bodies[p.gb]?.ice ? 0.18 : 1);
+      const rvx = p.vx - p.gvx, rvz = p.vz - p.gvz, k = (tx * rvx + tz * rvz > 0 ? (W.crazy ? CZ.ACC : P.ACC) : (W.crazy ? CZ.DEC : P.DEC)) * dt * (p.knock > 0 ? 0.15 : 1) * (W.bodies[p.gb]?.ice ? 0.18 : 1);
       const nvx = approach(rvx, tx, Math.abs(k * (tx - rvx) / (Math.hypot(tx - rvx, tz - rvz) || 1)));
       const nvz = approach(rvz, tz, Math.abs(k * (tz - rvz) / (Math.hypot(tx - rvx, tz - rvz) || 1)));
       p.vx = nvx + p.gvx; p.vz = nvz + p.gvz; p.vy = Math.min(p.vy, p.gvy);
@@ -621,7 +631,9 @@ function stepPlayer(W, p, I, mate) {
       if (!I.jump) p.jHeld = false;
       const g = p.vy > 0 ? (p.jHeld || p.noCut ? P.G_UP : P.G_CUT) : P.G_DOWN; // propulsé (tremplin, piston) : pas de saut coupé
       p.vy = Math.max(-P.FALL_MAX, p.vy - g * dt);
-      if (W.crazy) { p.wjCd = Math.max(0, (p.wjCd || 0) - dt); if (p.vy < -CZ.WALL_SLIDE && wl > 0.3) { const n = wallNormal(W, p); if (n && wx * n.x + wz * n.z < -0.3) p.vy = -CZ.WALL_SLIDE; } } // glissade le long d'un mur
+      // mode crazy : GLISSADE MURALE — en tombant contre un mur lisse en poussant vers lui, on ne s'y accroche pas : on glisse (chute freinée à WALL_SLIDE m/s) ; p.wsl = état
+      // lu par le rendu (pose de glissade) avec la normale du mur (p.wnx, p.wnz)
+      if (W.crazy) { p.wjCd = Math.max(0, (p.wjCd || 0) - dt); p.wsl = 0; if (p.vy < 0 && wl > 0.3) { const n = wallNormal(W, p); if (n && wx * n.x + wz * n.z < -0.3) { p.wsl = 1; p.wnx = n.x; p.wnz = n.z; if (p.vy < -CZ.WALL_SLIDE) p.vy = -CZ.WALL_SLIDE; } } }
       // grimper le long de la chaîne quand on pend dessous (maintenir « Tenir »)
       if (p.brace && p.dangling && p.sta > 0) { p.ropeUp = true; p.sta -= P.STA_ROPE * dt; }
     }
@@ -640,7 +652,8 @@ function stepPlayer(W, p, I, mate) {
     else if (p.onMate && mate && Math.abs(p.y - (mate.y + P.H)) < 0.08 && Math.hypot(p.x - mate.x, p.z - mate.z) < P.R * 2) { p.st = ST.GROUND; }
     else if (wasGround && p.vy <= p.gvy + 0.01 && !p.onMate) {
       // accroche au sol : on suit les marches et les plateformes qui descendent
-      const gr = groundBelow(W, p.x, p.y + 0.02, p.z, 0.32);
+      let gr = groundBelow(W, p.x, p.y + 0.02, p.z, 0.32);
+      if (W.crazy) { const hx = p.vx - p.gvx, hz = p.vz - p.gvz, hs = Math.hypot(hx, hz); if (hs > 0.3) { const g2 = groundBelow(W, p.x + (hx / hs) * P.R * 0.85, p.y + 0.02, p.z + (hz / hs) * P.R * 0.85, 0.32); if (g2 && (!gr || g2.y > gr.y)) gr = g2; } } // crazy : le pied avant porte aussi (marche montée)
       if (gr) { p.y = gr.y; setGround(W, p, gr.b); }
       else toAir(p);
     } else if (p.st === ST.GROUND) toAir(p);
@@ -650,8 +663,12 @@ function stepPlayer(W, p, I, mate) {
         const c = findClimb(W, p, wx, wz);
         if (c) { p.st = ST.CLIMB; p.climb = c; p.stT = 0; p.vy = 0; ev(W, 'grab', { p: p.id, wall: 1 }); }
         else {
-          const h = findLedge(W, p, wx, wz);
-          if (h) { p.st = ST.HANG; p.hang = h; p.stT = 0; p.vx = p.vy = p.vz = 0; hangPose(W, p); ev(W, 'grab', { p: p.id, x: p.x, y: p.y + 2, z: p.z }); }
+          // mode crazy : on ne pend qu'à un bord que les MAINS atteignent (bras levés : 1,45 à 2,3 m au-dessus des pieds, à moins de 28 cm devant le corps) ; un bord à hauteur
+          // de poitrine (0,55 à 1,45 m) se FRANCHIT directement (on pose les mains et on passe dessus) au lieu de pendre plus bas que lui (le corps « téléporté » d'un mètre)
+          const h = W.crazy ? findLedge(W, p, wx, wz, CZ.GRAB_LO, CZ.GRAB_HI, CZ.GRAB_REACH) : findLedge(W, p, wx, wz);
+          const v = !h && W.crazy && wl > 0.3 ? findLedge(W, p, wx, wz, CZ.VAULT_LO, CZ.GRAB_LO, CZ.GRAB_REACH) : null;
+          if (v && roomAbove(W, W.bodies[v.b], v.f, v.u)) startMantle(W, p, W.bodies[v.b], v.f, v.u);
+          else if (h) { p.st = ST.HANG; p.hang = h; p.stT = 0; p.vx = p.vy = p.vz = 0; hangPose(W, p); ev(W, 'grab', { p: p.id, x: p.x, y: p.y + 2, z: p.z }); }
           else { const r = findRope(W, p, mate); if (r) { p.st = ST.ROPE; p.rope = r; p.stT = 0; ev(W, 'grab', { p: p.id, rope: 1, x: p.x, y: p.y + 2, z: p.z }); } }
         }
       }
@@ -1018,7 +1035,7 @@ const onBody = (W, b) => { let n = 0; for (const p of W.pl) if (p.st === ST.GROU
 const X = { ST, P, DT, HP, CH, ev: (W, k, o) => ev(W, k, o), clamp, onB: onBody, inside, groundBelow, bounds, spanOf, toAir: (p) => toAir(p) };
 
 /* ------------------------------ mode CRAZY : arène, fusil à verrou ------------------------------ */
-export const CZ = { LIMIT: 15, TIME: 300, RESPAWN: 3, PROT: 2, SHOULDER: 0.75, CAMUP: 0.35, BORE: 0.12, WALL_SLIDE: 3.2, WALL_CD: 0.22, WJ_MAX: 3, SCOPE_SLOW: 0.55, ZOOM_T: 0.3, SCOPE_UP: -0.068, WJ_OUT: 6.4, WJ_UP: 8.6,
+export const CZ = { STEP: 0.16, ACC: 30, DEC: 26, SPRINT: 1.32, BACK: 0.8, GRAB_LO: 1.45, GRAB_HI: 2.3, GRAB_REACH: 0.28, VAULT_LO: 0.55, LIMIT: 15, TIME: 300, RESPAWN: 3, PROT: 2, SHOULDER: 0.75, CAMUP: 0.35, BORE: 0.12, WALL_SLIDE: 3.2, WALL_CD: 0.22, WJ_MAX: 3, SCOPE_SLOW: 0.55, ZOOM_T: 0.3, SCOPE_UP: -0.068, WJ_OUT: 6.4, WJ_UP: 8.6,
   // phases du cycle de culasse (s depuis le tir) et du rechargement (s depuis son début) : chacune émet un événement de son propre bruit
   BOLT: [[0.10, 'up'], [0.22, 'back'], [0.42, 'eject'], [0.60, 'fwd'], [0.80, 'down']], RELOAD_AT: [[0.25, 'open'], [0.85, 'clip'], [1.85, 'push'], [2.3, 'close']] };
 export const crazyEye = (p) => (p.slideT > 0 || p.crawl ? KAR.EYE_SLIDE : KAR.EYE);
@@ -1143,7 +1160,7 @@ function stepCombat(W, p, I) {
       if (p.rl >= KAR.RELOAD) { p.rl = -1; p.ammo = KAR.AMMO; }
     }
   }
-  p.scope = !!I.scope && free && p.rl < 0; p.scT = p.scope ? (p.scT || 0) + dt : 0; p.zm = p.scT > CZ.ZOOM_T;
+  p.scope = !!I.scope && free && p.rl < 0; p.scT = p.scope ? (p.scT || 0) + dt : 0; p.zm = false; // UN seul niveau de visée (à l'épaule) : plus de lunette (demande du propriétaire)
   if (!free) return;
   const want = !!I.reload && p.ammo < KAR.AMMO, empty = p.ammo <= 0 && I.fire;
   if ((want || empty) && p.rl < 0 && p.cyc <= 0) { p.rl = 0; p.scope = false; }
@@ -1162,9 +1179,9 @@ function stepCrazy(W, inputs) {
     if (p.dead > 0) { p.dead -= DT; p.vx = p.vz = 0; if (p.dead <= 0 && !W.done) respawnCrazy(W, p); continue; }
     p.ay = Number.isFinite(I.ay) ? I.ay : p.ay; p.ap = clamp(Number.isFinite(I.ap) ? I.ap : p.ap, -1.45, 1.45);
     const sl = p.scope ? CZ.SCOPE_SLOW : p.rl >= 0 ? 0.8 : 1;
-    stepPlayer(W, p, { ...I, mx: (I.mx || 0) * sl, mz: (I.mz || 0) * sl, punch: false, kick: false, reset: false, cup: false, pull: false }, null);
+    stepPlayer(W, p, { ...I, mx: (I.mx || 0) * sl, mz: (I.mz || 0) * sl, sprint: !!I.brace && !p.scope && p.rl < 0, brace: false, punch: false, kick: false, reset: false, cup: false, pull: false }, null);
     if (p.st === ST.GROUND || p.st === ST.AIR) p.yaw = p.ay; // le tireur regarde toujours où il vise
-    if (p.st !== ST.AIR) p.wjN = 0;
+    if (p.st !== ST.AIR) { p.wjN = 0; p.wsl = 0; }
     stepCombat(W, p, I);
   }
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (!pl[i].dead && !pl[j].dead) collidePair(pl[i], pl[j]);

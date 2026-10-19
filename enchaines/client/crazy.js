@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as Scene from './scene.js';
 import * as Snd from './audio.js';
-import { ST, P, inside, groundBelow, CZ, crazyEye, crazySpread, rightOf } from '../core/sim.js';
+import { ST, P, inside, groundBelow, CZ, crazyEye, crazySpread, rightOf, ledgePoint } from '../core/sim.js';
 import { KAR, aimDir, rayBody } from '../core/weapon.js';
 
 const S = Scene.S, clamp = (v, a, b) => (v < a ? a : v > b ? b : v), lerp = (a, b, k) => a + (b - a) * k, sm = (u) => { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };
@@ -17,10 +17,10 @@ export const A = { yaw: 0, pitch: 0, scope: 0, zoom: 0 }; // visée du joueur lo
 export const cfg = { blood: true };
 export const dbg = {};
 const DAMP = { pelvis: 0.5, spine_01: 0.7, spine_02: 0.75, spine_03: 0.75, neck_01: 0.9, Head: 0.9 };
-const X = { on: false, W: null, G: null, me: null, rifles: [], aim: [], rec: [], feed: [], hitT: 0, hitHead: false, dmgT: 0, dmgAng: 0, banner: null, bannerT: 0, wasDead: false, camBack: 5.6, fov: 60, droplets: null, decals: [], pools: [], casings: [], tracers: [], puffs: [], mist: [], flashes: [], lastSnd: {} };
+const X = { ready: [], readyT: [], on: false, W: null, G: null, me: null, rifles: [], aim: [], rec: [], feed: [], hitT: 0, hitHead: false, dmgT: 0, dmgAng: 0, banner: null, bannerT: 0, wasDead: false, camBack: 5.6, fov: 60, droplets: null, decals: [], pools: [], casings: [], tracers: [], puffs: [], mist: [], flashes: [], lastSnd: {} };
 // RÉGLAGES DE LA CAMÉRA (une seule source) : la caméra est TOUJOURS sur le rayon de visée du tireur (épaule CZ.SHOULDER à droite, CZ.CAMUP au-dessus des yeux, définis dans
 // core/sim.js car la balle part de ce rayon) ; ici : sa distance, son champ de vision et ses transitions.
-export const CAM = { dist: 5.6, fov: 60, adsDist: 2.1, adsFov: 32, scopeFov: 15, zoomSpeed: 10, minDist: 1.3, adsSpeed: 9, inSpeed: 18, outSpeed: 2.2, wallMargin: 1.0 };
+export const CAM = { dist: 5.6, fov: 60, adsDist: 2.8, adsFov: 44, scopeFov: 15, zoomSpeed: 10, minDist: 1.3, adsSpeed: 9, inSpeed: 18, outSpeed: 2.2, wallMargin: 1.0 };
 
 /* ------------------------------ textures procédurales ------------------------------ */
 function canvasTex(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; }
@@ -164,7 +164,7 @@ export function look(dx, dy, sens = 1) {
   const z = 1 - A.scope * 0.4 - A.zoom * 0.5; // plus la visée est serrée, plus la souris est lente
   A.yaw = wrap(A.yaw - dx * 0.0024 * sens * z); A.pitch = clamp(A.pitch - dy * 0.002 * sens * z, -1.25, 1.35);
 }
-// champs de l'entrée propres au mode : tir (clic gauche), lunette (clic droit), rechargement (R), visée
+// champs de l'entrée propres au mode : tir (clic gauche), visée à l'épaule (clic droit), rechargement (R), cap et hauteur de visée
 export function extras(keys) {
   const q = (v) => Math.round(v * 1000) / 1000;
   return { fire: keys.has('Mouse0'), scope: keys.has('Mouse2'), reload: keys.has('KeyR'), ay: q(A.yaw), ap: q(A.pitch) };
@@ -175,6 +175,7 @@ export const moveYaw = () => A.yaw + Math.PI;
 /* ------------------------------ mise en place ------------------------------ */
 export function begin(G) {
   stop(); const W = G.W, T = textures();
+  X.on = true; window.__czX = X; // (outils de mesure et captures)
   X.on = true; X.W = W; X.G = G; X.me = G.me; X.feed = []; X.wasDead = false; X.banner = null; X.hitT = 0; X.dmgT = 0; X.camBack = CAM.dist; X.backS = null;
   const p = W.pl[G.me ?? 0]; if (p) { A.yaw = p.ay ?? p.yaw; A.pitch = 0; } A.scope = 0;
   X.root = new THREE.Group(); S.scene.add(X.root);
@@ -222,7 +223,7 @@ function buildHud(G) {
   <div id="cz-dead"><small></small><b></b><em></em></div>
   <div id="cz-banner"></div>
   <div id="cz-tags"></div>
-  <div id="cz-keys"><b>Mode Crazy</b><span><kbd>Souris</kbd> viser</span><span><kbd>Clic gauche</kbd> tirer</span><span><kbd>Clic droit</kbd> viser · maintenu : lunette ×4</span><span><kbd>R</kbd> recharger</span><span><kbd>Espace</kbd> sauter · contre un mur : re-saut</span><span><kbd>V</kbd> glisser</span><span><kbd>Tab</kbd> scores</span></div>
+  <div id="cz-keys"><b>Mode Crazy</b><span><kbd>Souris</kbd> viser</span><span><kbd>Clic gauche</kbd> tirer</span><span><kbd>Clic droit</kbd> viser (on peut tirer en visant)</span><span><kbd>Maj</kbd> sprinter</span><span><kbd>R</kbd> recharger</span><span><kbd>Espace</kbd> sauter · contre un mur : re-saut</span><span><kbd>V</kbd> glisser</span><span><kbd>Tab</kbd> scores</span></div>
   <div id="cz-board"></div>`;
   X.tagEls = G.W.pl.map((_, k) => { const e = document.createElement('div'); e.className = 'czt t' + k; $('#cz-tags').appendChild(e); return e; });
   X.rounds = [...Array(KAR.AMMO)].map(() => { const e = document.createElement('i'); $('#cz-ammo .rounds').appendChild(e); return e; });
@@ -245,8 +246,8 @@ const CSS = `
 #cz-feed li.me{outline:1px solid #e0b25a} #cz-feed li em{font-style:normal;color:#ff6b5a} #cz-feed li b{font-weight:800}
 @keyframes czin{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
 #cz-cross{position:absolute;left:50%;top:50%;width:0;height:0}
-#cz-cross i{position:absolute;background:#fff;box-shadow:0 0 3px #000;opacity:.92} #cz-cross b{position:absolute;left:-1.5px;top:-1.5px;width:3px;height:3px;border-radius:50%;background:#fff;box-shadow:0 0 3px #000}
-#cz-cross .u,#cz-cross .d{width:2px;height:9px;left:-1px} #cz-cross .l,#cz-cross .r{height:2px;width:9px;top:-1px}
+#cz-cross i{position:absolute;background:#f4f4f0;outline:1px solid rgba(0,0,0,.55);opacity:.95} #cz-cross b{position:absolute;left:-1px;top:-1px;width:2px;height:2px;background:#f4f4f0;outline:1px solid rgba(0,0,0,.55)}
+#cz-cross .u,#cz-cross .d{width:2px;height:7px;left:-1px} #cz-cross .l,#cz-cross .r{height:2px;width:7px;top:-1px}
 #cz-hit{position:absolute;left:50%;top:50%;width:0;height:0;opacity:0;transition:opacity .06s}
 #cz-hit i{position:absolute;width:3px;height:11px;background:#fff;box-shadow:0 0 4px #000;left:-1.5px;top:-5px} #cz-hit i:nth-child(1){transform:rotate(45deg) translateY(-12px)} #cz-hit i:nth-child(2){transform:rotate(-45deg) translateY(-12px)} #cz-hit i:nth-child(3){transform:rotate(135deg) translateY(-12px)} #cz-hit i:nth-child(4){transform:rotate(-135deg) translateY(-12px)}
 #cz-hit.head i{background:#ff3b30}
@@ -513,6 +514,7 @@ export function bodyYaw(c, p, dt) {
   const k = c.k, aim = k === X.me && !(p.dead > 0) ? A.yaw : p.ay ?? p.yaw;
   if (c.legYaw === undefined || !Number.isFinite(c.legYaw)) c.legYaw = aim;
   const vx = p.vx - (p.gvx || 0), vz = p.vz - (p.gvz || 0), sp = Math.hypot(vx, vz); let tgt = c.legYaw; c.czRev = false;
+  if (p.st === ST.HANG || p.st === ST.MANTLE || p.st === ST.CLIMB) { c.legYaw = p.yaw; return p.yaw; } // accroché : le corps fait FACE au mur (la simulation l'oriente), jamais vers la visée
   if (sp > 0.9 && p.st === ST.GROUND) {
     const rel = wrap(Math.atan2(vx, vz) - aim);
     if (Math.abs(rel) <= (105 * Math.PI) / 180) tgt = aim + clamp(rel, -D75, D75);
@@ -544,22 +546,41 @@ function cycleAnim(el) { // culasse après un tir : lever (0 → 0,10), reculer 
   const up = sm(el / 0.1), back = sm((el - 0.1) / 0.12), fwd = sm((el - 0.46) / 0.14), down = sm((el - 0.66) / 0.14);
   return { handle: el < 0.66 ? lerp(-0.7, 1.3, up) : lerp(1.3, -0.7, down), slide: back * (1 - fwd), hand: el < 0.05 ? sm(el / 0.05) : el < 0.8 ? 1 : 1 - sm((el - 0.8) / 0.12) };
 }
+// PRISE D'UN REBORD (suspendu, puis en se hissant) : chaque main va au point de prise RÉEL du bord (core/sim.js ledgePoint), de part et d'autre du milieu, posée sur le
+// dessus juste après l'arête ; IK à deux segments (coudes vers l'extérieur et le bas), puis la main est orientée d'après SA géométrie (orientHand : axes déduits du médius
+// et du pouce, aucune rotation arbitraire) : doigts par-dessus le bord (vers le mur), paume vers le bas = prise en pronation ; les doigts se referment sur l'arête.
+function gripLedge(c, p, W) {
+  const L = ledgePoint(W, p), B = c.bones; if (!L || !B.upperarm_l || !B.upperarm_r) return;
+  const n = new THREE.Vector3(L.nx, 0, L.nz), t = new THREE.Vector3(L.tx, 0, L.tz), down = new THREE.Vector3(0, -1, 0), into = n.clone().negate();
+  c.armMiss = [];
+  for (const s of ['l', 'r']) {
+    const sg = s === 'l' ? -1 : 1, T = new THREE.Vector3(L.x, L.y + 0.025, L.z).addScaledVector(t, sg * 0.21).addScaledVector(into, 0.06);
+    const pole = n.clone().multiplyScalar(0.55).addScaledVector(t, sg * 0.7).addScaledVector(down, 0.35);
+    c.armMiss.push(ik2(B['upperarm_' + s], B['lowerarm_' + s], B['hand_' + s], T, pole));
+    const nh = orientHand(c, s, into, down); if (nh) curl(c, s, nh, { index: [0.75, 0.9, 0.5], middle: [0.8, 0.95, 0.55], ring: [0.85, 0.95, 0.55], pinky: [0.9, 0.95, 0.55], thumb: [0.3, 0.25, 0.1] });
+  }
+}
+// plaque de couche de la crosse par rapport à l'articulation de l'épaule droite (os upperarm_r), dans le repère de visée : en haut, à droite, vers l'avant (m)
+const BUTT = { up: 0.05, side: -0.05, fwd: -0.02 };
+// port bas (repos, course) : déplacement de la plaque de couche (m) et inclinaison du canon vers le bas (rad)
+const LOWREADY = { down: -0.14, side: 0.08, fwd: 0.06, pitch: 0.6 };
+const G0 = () => X.G;
 const RIFLE_WORLD = new THREE.Matrix4();
 export function pose(cl, W, dt, rp, me) {
   if (!X.on) return;
   X.me = me;
   for (let k = 0; k < W.pl.length; k++) {
     const p = W.pl[k], c = cl[k], r = X.rifles[k]; if (!c || !r) continue;
-    const alive = !(p.dead > 0) && (p.st === ST.GROUND || p.st === ST.AIR);
-    const hideMe = k === me && A.zoom > 0.6; // vue à travers la lunette : la caméra est dans le fusil, on ne dessine ni le tireur ni son arme
-    r.g.visible = alive && !hideMe; c.g.visible = !hideMe;
+    const alive = !(p.dead > 0) && (p.st === ST.GROUND || p.st === ST.AIR), climbing = !(p.dead > 0) && (p.st === ST.HANG || p.st === ST.MANTLE);
+    r.g.visible = alive; c.g.visible = true;
     c.ring.visible = true;
-    if (!alive) { c.czPost = null; continue; }
+    if (!alive && !climbing) { c.czPost = null; continue; }
     // les rotations ci-dessous sont RELATIVES (torsion du buste, tangage, doigts) : si l'animation en cours ne réécrit pas un os à chaque image (clip sans piste pour cet os), la rotation de l'image
     // précédente s'y ajouterait indéfiniment (le buste tourne alors en boucle). On défait donc d'abord nos propres modifications sur les os que l'animation n'a pas réécrits.
     const allB = c.boneList ||= [...new Set(Object.values(c.bones).filter(Boolean))];
     if (c.czPost) { for (const [b, st] of c.czPost) if (b.quaternion.equals(st.after)) b.quaternion.copy(st.before); c.root.updateMatrixWorld(true); }
     const pre = new Map(allB.map((b) => [b, b.quaternion.clone()]));
+    if (climbing) { c.root.updateMatrixWorld(true); gripLedge(c, p, W); c.czPost = new Map(); for (const [b, q0] of pre) if (!b.quaternion.equals(q0)) c.czPost.set(b, { before: q0, after: b.quaternion.clone() }); continue; }
     if (c.restQ && !dbg.noDamp) for (const n in c.restQ) { const b = c.bones[n]; if (b) b.quaternion.slerp(c.restQ[n], DAMP[n] ?? 0.8); } // le clip de course balance bassin, buste et tête de gauche à droite : on les ramène en grande partie à la pose de repos ; la visée les oriente ensuite
     const a = aimFor(k, p, dt), d = new THREE.Vector3().copy(aimDirV(a.yaw, a.pitch)), Rv = new THREE.Vector3(rightOf(a.yaw).x, 0, rightOf(a.yaw).z);
     // longueur des bras : les bras de ce modèle sont courts pour un fusil de 1,1 m ; on les allonge un peu (l'échelle suit l'axe de l'os)
@@ -580,7 +601,7 @@ export function pose(cl, W, dt, rp, me) {
     { // torsion du buste = écart entre le bassin (c.yaw, racine rendue) et la visée, répartie sur trois vertèbres
       const Y = _e.set(0, 1, 0), uL = c.bones.upperarm_l, uR = c.bones.upperarm_r;
       // cap voulu du buste = visée tournée de STANCE, jamais à plus de 80° du bassin ; cap actuel mesuré sur la ligne des épaules (l'animation de course tord elle-même le buste : on corrige l'écart réel, on n'ajoute pas une torsion fixe)
-      const want = c.yaw + clamp(wrap(a.yaw - STANCE - c.yaw), -1.4, 1.4); let cur = want;
+      const want = c.yaw + clamp(wrap(a.yaw - (X.stance ?? STANCE) - c.yaw), -1.4, 1.4); let cur = want;
       if (uL && uR) { const pl = wpos(uL, new THREE.Vector3()), pr = wpos(uR, new THREE.Vector3()); cur = Math.atan2(pr.z - pl.z, -(pr.x - pl.x)); }
       const twist = clamp(wrap(want - cur), -1.6, 1.6);
       for (const [bn, kf] of [['spine_01', 0.25], ['spine_02', 0.4], ['spine_03', 0.35]]) { const b = c.bones[bn]; if (b) rotWorld(b, Y, twist * kf); }
@@ -594,14 +615,25 @@ export function pose(cl, W, dt, rp, me) {
     const orgEye = new THREE.Vector3(ex, ey, ez).addScaledVector(Rv, CZ.BORE).addScaledVector(yA, -0.12).addScaledVector(zA, RIFLE.org - kick);
     // le fusil est porté par le corps : crosse dans le creux de l'épaule droite (position réelle de l'os, donc il suit la foulée, le buste et le tangage) ; seule la visée à la lunette revient à la position exacte de l'œil (la balle part de là)
     const org = orgEye.clone(), uR = c.bones.upperarm_r;
-    if (uR) { const sh = wpos(uR, new THREE.Vector3()), zkk = k === me ? sm(A.zoom) : 0; org.copy(sh).addScaledVector(yA, 0.05).addScaledVector(Rv, -0.05).addScaledVector(zA, -RIFLE.butt - 0.02 - kick).lerp(orgEye, zkk); }
+    if (uR) { const sh = wpos(uR, new THREE.Vector3()), zkk = k === me ? sm(A.zoom) : 0, BO = X.buttOff || BUTT; org.copy(sh).addScaledVector(yA, BO.up).addScaledVector(Rv, BO.side).addScaledVector(zA, -RIFLE.butt + BO.fwd - kick).lerp(orgEye, zkk); }
     // roulis (rechargement : le fusil penche vers la gauche pour ouvrir la culasse) et tangage du recul
     _m.makeBasis(xA, yA, zA); _q1.setFromRotationMatrix(_m); _q2.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -ang); _q1.multiply(_q2); _q2.setFromAxisAngle(new THREE.Vector3(0, 0, 1), tilt); _q1.multiply(_q2);
+    { // ÉTATS DU FUSIL : épaulé (visée, tir et 1,2 s après, culasse, rechargement) ; au repos et en course, PORTÉ BAS (canon vers le bas-avant, crosse sortie de l'épaule, le long
+      // de la hanche) : à l'épaule en permanence, la crosse rentrait dans le corps (mesuré : jusqu'à 20 points sur 30 du fût à plus de 2 cm dans le maillage selon le personnage)
+      X.readyT[k] = Math.max(0, (X.readyT[k] || 0) - dt); if (p.scope || p.cyc > 0 || reloading || X.rec[k] > 0.01 || (k === me && G0()?.keysHeld?.has('Mouse0'))) X.readyT[k] = 1.2;
+      const want = X.readyOverride ?? (X.readyT[k] > 0 ? 1 : 0), cur = X.ready[k] ?? 1; X.ready[k] = cur + (want - cur) * Math.min(1, dt * (want > cur ? 16 : 5));
+      const low = 1 - sm(X.ready[k]), LR = X.low || LOWREADY; X.lowNow = low;
+      if (low > 0.001) {
+        const buttW = org.clone().addScaledVector(zA, RIFLE.butt).addScaledVector(yA, LR.down * low).addScaledVector(Rv, LR.side * low).addScaledVector(zA, LR.fwd * low);
+        _q2.setFromAxisAngle(new THREE.Vector3(1, 0, 0), LR.pitch * low); _q1.multiply(_q2); org.copy(buttW).sub(new THREE.Vector3(0, 0, RIFLE.butt).applyQuaternion(_q1));
+      }
+    }
     RIFLE_WORLD.compose(org, _q1, new THREE.Vector3(1, 1, 1)); r.muz = (r.muz || new THREE.Vector3()).set(0, 0, RIFLE.muzzle + 0.04).applyMatrix4(RIFLE_WORLD); r.eye = (r.eye || new THREE.Vector3()).set(0, RIFLE.glb ? 0.052 : 0.03, RIFLE.glb ? -0.31 : -0.2).applyMatrix4(RIFLE_WORLD); // oculaire de la lunette
     r.g.matrix.copy(RIFLE_WORLD); r.g.matrixWorld.copy(RIFLE_WORLD); r.g.matrixWorldNeedsUpdate = true; r.g.updateMatrixWorld(true);
     // mains
     const toW = (v) => v.clone().applyMatrix4(RIFLE_WORLD), dirW = (v) => v.clone().transformDirection(RIFLE_WORLD);
-    let tR = RIFLE.gripR.clone(), tL = RIFLE.gripL.clone();
+    // main gauche : le long du garde-main, plus près du boîtier en port bas (bras à la bonne longueur : mesuré, elle restait à 10-25 cm du bois)
+    let tR = RIFLE.gripR.clone(), tL = RIFLE.gripL.clone(); tL.z -= (X.gripBack ?? 0.1) + (X.gripLow ?? 0.14) * (X.lowNow || 0);
     if (reloading) { const el = rlT; let i = 0; while (i < RELOAD_R.length - 2 && el >= RELOAD_R[i + 1][0]) i++; const [t0, k0] = RELOAD_R[i], [t1, k1] = RELOAD_R[i + 1], u = sm((el - t0) / (t1 - t0));
       const pos = (kk) => (kk === 'h' ? r.ball(RBL).clone().add(new THREE.Vector3(0.0, -0.01, 0)) : RPOS[kk].clone()); tR = pos(k0).lerp(pos(k1), u);
       if (clipShow) { // la lame descend de la ceinture vers le sommet du boîtier, puis s'enfonce
@@ -617,6 +649,13 @@ export function pose(cl, W, dt, rp, me) {
       const nR = orientHand(c, 'r', dirW(fingR.f), dirW(handHoldingBolt ? new THREE.Vector3(0.1, 0.9, 0.3) : fingR.n)), nL = orientHand(c, 'l', dirW(fingL.f), dirW(fingL.n));
       if (nR) { const trig = p.cd > KAR.FIRE_CD - 0.06 ? 0.7 : 0.18; curl(c, 'r', nR, { index: [trig, trig, trig * 0.5], middle: [1.15, 1.25, 0.9], ring: [1.2, 1.25, 0.9], pinky: [1.25, 1.25, 0.9], thumb: [0.45, 0.4, 0.2] }); }
       if (nL) curl(c, 'l', nL, { index: [0.95, 1.1, 0.7], middle: [1.1, 1.2, 0.9], ring: [1.15, 1.2, 0.9], pinky: [1.2, 1.2, 0.9], thumb: [0.25, 0.3, 0.15] });
+      // GLISSADE MURALE (p.wsl, simulation) : la main gauche quitte le garde-main et cherche appui sur le mur, paume contre la paroi, doigts vers le haut ; le fusil reste dans la main droite
+      c.wsl = (c.wsl || 0) + ((p.wsl ? 1 : 0) - (c.wsl || 0)) * Math.min(1, dt * 10);
+      if (c.wsl > 0.05 && p.wnx !== undefined) {
+        const n = new THREE.Vector3(p.wnx, 0, p.wnz), onWall = new THREE.Vector3(rp[k].x, rp[k].y + 1.45, rp[k].z).addScaledVector(n, -(P.R + 0.03)).addScaledVector(Rv, -0.22);
+        const T = wL.clone().lerp(onWall, sm(c.wsl)); ik2(B.upperarm_l, B.lowerarm_l, B.hand_l, T, n.clone().addScaledVector(Rv, -0.6).add(new THREE.Vector3(0, -0.4, 0)));
+        if (c.wsl > 0.5) orientHand(c, 'l', new THREE.Vector3(0, 1, 0), n.clone().negate());
+      }
     }
     c.czPost = new Map(); for (const [b, q0] of pre) if (!b.quaternion.equals(q0)) c.czPost.set(b, { before: q0, after: b.quaternion.clone() });
   }
@@ -693,9 +732,11 @@ export function hud(W, dt, G) {
   if (!me) return;
   const dead = me.dead > 0;
   // viseur : l'écart des traits suit la dispersion réelle du tir ; remplacé par la lunette
-  const spread = crazySpread(me), gap = (Math.tan(spread) / Math.tan((S.cam.fov * Math.PI) / 360)) * (innerHeight / 2), sc = sm(A.scope);
+  // réticule FIXE au centre ; seul l'écart des traits indique la dispersion, borné (4 à 12 px) et lissé : il ne « respire » pas à chaque pas
+  const spread = crazySpread(me), raw = (Math.tan(spread) / Math.tan((S.cam.fov * Math.PI) / 360)) * (innerHeight / 2), sc = sm(A.scope);
+  X.gap = (X.gap ?? 4) + (clamp(4 + raw * 0.35, 4, 12) - (X.gap ?? 4)) * Math.min(1, dt * 8); const gap = Math.round(X.gap);
   const cr = $('#cz-cross'); cr.style.opacity = dead || A.zoom > 0.3 ? 0 : 1;
-  cr.querySelector('.u').style.top = `${-gap - 11}px`; cr.querySelector('.d').style.top = `${gap + 2}px`; cr.querySelector('.l').style.left = `${-gap - 11}px`; cr.querySelector('.r').style.left = `${gap + 2}px`;
+  cr.querySelector('.u').style.top = `${-gap - 7}px`; cr.querySelector('.d').style.top = `${gap}px`; cr.querySelector('.l').style.left = `${-gap - 7}px`; cr.querySelector('.r').style.left = `${gap}px`;
   $('#cz-scope').style.display = A.zoom > 0.02 ? 'block' : 'none'; $('#cz-scope').style.opacity = clamp(A.zoom * 1.4, 0, 1); // vue à travers la lunette du Kar98k (zoom ×4)
   X.hitT = Math.max(0, X.hitT - dt); const hm = $('#cz-hit'); hm.style.opacity = X.hitT > 0 ? Math.min(1, X.hitT / 0.12) : 0; hm.classList.toggle('head', X.hitHead);
   X.dmgT = Math.max(0, X.dmgT - dt); $('#cz-vig').style.opacity = Math.min(1, X.dmgT * 1.8);

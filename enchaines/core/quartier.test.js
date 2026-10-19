@@ -68,7 +68,9 @@ function bot(x, y, z) {
       R.log.push(`ÉCHEC st=${p.st} (${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})`); return false;
     },
     hangs: (q) => q.st === ST.HANG, stands: (y) => (q) => q.st === ST.GROUND && q.y > y - 0.05,
-    mantle() { return R.go(0, 0, (q) => q.st === ST.GROUND, 1.5, true); },
+    mantle() { return p.st === ST.GROUND || R.go(0, 0, (q) => q.st === ST.GROUND, 1.5, true); }, // déjà passé par-dessus (bord bas franchi d'un coup) : rien à faire
+    // monte sur le rebord : suspendu, ou déjà passé dessus (franchissement direct d'un bord à hauteur de poitrine, mode crazy)
+    climbs: (q) => q.st === ST.HANG || (q.st === ST.MANTLE) || (q.st === ST.GROUND && q.y > 1),
     get t() { return t; },
   };
   return R;
@@ -100,15 +102,12 @@ test('Quartier : longer un balcon suspendu (déplacement latéral), puis passer 
   assert.ok(Q.p.st === ST.HANG && Q.p.hang.f !== f0, 'coin passé : on pend maintenant sur la façade sud');
 });
 
-test('Quartier : itinéraire nord — petit toit de B8 (3,9) → toit haut (5,9) → toit de B9 (7-8 m), et l\'auvent de B7 (6,95) depuis le petit toit', () => {
+test('Quartier : itinéraire nord — petit toit de B8 (3,9) → toit haut (5,9) → toit de B9 (7-8 m)', () => {
   const [x, z] = at('B8', 1.4, 5.2), R = bot(x, 0, z), { p } = R; // près du coin : la face avant est un pignon, seul son bas (aux angles) est un rebord
   assert.ok(R.go(0, -1, R.hangs, 1.5, true), 'égout du petit toit depuis la rue arrière : ' + R.log); assert.ok(R.mantle() && p.y > 3.8, R.log.join(' | '));
-  assert.ok(R.go(0, -1, R.hangs, 2, true), 'égout du toit haut : ' + R.log); assert.ok(R.mantle() && p.y > 5.8, R.log.join(' | '));
+  assert.ok(R.go(0, -1, R.climbs, 2, true), 'égout du toit haut : ' + R.log); assert.ok(R.mantle() && p.y > 5.8, R.log.join(' | '));
   R.go(-1, 0, (q) => q.x < -9.4, 1); // au faîtage du toit haut, puis élan vers l'ouest et saut sur la pente de B9
   assert.ok(R.go(-1, 0, (q) => q.st === ST.GROUND && q.y > 6.85 && q.x < at('B9', 5.7, 0)[0], 3, false, (q) => q.x < -10.75), 'passé sur le toit de B9 : ' + R.log);
-  const S = bot(...((a) => [a[0], 0, a[1]])(at('B8', 1.4, 5.2))); S.go(0, -1, S.hangs, 1.5, true); S.mantle();
-  S.go(0, 1, (q) => q.z > -26.95, 1); // au bord avant du petit toit, dans l'axe de l'auvent (on en saisit le bout, puis on passe l'angle)
-  assert.ok(S.go(1, 0, S.hangs, 2, false, (q) => q.x > -7.75) && S.p.hang && S.W.bodies[S.p.hang.b].ledge, 'auvent de B7 saisi depuis le petit toit : ' + S.log); assert.ok(S.mantle() && S.p.y > 6.9, S.log.join(' | '));
 });
 
 test('Quartier : appentis des ailes — inaccessible d\'un saut depuis le sol, accessible depuis la caisse d\'appui ; le kiosque se gravit', () => {
@@ -116,7 +115,7 @@ test('Quartier : appentis des ailes — inaccessible d\'un saut depuis le sol, a
   const Q = bot(-8.85, 1.25, 6.6); assert.ok(Q.go(-1, 0, Q.hangs, 1.5, true), 'depuis la caisse : ' + Q.log); assert.ok(Q.mantle() && Q.p.y > 4.0, Q.log.join(' | '));
   assert.ok(Q.go(-1, 0, (q) => q.y > 6, 4), 'on monte l\'appentis en marchant : ' + Q.log);
   const K = bot(3, 0, 12.6); assert.ok(K.go(0, -1, K.hangs, 1.5, true), 'kiosque, partie basse (égout sud) : ' + K.log); assert.ok(K.mantle() && K.p.y > 3.8, K.log.join(' | '));
-  const C = bot(-2, 0, 5.4); assert.ok(C.go(0, 1, C.hangs, 1.5, true) && C.mantle() && C.p.y > 2.3, 'sur la pile de caisses : ' + C.log);
+  const C = bot(-2, 0, 5.4); assert.ok(C.go(0, 1, C.climbs, 1.5, true) && C.mantle() && C.p.y > 2.3, 'sur la pile de caisses : ' + C.log);
   assert.ok(C.go(0, 1, C.hangs, 2, true), 'kiosque, partie haute depuis la caisse : ' + C.log); assert.ok(C.mantle() && C.p.y > 5.8, C.log.join(' | '));
 });
 

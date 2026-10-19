@@ -141,11 +141,32 @@ test('fuzz : quatre tireurs aux entrées aléatoires restent dans chaque arène 
   }
 });
 
-test('lunette : au bout de 0,3 s de visée le rayon part de l\'axe de la lunette, et le tir touche toujours ce qui est sous le réticule', () => {
-  const { W, a, b } = duel(); Object.assign(b, { x: -15 - CZ.BORE, y: 0, z: 17 });
-  run(W, [{ ...IDLE, ay: 0, ap: 0, scope: true }, IDLE], 0.15); assert.ok(a.scope && !a.zm, 'viseur à l\'épaule d\'abord');
-  run(W, [{ ...IDLE, ay: 0, ap: 0, scope: true }, IDLE], 0.25); assert.ok(a.zm, 'puis lunette');
-  const ev = run(W, [fire({ ...IDLE, ay: 0, ap: Math.atan2(1.0 - (1.5 + CZ.SCOPE_UP), 20), scope: true }), IDLE], 0.05);
-  assert.ok(ev.some((e) => e.k === 'dmg' && e.v === 1), 'touché');
-  run(W, [IDLE, IDLE], 0.1); assert.ok(!a.zm && a.scT === 0, 'relâché : retour au viseur normal');
+test('visée : un seul niveau (à l\'épaule), jamais de lunette, et le tir part en visant', () => {
+  const { W, a } = duel();
+  run(W, [{ ...IDLE, ay: 0, ap: 0, scope: true }, IDLE], 1.0); assert.ok(a.scope && !a.zm, 'visée à l\'épaule, même maintenue 1 s : pas de second niveau');
+  const ev = run(W, [fire({ ...IDLE, ay: 0, ap: Math.atan2(1.0 - EYEC, 20), scope: true }), IDLE], 0.05);
+  assert.ok(ev.some((e) => e.k === 'shot') && ev.some((e) => e.k === 'dmg' && e.v === 1), 'tir pendant la visée : touché');
+  run(W, [IDLE, IDLE], 0.1); assert.ok(!a.scope && a.scT === 0, 'relâché : visée normale');
+});
+
+test('déplacements crazy : départ et arrêt progressifs (pas instantanés), sprint avec Maj vers l\'avant, marche arrière plus lente', () => {
+  const W = mk(1), p = W.pl[0]; Object.assign(p, { x: 0, y: 0, z: 0, vx: 0, vz: 0, st: ST.GROUND, prot: 0 });
+  run(W, [{ ...IDLE, mz: 1, ay: 0 }], 0.05); const v1 = Math.hypot(p.vx, p.vz); assert.ok(v1 > 0.5 && v1 < 2.2, 'démarrage progressif : ' + v1.toFixed(2));
+  run(W, [{ ...IDLE, mz: 1, ay: 0 }], 0.5); assert.ok(Math.abs(Math.hypot(p.vx, p.vz) - P.RUN) < 0.05, 'pleine vitesse en moins de 0,3 s');
+  run(W, [{ ...IDLE, mz: 1, ay: 0, brace: true }], 0.5); assert.ok(Math.abs(Math.hypot(p.vx, p.vz) - P.RUN * CZ.SPRINT) < 0.05, 'sprint : ' + Math.hypot(p.vx, p.vz).toFixed(2));
+  run(W, [{ ...IDLE, ay: 0 }], 0.05); assert.ok(Math.hypot(p.vx, p.vz) > 4, 'arrêt progressif');
+  run(W, [{ ...IDLE, mz: -1, ay: 0 }], 0.8); assert.ok(Math.abs(Math.hypot(p.vx, p.vz) - P.RUN * CZ.BACK) < 0.05, 'marche arrière : ' + Math.hypot(p.vx, p.vz).toFixed(2));
+});
+
+test('glissade murale : contre un mur lisse on ne s\'accroche pas, on glisse (chute freinée, état visible) ; un bord à hauteur de poitrine se franchit d\'un coup', () => {
+  const W = mk(1), p = W.pl[0];
+  Object.assign(p, { x: 0, y: 3, z: 69.5 - P.R - 0.02, vx: 0, vy: -1, vz: 0, st: ST.AIR, stT: 1, prot: 0 }); let slid = 0, minVy = 0;
+  for (let i = 0; i < 40; i++) { stepWorld(W, [{ ...IDLE, mz: 1, ay: 0 }]); if (p.wsl) slid++; minVy = Math.min(minVy, p.vy); }
+  assert.ok(p.st !== ST.HANG && slid > 20 && minVy >= -CZ.WALL_SLIDE - 1e-6, `glisse sans s'accrocher (${slid} pas, vy min ${minVy.toFixed(2)})`);
+  // muret de 1,2 m : on saute vers lui, on passe dessus sans pendre
+  const K = course({ id: 'czv', world: 'mech', name: 't', short: 't', diff: 1, published: false, crazy: true, medals: { gold: 1, silver: 2, bronze: 3 }, abyss: -12 });
+  K.block(0, -4, 0, 0, 40, 40, { mat: 'metal' }); K.block(0, 0, 1.7, 3, 6, 1.5, { mat: 'brick' }); K.cp(-15, 0, -15); K.cp(15, 0, 15); // mur plus haut que l'apex du saut (1,6 m) : on ne peut que le FRANCHIR en posant les mains
+  const V = createWorld({ crazy: true, level: K.done(), players: 1 }), q = V.pl[0]; Object.assign(q, { x: 0, y: 0, z: 1.2, vx: 0, vz: 0, st: ST.GROUND, prot: 0 }); let hung = false;
+  let top = 0; for (let i = 0; i < 120; i++) { stepWorld(V, [{ ...IDLE, mz: 1, ay: 0, jc: 1, jump: i < 40 }]); if (q.st === ST.HANG) hung = true; if (q.st === ST.GROUND) top = Math.max(top, q.y); }
+  assert.ok(!hung && top > 1.65, 'mur de 1,7 m franchi d\'un coup, sans pendre : debout à ' + top.toFixed(2));
 });

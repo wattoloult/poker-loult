@@ -285,6 +285,7 @@ wss.on('connection', (ws) => {
       case 'vote': if (r && p && r.vote && r.vote.list.includes(m.course)) { r.vote.votes[p.seat] = m.course; cast(r, voteMsg(r)); } break;
       case 'cp': if (r && p && r.W) { if (r.cfg.mode === 'crazy') break; else if (r.cfg.mode === 'free') p.rstT = 0.7; else { r.W.resetHold[p.seat] = 1.01; r.run?.push(['cp', p.seat]); } } break; // retour au point de passage demandé depuis le menu
       case 'ready': if (p) p.ready = true; break; // fin de chargement du client (mode crazy)
+      case 'devtp': if (DEV && p && r?.W?.pl[p.seat]) { const q = r.W.pl[p.seat]; for (const k of ['x', 'y', 'z', 'ay']) if (Number.isFinite(m[k])) q[k] = m[k]; q.vx = q.vy = q.vz = 0; q.st = 1; q.hang = q.mantle = null; } break; // DÉVELOPPEMENT SEULEMENT (ENCH_DEV=1) : place son grimpeur (captures, mises au point)
       case 'i': {
         if (!p || !r.W || !Array.isArray(m.a)) break;
         for (const e of m.a.slice(0, 12)) if (Array.isArray(e) && e.length >= 6 && e.length <= 9 && Number.isInteger(e[0]) && e[0] > p.ack) { if (p.fresh) { p.fresh = false; p.q = []; } p.q.push(e); }

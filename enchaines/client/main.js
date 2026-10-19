@@ -95,6 +95,14 @@ addEventListener('mousedown', (e) => { if (e.button > 0 && (e.target.id === 'gl'
 // tant qu'on joue, dans le jeu ou pendant le réglage d'une touche ; ils restent utilisables comme actions (« Souris 4 / 5 » dans les réglages).
 for (const ev of ['mousedown', 'mouseup', 'auxclick', 'click']) addEventListener(ev, (e) => { if ((e.button === 3 || e.button === 4) && (e.target.id === 'gl' || G.mode || G.capturing)) { e.preventDefault(); e.stopPropagation(); } }, true);
 addEventListener('pointerup', (e) => { keys.delete('Mouse' + e.button); if (e.button === 1 && PW.down) pingUp(e); });
+// boutons ENCHAÎNÉS : un 2e bouton pressé pendant qu'un autre est tenu ne déclenche PAS pointerdown (spéc. Pointer Events : seulement pointermove, avec e.buttons
+// mis à jour). Sans cette lecture, le clic gauche était perdu pendant la visée (clic droit tenu) : on ne pouvait pas tirer en visant.
+const MB = [[1, 'Mouse0'], [2, 'Mouse2'], [4, 'Mouse1'], [8, 'Mouse3'], [16, 'Mouse4']];
+function syncButtons(e) {
+  if (!G.mode || G.capturing || !(document.pointerLockElement || e.target?.id === 'gl')) return;
+  for (const [bit, k] of MB) { const on = (e.buttons & bit) !== 0; if (on && !keys.has(k)) { pressed.add(k); keys.add(k); } else if (!on && keys.has(k)) keys.delete(k); }
+}
+addEventListener('pointermove', syncButtons);
 addEventListener('pointercancel', () => { for (let b = 0; b < 5; b++) keys.delete('Mouse' + b); });
 addEventListener('pointermove', (e) => { if (PW.open) wheelHover(e); if (G.crazy && document.pointerLockElement) { Crazy.look(e.movementX, e.movementY, CFG.sens * (CFG.invert ? 1 : 1)); return; } if (document.pointerLockElement) { Scene.camInput(-e.movementX * 0.0032 * CFG.sens, e.movementY * 0.0022 * (CFG.invert ? -1 : 1), 0); return; } if (!drag) return; Scene.camInput(-(e.clientX - drag.x) * 0.006 * CFG.sens, (e.clientY - drag.y) * 0.004 * (CFG.invert ? -1 : 1), 0); drag = { x: e.clientX, y: e.clientY }; });
 addEventListener('pointerup', () => { drag = null; });
