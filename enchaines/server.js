@@ -52,8 +52,8 @@ const live = (r) => r.people.filter((p) => !p.gone);
 function newCode() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; for (;;) { let c = ''; for (let i = 0; i < 4; i++) c += A[crypto.randomInt(A.length)]; if (!rooms.has(c)) return c; } }
 const num = (v, a, b) => (Number.isFinite(+v) ? Math.max(a, Math.min(b, +v)) : 0);
 const cnt = (v) => (Number.isInteger(v) && v >= 0 && v < 1e9 ? v : 0);
-const decIn = (a) => ({ mx: num(a[1], -1, 1), mz: num(a[2], -1, 1), jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), punch: !!(a[3] & 32), kick: !!(a[3] & 64), slide: !!(a[3] & 128), fire: !!(a[3] & 256), scope: !!(a[3] & 512), reload: !!(a[3] & 1024), ay: num(a[7], -64, 64), ap: num(a[8], -1.5, 1.5), jc: cnt(a[4]), dc: cnt(a[5]), uc: cnt(a[6]) });
-const encIn = (I) => (I ? [0, I.mx, I.mz, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0) | (I.cup ? 16 : 0) | (I.punch ? 32 : 0) | (I.kick ? 64 : 0) | (I.slide ? 128 : 0) | (I.fire ? 256 : 0) | (I.scope ? 512 : 0) | (I.reload ? 1024 : 0), I.jc, I.dc, I.uc || 0, I.ay || 0, I.ap || 0] : null);
+const decIn = (a) => ({ mx: num(a[1], -1, 1), mz: num(a[2], -1, 1), jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), punch: !!(a[3] & 32), kick: !!(a[3] & 64), slide: !!(a[3] & 128), fire: !!(a[3] & 256), scope: !!(a[3] & 512), reload: !!(a[3] & 1024), ay: a.length > 7 ? num(a[7], -64, 64) : undefined, ap: a.length > 8 ? num(a[8], -1.5, 1.5) : undefined, jc: cnt(a[4]), dc: cnt(a[5]), uc: cnt(a[6]) });
+const encIn = (I) => (I ? [0, I.mx, I.mz, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0) | (I.cup ? 16 : 0) | (I.punch ? 32 : 0) | (I.kick ? 64 : 0) | (I.slide ? 128 : 0) | (I.fire ? 256 : 0) | (I.scope ? 512 : 0) | (I.reload ? 1024 : 0), I.jc, I.dc, I.uc || 0, ...(I.ay !== undefined ? [I.ay, I.ap] : [])] : null);
 
 /* ------------------------------ salons ------------------------------ */
 function roomView(r, you) {
@@ -112,7 +112,7 @@ function startGame(r) {
   for (const ws of r.spect) send(ws, startMsg(r, null));
   pushRoom(r);
 }
-const KEEP = new Set(['hit', 'kill', 'spawn', 'shot', 'bolt', 'casing', 'reload', 'dry', 'lost', 'punch', 'tackle', 'down', 'checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
+const KEEP = new Set(['dmg', 'kill', 'spawn', 'shot', 'bolt', 'casing', 'reload', 'dry', 'lost', 'punch', 'tackle', 'down', 'checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
 function update(r, dt) {
   if (r.phase !== 'play' || !r.W) return;
   r.acc += dt; let n = 0;

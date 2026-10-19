@@ -1016,7 +1016,7 @@ const onBody = (W, b) => { let n = 0; for (const p of W.pl) if (p.st === ST.GROU
 const X = { ST, P, DT, HP, CH, ev: (W, k, o) => ev(W, k, o), clamp, onB: onBody, inside, groundBelow, bounds, spanOf, toAir: (p) => toAir(p) };
 
 /* ------------------------------ mode CRAZY : arène, fusil à verrou ------------------------------ */
-export const CZ = { LIMIT: 15, TIME: 300, RESPAWN: 3, PROT: 2, SHOULDER: 0.45, WALL_SLIDE: 3.2, WALL_CD: 0.22, SCOPE_SLOW: 0.55, WJ_OUT: 6.4, WJ_UP: 8.6,
+export const CZ = { LIMIT: 15, TIME: 300, RESPAWN: 3, PROT: 2, SHOULDER: 0.45, BORE: 0.12, WALL_SLIDE: 3.2, WALL_CD: 0.22, SCOPE_SLOW: 0.55, WJ_OUT: 6.4, WJ_UP: 8.6,
   // phases du cycle de culasse (s depuis le tir) et du rechargement (s depuis son début) : chacune émet un événement de son propre bruit
   BOLT: [[0.10, 'up'], [0.22, 'back'], [0.42, 'eject'], [0.60, 'fwd'], [0.80, 'down']], RELOAD_AT: [[0.25, 'open'], [0.85, 'clip'], [1.85, 'push'], [2.3, 'close']] };
 export const crazyEye = (p) => (p.slideT > 0 || p.crawl ? KAR.EYE_SLIDE : KAR.EYE);
@@ -1074,34 +1074,46 @@ function killPlayer(W, v, by, head, dx, dy, dz) {
   const k = by != null && by !== v.id ? W.pl[by] : null; if (k) k.kills++;
   ev(W, 'kill', { p: by ?? -1, v: v.id, head: head ? 1 : 0, x: v.x, y: v.y + 1, z: v.z, dx, dy, dz, w: 'kar' });
 }
+// premier obstacle sur un rayon : décor (boîtes) ou adversaire vivant et vulnérable ; renvoie { t, kind (0 rien, 1 décor, 2 joueur), victim, n }
+function traceRay(W, p, ox, oy, oz, d, max) {
+  const r = { t: max, kind: 0, victim: null, nx: 0, ny: 1, nz: 0 };
+  for (const b of W.bodies) {
+    if (!b.on || b.ghost || b.ex === undefined) continue;
+    if (Math.abs(ox - b.px) - b.ex > max || Math.abs(oz - b.pz) - b.ez > max) continue;
+    const hit = rayBody(b, ox, oy, oz, d.x, d.y, d.z, r.t); if (hit && hit.t < r.t) { r.t = hit.t; r.kind = 1; r.nx = hit.nx; r.ny = hit.ny; r.nz = hit.nz; }
+  }
+  let tp = -1, victim = null;
+  for (const q of W.pl) {
+    if (q === p || q.dead > 0 || q.prot > 0) continue;
+    const Hq = q.slideT > 0 || q.crawl ? P.H * 0.55 : P.H, t = rayCapsule(ox, oy, oz, d.x, d.y, d.z, q.x, q.y + P.R, q.y + Hq - P.R, q.z, P.R + 0.08, r.t);
+    if (t >= 0 && (tp < 0 || t < tp)) { tp = t; victim = q; }
+  }
+  if (victim && tp <= r.t) { r.t = tp; r.kind = 2; r.victim = victim; }
+  return r;
+}
+// TIR : comme dans tout jeu à la troisième personne, la caméra (épaule décalée, derrière le tireur) vise un POINT ; la balle part du fusil vers ce point
+// (ce qui est sous le viseur est touché à toute distance). Le rayon de caméra part de l'épaule + CZ.SHOULDER, au niveau des yeux.
 function fireShot(W, p) {
   const ay = p.ay, ap = p.ap, sp = crazySpread(p);
   // dispersion déterministe (même tirage chez tous) : un point dans un disque autour de la visée
   const h = Math.imul(W.tick * 31 + p.id * 977 + p.ammo, 2654435761) >>> 0, a = ((h & 0xffff) / 65536) * Math.PI * 2, r = (((h >>> 16) & 0xffff) / 65536) ** 0.5 * sp;
   const d = aimDir(ay + Math.cos(a) * r, clamp(ap + Math.sin(a) * r, -1.45, 1.45)), R = rightOf(ay), eye = crazyEye(p);
-  const ox = p.x + R.x * CZ.SHOULDER, oy = p.y + eye, oz = p.z + R.z * CZ.SHOULDER;
-  let tw = KAR.RANGE, nx = 0, ny = 1, nz = 0, surf = 0;
-  for (const b of W.bodies) {
-    if (!b.on || b.ghost || b.ex === undefined) continue;
-    if (Math.abs(ox - b.px) - b.ex > KAR.RANGE || Math.abs(oz - b.pz) - b.ez > KAR.RANGE) continue;
-    const hit = rayBody(b, ox, oy, oz, d.x, d.y, d.z, tw); if (hit && hit.t < tw) { tw = hit.t; nx = hit.nx; ny = hit.ny; nz = hit.nz; surf = 1; }
-  }
-  let tp = -1, victim = null;
-  for (const q of W.pl) {
-    if (q === p || q.dead > 0 || q.prot > 0) continue;
-    const Hq = q.slideT > 0 || q.crawl ? P.H * 0.55 : P.H, t = rayCapsule(ox, oy, oz, d.x, d.y, d.z, q.x, q.y + P.R, q.y + Hq - P.R, q.z, P.R + 0.08, tw);
-    if (t >= 0 && (tp < 0 || t < tp)) { tp = t; victim = q; }
-  }
-  const mx = ox + R.x * 0.0 + d.x * 0.9, my = oy - 0.12 + d.y * 0.9, mz = oz + d.z * 0.9; // bouche du canon (≈ 0,9 m devant l'épaule)
-  let t = tw, kind = surf;
-  if (victim && tp <= tw) {
-    t = tp; kind = 2; const hx = ox + d.x * t, hy = oy + d.y * t, hz = oz + d.z * t, Hq = victim.slideT > 0 || victim.crawl ? P.H * 0.55 : P.H, rel = (hy - victim.y) / Hq;
+  const cx = p.x + R.x * CZ.SHOULDER, cy = p.y + eye, cz = p.z + R.z * CZ.SHOULDER;
+  const aimT = traceRay(W, p, cx, cy, cz, d, KAR.RANGE).t, px = cx + d.x * aimT, py = cy + d.y * aimT, pz = cz + d.z * aimT;
+  // départ de la balle : au niveau du fusil, à droite du corps
+  const ox = p.x + R.x * CZ.BORE, oy = p.y + eye - 0.12, oz = p.z + R.z * CZ.BORE;
+  let bx = px - ox, by = py - oy, bz = pz - oz; const bl = Math.hypot(bx, by, bz);
+  const db = bl > 0.6 ? { x: bx / bl, y: by / bl, z: bz / bl } : d;
+  const hit = traceRay(W, p, ox, oy, oz, db, KAR.RANGE), t = hit.t, victim = hit.victim;
+  const mx = ox + db.x * 0.9, my = oy + db.y * 0.9, mz = oz + db.z * 0.9; // bouche du canon (~0,9 m devant le départ)
+  if (victim) {
+    const hx = ox + db.x * t, hy = oy + db.y * t, hz = oz + db.z * t, Hq = victim.slideT > 0 || victim.crawl ? P.H * 0.55 : P.H, rel = (hy - victim.y) / Hq;
     const zone = rel >= KAR.HEAD_FROM ? 2 : rel < KAR.LEG_TO ? 0 : 1, dmg = zone === 2 ? KAR.DMG_HEAD : zone === 1 ? KAR.DMG_BODY : KAR.DMG_LEG;
-    victim.hp -= dmg; victim.lastBy = p.id; victim.lastByT = W.time; victim.vx += d.x * 1.2; victim.vz += d.z * 1.2;
-    ev(W, 'hit', { p: p.id, v: victim.id, zone, dmg, x: hx, y: hy, z: hz, dx: d.x, dy: d.y, dz: d.z, hp: Math.max(0, victim.hp) });
-    if (victim.hp <= 0) killPlayer(W, victim, p.id, zone === 2, d.x, d.y, d.z);
+    victim.hp -= dmg; victim.lastBy = p.id; victim.lastByT = W.time; victim.vx += db.x * 1.2; victim.vz += db.z * 1.2;
+    ev(W, 'dmg', { p: p.id, v: victim.id, zone, dmg, x: hx, y: hy, z: hz, dx: db.x, dy: db.y, dz: db.z, hp: Math.max(0, victim.hp) });
+    if (victim.hp <= 0) killPlayer(W, victim, p.id, zone === 2, db.x, db.y, db.z);
   }
-  ev(W, 'shot', { p: p.id, x: mx, y: my, z: mz, ex: ox + d.x * t, ey: oy + d.y * t, ez: oz + d.z * t, kind, nx, ny, nz, dx: d.x, dy: d.y, dz: d.z });
+  ev(W, 'shot', { p: p.id, x: mx, y: my, z: mz, ex: ox + db.x * t, ey: oy + db.y * t, ez: oz + db.z * t, kind: hit.kind, nx: hit.nx, ny: hit.ny, nz: hit.nz, dx: db.x, dy: db.y, dz: db.z });
 }
 function stepCombat(W, p, I) {
   const dt = DT;
@@ -1113,7 +1125,7 @@ function stepCombat(W, p, I) {
     for (const [t, s] of CZ.BOLT) if (e0 < t && e1 >= t) {
       ev(W, 'bolt', { p: p.id, s });
       if (s === 'eject') { const R = rightOf(p.ay), d = aimDir(p.ay, p.ap), eye = crazyEye(p), h = Math.imul(W.tick + p.id * 131, 2246822519) >>> 0, j = (h & 255) / 255;
-        ev(W, 'casing', { p: p.id, x: p.x + R.x * (CZ.SHOULDER + 0.1) + d.x * 0.35, y: p.y + eye - 0.12 + d.y * 0.35, z: p.z + R.z * (CZ.SHOULDER + 0.1) + d.z * 0.35,
+        ev(W, 'casing', { p: p.id, x: p.x + R.x * (CZ.BORE + 0.07) + d.x * 0.35, y: p.y + eye - 0.12 + d.y * 0.35, z: p.z + R.z * (CZ.BORE + 0.07) + d.z * 0.35,
           vx: R.x * (2.0 + j) + p.vx * 0.5, vy: 2.4 + ((h >>> 8) & 255) / 255, vz: R.z * (2.0 + j) + p.vz * 0.5 }); }
     }
     if (!p.cyc) p.ejected = true;

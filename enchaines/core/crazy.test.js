@@ -33,17 +33,17 @@ test('les arènes crazy sont à part des parcours et leurs places d\'apparition 
 test('un tir au corps retire 60, à la tête tue, aux jambes 40', () => {
   for (const [ap, dmg] of [[Math.atan2(1.0 - 1.5, 20), KAR.DMG_BODY], [Math.atan2(1.68 - 1.5, 20), KAR.DMG_HEAD], [Math.atan2(0.3 - 1.5, 20), KAR.DMG_LEG]]) {
     const { W, b, aim } = duel(); const ev = run(W, [fire(aim(ap)), IDLE], 0.05);
-    const h = ev.find((e) => e.k === 'hit'); assert.ok(h, 'touché'); assert.equal(h.dmg, dmg);
+    const h = ev.find((e) => e.k === 'dmg'); assert.ok(h, 'touché'); assert.equal(h.dmg, dmg);
     assert.equal(b.hp, Math.max(0, KAR.HP - dmg));
   }
 });
 
 test('un mur arrête la balle', () => {
   const { W } = duel();
-  const ev = run(W, [fire({ ...IDLE, ay: 0, ap: Math.atan2(1 - 1.5, 20) }), IDLE], 0.05); assert.ok(ev.some((e) => e.k === 'hit'));
+  const ev = run(W, [fire({ ...IDLE, ay: 0, ap: Math.atan2(1 - 1.5, 20) }), IDLE], 0.05); assert.ok(ev.some((e) => e.k === 'dmg'));
   const W2 = mk(2); const [a2, b2] = W2.pl; Object.assign(a2, { x: 0, y: 0, z: 1, prot: 0 }); Object.assign(b2, { x: -0.45, y: 0, z: 14, prot: 0 }); b2.hp = KAR.HP; W2.bodies.push(Object.assign({}, W2.bodies[0], { i: 99, px: 0, py: 1, pz: 8, hw: 6, hh: 2, hd: 0.3, ex: 6, ez: 6, c: 1, s: 0, on: true })); // mur plein entre les deux
   const ev2 = run(W2, [fire({ ...IDLE, ay: 0, ap: Math.atan2(1 - 1.5, 12) }), IDLE], 0.05);
-  assert.ok(!ev2.some((e) => e.k === 'hit'), 'le mur protège'); assert.equal(b2.hp, KAR.HP);
+  assert.ok(!ev2.some((e) => e.k === 'dmg'), 'le mur protège'); assert.equal(b2.hp, KAR.HP);
 });
 
 test('cycle de culasse : une douille éjectée par tir, pas de tir pendant le cycle, 5 cartouches', () => {
@@ -92,4 +92,12 @@ test('chute dans le vide = mort (crédit à celui qui a touché en dernier)', ()
 test('déterminisme : mêmes entrées => même état', () => {
   const go = () => { const { W } = duel(); const I = fire({ ...IDLE, ay: 0.01, ap: 0.05, mx: 0.5 }); run(W, [I, IDLE], 3); return JSON.stringify(W.pl.map((p) => [p.x, p.y, p.z, p.hp, p.ammo, p.cyc])); };
   assert.equal(go(), go());
+});
+
+test('la balle touche ce qui est sous le viseur de la caméra, de près comme de loin', () => {
+  for (const dist of [2.5, 6, 40]) {
+    const { W, b } = duel(); Object.assign(b, { x: -15 - CZ.SHOULDER, y: 0, z: -3 + dist });
+    const ev = run(W, [fire({ ...IDLE, ay: 0, ap: Math.atan2(1.0 - 1.5, dist) }), IDLE], 0.05);
+    assert.ok(ev.some((e) => e.k === 'dmg' && e.v === 1), `touché à ${dist} m`);
+  }
 });

@@ -252,7 +252,7 @@ export const EN = {
   "serveur occupé, réessaie": "server busy, try again",
   "Speedrun solo : un seul grimpeur, sans chaîne ; second saut en l'air, une plaque suffit,": "Solo speedrun: one climber, no chain; double jump in the air, one plate is enough,", "Suppr": "Delete",
   "recommence aussitôt. Le chrono part au premier mouvement ; le serveur rejoue la montée avant de la classer.": "restarts instantly. The clock starts on your first move; the server replays the climb before ranking it.",
-  "Mode": "Mode", "Coop · chaîne": "Co-op · chain", "Libre · jusqu'à 4": "Free · up to 4", "Place libre…": "Free slot…", "Lancer la course": "Start the race", "libre": "free",
+  "Mode": "Mode", "Coop · chaîne": "Co-op · chain", "Libre · jusqu'à 4": "Free · up to 4", "Crazy · tir à 4": "Crazy · 4-player shootout", "Fin de la manche": "Round over", "Éliminations": "Kills", "Place libre…": "Free slot…", "Lancer la course": "Start the race", "libre": "free",
   "{0} arrive n°{1} !": "{0} finishes #{1}!", "Fin de la course": "Race over", "Classement": "Ranking", "pas arrivé": "did not finish", "Rejouer": "Play again",
   "Prochaine carte · vote": "Next map · vote", "Prochaine carte dans {0} s — vote !": "Next map in {0}s — vote!", "Prochaine carte : {0}": "Next map: {0}",
 };

@@ -81,3 +81,89 @@ export function play(name, o = {}) {
 let WG = null, WF = null;
 function wind() { const s = C.createBufferSource(); s.buffer = NB; s.loop = true; WF = C.createBiquadFilter(); WF.type = 'bandpass'; WF.Q.value = 0.6; WF.frequency.value = 500; WG = C.createGain(); WG.gain.value = 0; s.connect(WF).connect(WG).connect(SFXB || OUT); s.start(); }
 export function fall(speed) { safe(() => { if (!WG) return; const k = Math.max(0, Math.min(1, (speed - 13) / 14)); WG.gain.setTargetAtTime(k * 0.22, C.currentTime, 0.12); WF.frequency.setTargetAtTime(400 + k * 900, C.currentTime, 0.2); }); }
+
+/* ------------------------------ armes (mode crazy) : fusil à verrou Kar98k ------------------------------ */
+// Synthèse en couches (pas d'échantillon) : claquement supersonique, souffle de bouche, coup sourd du grave, écho de l'espace, puis le métal de la culasse,
+// la douille qui tinte, les cartouches qui glissent. Chaque son part d'une destination `out()` : distance (filtre passe-bas + atténuation + retard), panoramique, réverbération.
+let REV = null;
+function reverb() {
+  if (REV) return REV;
+  const sr = C.sampleRate, len = Math.floor(sr * 2.2), buf = C.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6) * 0.5;
+    // premières réflexions (murs proches) : quelques échos nets avant la queue diffuse
+    for (const [ms, a] of [[23, 0.7], [41, 0.5], [67, 0.4], [113, 0.3]]) { const k = Math.floor(sr * (ms + ch * 7) / 1000); d[k] += a; d[k + 1] -= a * 0.5; }
+  }
+  const cv = C.createConvolver(); cv.buffer = buf; const g = C.createGain(); g.gain.value = 0.6; cv.connect(g).connect(SFXB || OUT); REV = cv; return cv;
+}
+function out(o = {}) {
+  const dist = o.dist || 0, g = C.createGain(); g.gain.value = (o.v ?? 1) / (1 + dist / 16);
+  const f = C.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = Math.max(900, 17000 / (1 + dist / 28));
+  const pn = C.createStereoPanner(); pn.pan.value = Math.max(-1, Math.min(1, o.pan || 0));
+  g.connect(f).connect(pn).connect(SFXB || OUT);
+  if (o.wet !== 0) { const w = C.createGain(); w.gain.value = o.wet ?? Math.min(0.75, 0.25 + dist / 140); f.connect(w).connect(reverb()); }
+  return g;
+}
+function nb(t0, dur, f, q, gain, type, dest, att = 0.001, f2) {
+  const s = C.createBufferSource(); s.buffer = NB; s.playbackRate.value = 0.85 + Math.random() * 0.3;
+  const bq = C.createBiquadFilter(); bq.type = type; bq.frequency.setValueAtTime(f, t0); if (f2) bq.frequency.exponentialRampToValueAtTime(f2, t0 + dur); bq.Q.value = q;
+  const g = C.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(gain, t0 + att); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  s.connect(bq).connect(g).connect(dest); s.start(t0, Math.random() * 1); s.stop(t0 + dur + 0.05);
+}
+function tn(t0, f, dur, gain, type, dest, f2, att = 0.001) {
+  const o = C.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t0); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+  const g = C.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(gain, t0 + att); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g).connect(dest); o.start(t0); o.stop(t0 + dur + 0.05);
+}
+// métal qui cogne : partiels inharmoniques à décroissance rapide + un bruit de contact
+function ring(t0, gain, dest, base = 2200, len = 1) {
+  for (const [k, d] of [[1, 0.1], [2.32, 0.07], [4.1, 0.05], [6.7, 0.03]]) tn(t0, base * k * (0.97 + Math.random() * 0.06), d * len, gain / k ** 0.5, 'sine', dest);
+  nb(t0, 0.012, 4200, 1.2, gain * 0.8, 'bandpass', dest, 0.0005);
+}
+export function gun(name, o = {}) {
+  safe(() => {
+    if (!C || C.state !== 'running') return;
+    const dist = o.dist || 0, delay = Math.min(0.5, dist / 340), t = C.currentTime + delay, dest = out(o), v = o.v ?? 1;
+    switch (name) {
+      case 'shot': {
+        // 7,92×57 : le claquement sec de l'onde de choc, le souffle large de la bouche, le coup de grave, puis l'écho de l'espace
+        nb(t, 0.018, 3200, 0.6, 1.2, 'highpass', dest, 0.0004);
+        nb(t, 0.09, 2600, 0.6, 0.8, 'bandpass', dest, 0.0005, 800);
+        nb(t, 0.28, 320, 0.5, 1.1, 'lowpass', dest, 0.001, 110);
+        tn(t, 180, 0.4, 1.0, 'sine', dest, 38, 0.002);
+        nb(t + 0.004, 0.14, 1000, 0.8, 0.55, 'bandpass', dest, 0.002, 280);
+        nb(t + 0.01, 0.5, 220, 0.4, 0.4, 'lowpass', dest, 0.02, 70);
+        // écho lointain (falaises, entrepôts)
+        nb(t + 0.26, 0.45, 700, 0.5, 0.2 * v, 'lowpass', dest, 0.03, 200); nb(t + 0.55, 0.5, 500, 0.5, 0.1 * v, 'lowpass', dest, 0.05, 150);
+        break;
+      }
+      case 'whiz': nb(t, 0.16, 4200, 2.4, 0.4 * v, 'bandpass', dest, 0.02, 1400); nb(t + 0.01, 0.1, 6500, 1.2, 0.15 * v, 'highpass', dest, 0.01); break; // balle qui passe tout près
+      case 'dry': ring(t, 0.1, dest, 900, 0.5); nb(t, 0.02, 1500, 1, 0.12, 'bandpass', dest, 0.001); break;
+      case 'bolt_up': nb(t, 0.03, 1600, 1.5, 0.22, 'bandpass', dest); ring(t, 0.13, dest, 1700, 0.7); tn(t, 210, 0.05, 0.12, 'triangle', dest, 120); break;
+      case 'bolt_back': nb(t - 0.1, 0.1, 2600, 1.4, 0.12, 'bandpass', dest, 0.02, 1100); ring(t, 0.22, dest, 1350); nb(t, 0.05, 700, 1, 0.2, 'lowpass', dest); break;
+      case 'bolt_fwd': nb(t - 0.12, 0.12, 1100, 1.2, 0.13, 'bandpass', dest, 0.03, 2600); nb(t, 0.06, 600, 1, 0.24, 'lowpass', dest); ring(t, 0.12, dest, 1500, 0.7); break;
+      case 'bolt_down': ring(t, 0.3, dest, 1050); nb(t, 0.05, 900, 0.8, 0.32, 'lowpass', dest); tn(t, 140, 0.07, 0.18, 'triangle', dest, 70); break;
+      case 'casing': { // une douille laiton qui rebondit deux fois
+        const k = 0.55 + Math.random() * 0.4;
+        ring(t, 0.16 * v, dest, 5200 * k, 0.9); ring(t + 0.09, 0.09 * v, dest, 5000 * k, 0.8); ring(t + 0.15, 0.05 * v, dest, 4800 * k, 0.6); break;
+      }
+      case 'rl_open': gun('bolt_up', o); setTimeout(() => gun('bolt_back', o), 110); break;
+      case 'rl_clip': // la lame-chargeur glisse dans les rails : frottement, claquement, ressort
+        nb(t, 0.12, 2200, 1.2, 0.14, 'bandpass', dest, 0.02, 900); ring(t + 0.1, 0.15, dest, 2000, 0.8); ring(t + 0.16, 0.1, dest, 2600, 0.6); nb(t + 0.12, 0.05, 500, 1, 0.14, 'lowpass', dest); break;
+      case 'rl_push': // le pouce enfonce les cinq cartouches : cinq petits claquements de plus en plus secs
+        for (let i = 0; i < 5; i++) { ring(t + i * 0.075, 0.07 + i * 0.012, dest, 2300 + i * 140, 0.35); nb(t + i * 0.075, 0.03, 700, 1, 0.1, 'lowpass', dest); } break;
+      case 'rl_close': gun('bolt_fwd', o); setTimeout(() => gun('bolt_down', o), 130); break;
+      case 'hitmark': tn(t, 1500, 0.05, 0.22, 'square', dest, 900); if (o.head) { tn(t, 2300, 0.4, 0.28, 'sine', dest); tn(t, 3450, 0.3, 0.12, 'sine', dest); } break; // retour au tireur
+      case 'flesh': // balle dans le corps : choc mat et clapotis humide
+        nb(t, 0.12, 380, 0.7, 0.55 * v, 'lowpass', dest, 0.002); tn(t, 105, 0.16, 0.4 * v, 'sine', dest, 50); nb(t + 0.01, 0.1, 1500, 1.4, 0.2 * v, 'bandpass', dest, 0.005, 600); break;
+      case 'bone': // tête : craquement sec, sourd, plus violent
+        nb(t, 0.04, 2400, 0.9, 0.7 * v, 'bandpass', dest, 0.0005); nb(t, 0.14, 300, 0.6, 0.6 * v, 'lowpass', dest, 0.001); tn(t, 130, 0.2, 0.45 * v, 'sine', dest, 45); nb(t + 0.02, 0.08, 1100, 1.2, 0.2 * v, 'bandpass', dest, 0.004); break;
+      case 'ringing': tn(t, 3300, 0.9, 0.05, 'sine', dest); break; // acouphène bref quand on est touché
+      case 'fall': nb(t, 0.3, 200, 0.7, 0.55 * v, 'lowpass', dest, 0.004, 80); tn(t, 85, 0.35, 0.4 * v, 'sine', dest, 38); nb(t + 0.05, 0.25, 900, 0.6, 0.12 * v, 'bandpass', dest, 0.03, 300); break; // corps qui s'effondre
+      case 'impact': nb(t, 0.04, 2800, 1, 0.3 * v, 'bandpass', dest, 0.0005); nb(t, 0.1, 500, 0.8, 0.25 * v, 'lowpass', dest, 0.001); if (o.metal) ring(t, 0.12 * v, dest, 3000, 0.8); break; // balle contre un mur
+      case 'scope': ring(t, 0.05, dest, 3000, 0.3); nb(t, 0.08, 1800, 1, 0.05, 'bandpass', dest, 0.03, 600); break;
+      case 'kill': tn(t, 440, 0.18, 0.12, 'triangle', dest); tn(t + 0.08, 660, 0.3, 0.12, 'triangle', dest); break;
+    }
+  });
+}

@@ -6,6 +6,7 @@ import * as Scene from './scene.js';
 import * as Music from './music.js';
 import * as Snd from './audio.js';
 import * as Sfx from './sfx.js';
+import * as Crazy from './crazy.js';
 import * as Voice from './voice.js';
 import * as Pings from './pings.js';
 import { createNet } from './net.js';
@@ -17,6 +18,7 @@ const qs = new URLSearchParams(location.search);
 const safe = (f, d) => { try { return f(); } catch { return d; } };
 const G = { course: safe(() => localStorage.getItem('ch-course'), null) || DEFAULT_COURSE, pt: null, mode: null, W: null, me: null, acc: 0, paused: false, debug: qs.has('debug'), ct: 0, pend: [], partnerIn: IDLE, names: ['Grimpeur 1', 'Grimpeur 2'], L: CH.L, hintT: 0, last: performance.now(), stepT: [0, 0, 0, 0], free: false, seatIn: [], done: false, room: null };
 window.__ch = G; // tests
+Scene.S.crazy = Crazy; G.keysHeld = null; // mode crazy : visée, fusil, interface de combat (client/crazy.js)
 const LV = () => G.W?.level || getCourse(G.course);
 G.play = (id) => { G.course = id; return startLocal(); }; // tests / mode test
 G.tp = (i) => { if (G.mode !== 'local') return; G.W.cp = i; G.W.cpMax = Math.max(G.W.cpMax, i); spawnAt(G.W, i); Scene.onEvent(G.W, { k: 'respawn' }); };
@@ -75,6 +77,7 @@ function readInput(k, schemes, pads) {
   const l = Math.hypot(ax, ay); if (l > 1) { ax /= l; ay /= l; }
   // déplacement relatif à la caméra
   const yaw = Scene.controlYaw(k, G.W?.pl[G.mode === 'online' ? G.me ?? 0 : k], l > 0.2), c = Math.cos(yaw), s = Math.sin(yaw);
+  if (G.crazy) { const cy = Crazy.moveYaw(), cc = Math.cos(cy), ss = Math.sin(cy); return { mx: ax * cc - ay * ss, mz: -ax * ss - ay * cc, jump, brace: false, pull: false, cup: false, punch: false, kick: false, slide, reset: false, jc: slot[k].jc, dc: slot[k].dc, uc: slot[k].uc, ...Crazy.extras(keys) }; } // mode crazy : « avant » = là où l'on vise
   return { mx: ax * c - ay * s, mz: -ax * s - ay * c, jump, brace, pull, cup, punch, kick, slide, reset, jc: slot[k].jc, dc: slot[k].dc, uc: slot[k].uc };
 }
 // souris : glisser = tourner la caméra, molette = recul
@@ -83,8 +86,8 @@ addEventListener('pointerdown', (e) => {
   Music.unlock(); Snd.unlock(); Sfx.load();
   if (G.capturing && G.capturing.armed) { e.preventDefault(); endCapture('Mouse' + e.button); return; }
   if (e.button === 1 && e.target.id === 'gl' && G.mode && G.W && !Object.values(BIND).some((l) => l.includes('Mouse1'))) { e.preventDefault(); pingDown(e); return; } // molette : pings (sauf si une action y est réglée)
-  if (e.target.id === 'gl' && CFG.camLock && G.mode && !G.paused && !document.pointerLockElement) e.target.requestPointerLock?.(); // caméra verrouillée au pointeur : le premier clic dans le jeu capture la souris
-  if (e.target.id === 'gl') { if (!Object.values(BIND).some((l) => l.includes('Mouse' + e.button))) drag = { x: e.clientX, y: e.clientY }; // caméra : un bouton qui n'est pas une action (clic droit par défaut)
+  if (e.target.id === 'gl' && (CFG.camLock || G.crazy) && G.mode && !G.paused && !document.pointerLockElement) e.target.requestPointerLock?.(); // caméra verrouillée au pointeur : le premier clic dans le jeu capture la souris
+  if (e.target.id === 'gl') { if (!G.crazy && !Object.values(BIND).some((l) => l.includes('Mouse' + e.button))) drag = { x: e.clientX, y: e.clientY }; // caméra : un bouton qui n'est pas une action (clic droit par défaut)
     const k = 'Mouse' + e.button; if (!keys.has(k)) pressed.add(k); keys.add(k); }
 });
 addEventListener('mousedown', (e) => { if (e.button > 0 && (e.target.id === 'gl' || G.capturing)) e.preventDefault(); }); // clic molette / boutons latéraux : pas de défilement ni de navigation
@@ -93,10 +96,11 @@ addEventListener('mousedown', (e) => { if (e.button > 0 && (e.target.id === 'gl'
 for (const ev of ['mousedown', 'mouseup', 'auxclick', 'click']) addEventListener(ev, (e) => { if ((e.button === 3 || e.button === 4) && (e.target.id === 'gl' || G.mode || G.capturing)) { e.preventDefault(); e.stopPropagation(); } }, true);
 addEventListener('pointerup', (e) => { keys.delete('Mouse' + e.button); if (e.button === 1 && PW.down) pingUp(e); });
 addEventListener('pointercancel', () => { for (let b = 0; b < 5; b++) keys.delete('Mouse' + b); });
-addEventListener('pointermove', (e) => { if (PW.open) wheelHover(e); if (document.pointerLockElement) { Scene.camInput(-e.movementX * 0.0032 * CFG.sens, e.movementY * 0.0022 * (CFG.invert ? -1 : 1), 0); return; } if (!drag) return; Scene.camInput(-(e.clientX - drag.x) * 0.006 * CFG.sens, (e.clientY - drag.y) * 0.004 * (CFG.invert ? -1 : 1), 0); drag = { x: e.clientX, y: e.clientY }; });
+addEventListener('pointermove', (e) => { if (PW.open) wheelHover(e); if (G.crazy && document.pointerLockElement) { Crazy.look(e.movementX, e.movementY, CFG.sens * (CFG.invert ? 1 : 1)); return; } if (document.pointerLockElement) { Scene.camInput(-e.movementX * 0.0032 * CFG.sens, e.movementY * 0.0022 * (CFG.invert ? -1 : 1), 0); return; } if (!drag) return; Scene.camInput(-(e.clientX - drag.x) * 0.006 * CFG.sens, (e.clientY - drag.y) * 0.004 * (CFG.invert ? -1 : 1), 0); drag = { x: e.clientX, y: e.clientY }; });
 addEventListener('pointerup', () => { drag = null; });
+document.addEventListener('pointerlockchange', () => { if (G.crazy && G.mode && !document.pointerLockElement && !G.paused && !$('#end').classList.contains('on')) togglePause(true); }); // Échap libère la souris : menu pause
 addEventListener('contextmenu', (e) => { if (e.target.tagName !== 'INPUT') e.preventDefault(); }); // pas de menu du clic droit dans le jeu
-addEventListener('wheel', (e) => { if (G.mode) Scene.camInput(0, 0, Math.sign(e.deltaY) * 1.2); }, { passive: true });
+addEventListener('wheel', (e) => { if (G.mode && !G.crazy) Scene.camInput(0, 0, Math.sign(e.deltaY) * 1.2); }, { passive: true });
 function camKeys(dt) { const r = (anyKey(BIND.camR) ? 1 : 0) - (anyKey(BIND.camL) ? 1 : 0); if (r) Scene.camInput(-r * 1.8 * dt * CFG.sens, 0, 0); }
 
 /* ------------------------------ pings (client/pings.js) : clic molette = « Ici ! » ; molette maintenue = roue ------------------------------ */
@@ -181,7 +185,7 @@ async function startLocal() {
 function freshWorld() { const W = createWorld({ L: G.L, course: G.course }); if (G.solo) { W.alone = true; G.run = []; G.splits = []; G.forceReset = 0; } if (G.replay) { G.replay.i = 0; G.replay.k = 0; } return W; }
 const quant = (I) => decIn(encIn(0, I)); // entrées arrondies comme celles envoyées au serveur : le rejeu est identique au pas près
 function recStep(I) { const e = encIn(0, I), l = G.run[G.run.length - 1]; if (l && l.every((v, k) => k === 0 || v === e[k])) l[0]++; else { e[0] = 1; G.run.push(e); } }
-function stopGame() { G.free = false; Pings.clear(); if (G.replay?.prevL) G.L = G.replay.prevL; G.replay = null; $('#h-replay').classList.remove('on'); if (G.mode) setTimeout(backdrop, 0); G.mode = null; G.solo = false; G.W = null; $('#hud').classList.remove('on'); G.paused = false; $('#pause').classList.remove('on'); }
+function stopGame() { G.free = false; G.crazy = false; Crazy.stop(); document.body.classList.remove('czmode'); document.exitPointerLock?.(); Pings.clear(); if (G.replay?.prevL) G.L = G.replay.prevL; G.replay = null; $('#h-replay').classList.remove('on'); if (G.mode) setTimeout(backdrop, 0); G.mode = null; G.solo = false; G.W = null; $('#hud').classList.remove('on'); G.paused = false; $('#pause').classList.remove('on'); }
 function togglePause(v) {
   G.paused = v ?? !G.paused; if (G.paused) document.exitPointerLock?.(); $('#pause').classList.toggle('on', G.paused);
   $('#p-restart').style.display = G.mode === 'online' && G.room && G.room.host !== G.room.you ? 'none' : '';
@@ -209,16 +213,20 @@ function toCheckpoint() {
 }
 
 /* ------------------------------ événements -> sons et effets ------------------------------ */
+const CZ_LOCAL = new Set(['shot', 'bolt', 'casing', 'reload', 'dry']), CZ_SERVER = new Set(['dmg', 'kill', 'spawn', 'end']), CZ_ALL = new Set([...CZ_LOCAL, ...CZ_SERVER]);
 const GLOBAL = new Set(['lost', 'punch', 'tackle', 'down', 'checkpoint', 'respawn', 'finish', 'collapse', 'restore', 'save', 'abyss', 'reset']);
 function handleEvents(W, list, fromServer) {
   for (const e of list) {
-    if (G.mode === 'online' && GLOBAL.has(e.k) !== !!fromServer) continue; // en ligne : le serveur annonce les événements communs, la prédiction les gestes
+    if (G.crazy && G.mode === 'online') { // mode crazy : ses propres gestes (tir, culasse, douille) sont joués tout de suite par la prédiction ; ceux des autres et les touches / morts viennent du serveur
+      if (CZ_LOCAL.has(e.k)) { if ((e.p === G.me) === !!fromServer) continue; } else if (CZ_SERVER.has(e.k)) { if (!fromServer) continue; } else if (GLOBAL.has(e.k) !== !!fromServer) continue;
+      if (CZ_ALL.has(e.k)) { Crazy.onEvent(W, e, G); continue; }
+    } else if (G.mode === 'online' && GLOBAL.has(e.k) !== !!fromServer) continue; // en ligne : le serveur annonce les événements communs, la prédiction les gestes
     Scene.onEvent(W, e);
     if (G.free && (e.k === 'checkpoint' || e.k === 'respawn' || e.k === 'abyss' || e.k === 'reset') && e.p !== G.me) continue; // mode libre : on n'entend / ne lit que SES points de passage et SES chutes
     const p = e.p != null ? W.pl[e.p] : null, pan = p ? panOf(p) : 0;
     switch (e.k) {
       case 'slide': Snd.play('slide', { pan }); break;
-      case 'jump': if (!p || !Sfx.jump(p.x, p.y + 1.5, p.z, { key: e.p, rate: 0.97 + Math.random() * 0.06 })) Snd.play('jump', { pan }); break; // la voix du propriétaire
+      case 'jump': if (G.crazy && e.wall) Crazy.onEvent(W, e, G); else if (!p || !Sfx.jump(p.x, p.y + 1.5, p.z, { key: e.p, rate: 0.97 + Math.random() * 0.06 })) Snd.play('jump', { pan }); break; // la voix du propriétaire
       case 'land': if (e.v > 3) Snd.play('land', { pan, v: e.v }); break;
       case 'grab': Snd.play('grab', { pan }); break;
       case 'mantle': Snd.play('mantle', { pan }); break;
@@ -302,8 +310,9 @@ function loop(now) {
     footsteps(G.W, dt);
     Scene.frame(G.W, dt, { me: G.me });
     Scene.debugDraw(G.W, G.debug);
-    hud(G.W, dt); Pings.update(G.W, dt, G.mode === 'online' ? G.me : 0);
-    if (G.W.done && !G.done) { G.done = true; const W0 = G.W; setTimeout(() => (G.free ? showFreeEnd(W0) : showEnd(W0)), G.free ? 600 : 4500); }
+    if (G.crazy) { G.keysHeld = keys; Crazy.hud(G.W, dt, G); } else hud(G.W, dt);
+    Pings.update(G.W, dt, G.mode === 'online' ? G.me : 0);
+    if (G.W.done && !G.done) { G.done = true; const W0 = G.W; setTimeout(() => (G.crazy ? showCrazyEnd(W0) : G.free ? showFreeEnd(W0) : showEnd(W0)), G.free ? 600 : 4500); }
   }
 }
 // une exception dans une image ne doit JAMAIS figer le jeu : on replanifie d'abord, on signale l'erreur (une fois par message) au serveur
@@ -405,6 +414,14 @@ function showFreeEnd(W) {
   const lead = G.room && G.room.host === G.room.you;
   $('#e-again').style.display = 'none'; $('#e-next').style.display = 'none'; $('#end').classList.add('on'); renderVote(); // la carte suivante se décide par le vote
 }
+// mode crazy : tableau final (éliminations, morts), puis vote de l'arène suivante
+function showCrazyEnd(W) {
+  document.exitPointerLock?.();
+  const rows = (W.rank?.length ? W.rank : W.pl.map((_, k) => k)).map((k, i) => `<li class="${k === G.me ? 'me' : ''}"><b>${i + 1}</b> ${esc(G.names[k] || '?')} <em>${W.pl[k].kills} ⌖ · ${W.pl[k].deaths} ☠</em></li>`).join('');
+  $('#end h2').textContent = tr('Fin de la manche'); $('#e-medal').innerHTML = ''; $('#e-names').textContent = G.names.join(' · ');
+  $('#end .stats').style.display = 'none'; $('#e-sub').style.display = 'none'; $('#end h3').textContent = tr('Classement'); $('#e-board').innerHTML = rows;
+  $('#e-again').style.display = 'none'; $('#e-next').style.display = 'none'; $('#end').classList.add('on'); renderVote();
+}
 // vote de la carte suivante : toutes les cartes, un clic = son vote (modifiable), 10 s ; la plus votée part, égalité ou aucun vote = au hasard (décidé par le serveur)
 function renderVote() {
   const v = G.vote, box = $('#e-vote'); if (!v || !G.free) { box.style.display = 'none'; return; }
@@ -470,8 +487,8 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 // la liste des salons ouverts se met à jour toute seule tant qu'on est sur l'écran « Jouer en ligne » (avant : une seule demande à l'ouverture, un salon créé ensuite n'apparaissait qu'après avoir cliqué sur ↻)
 setInterval(() => { if (document.body.dataset.screen === 'online' && net?.up) net.send({ t: 'list' }); }, 2500);
 let net = null;
-const encIn = (ct, I) => [ct, Math.round(I.mx * 100) / 100, Math.round(I.mz * 100) / 100, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0) | (I.cup ? 16 : 0) | (I.punch ? 32 : 0) | (I.kick ? 64 : 0) | (I.slide ? 128 : 0), I.jc, I.dc, I.uc || 0];
-const decIn = (a) => (a ? { mx: a[1], mz: a[2], jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), punch: !!(a[3] & 32), kick: !!(a[3] & 64), slide: !!(a[3] & 128), jc: a[4], dc: a[5], uc: a[6] || 0 } : IDLE);
+const encIn = (ct, I) => [ct, Math.round(I.mx * 100) / 100, Math.round(I.mz * 100) / 100, (I.jump ? 1 : 0) | (I.brace ? 2 : 0) | (I.reset ? 4 : 0) | (I.pull ? 8 : 0) | (I.cup ? 16 : 0) | (I.punch ? 32 : 0) | (I.kick ? 64 : 0) | (I.slide ? 128 : 0) | (I.fire ? 256 : 0) | (I.scope ? 512 : 0) | (I.reload ? 1024 : 0), I.jc, I.dc, I.uc || 0, ...(I.ay !== undefined ? [I.ay, I.ap] : [])];
+const decIn = (a) => (a ? { mx: a[1], mz: a[2], jump: !!(a[3] & 1), brace: !!(a[3] & 2), reset: !!(a[3] & 4), pull: !!(a[3] & 8), cup: !!(a[3] & 16), punch: !!(a[3] & 32), kick: !!(a[3] & 64), slide: !!(a[3] & 128), fire: !!(a[3] & 256), scope: !!(a[3] & 512), reload: !!(a[3] & 1024), jc: a[4], dc: a[5], uc: a[6] || 0, ...(a.length > 7 ? { ay: a[7], ap: a[8] } : {}) } : IDLE);
 function getNet() {
   if (net) return net;
   net = createNet(() => CFG.name || 'Grimpeur');
@@ -488,13 +505,13 @@ function getNet() {
   net.on('start', async (m) => {
     await ensureScene();
     show('loading'); G.prep = true; setLoad(0.05, 'Construction du décor…');
-    G.mode = 'online'; G.demo = null; G.me = m.seat; G.names = m.names; G.L = m.L; G.free = m.mode === 'free'; G.seatIn = []; G.vote = null; $('#e-vote').style.display = 'none';
+    G.mode = 'online'; G.demo = null; G.me = m.seat; G.names = m.names; G.L = m.L; G.crazy = m.mode === 'crazy'; G.free = m.mode === 'free' || G.crazy; G.seatIn = []; document.body.classList.toggle('czmode', G.crazy); if (!G.crazy) Crazy.stop(); G.vote = null; $('#e-vote').style.display = 'none';
     G.course = m.course || DEFAULT_COURSE; setTimeout(() => $('#fade').classList.remove('on'), 400);
-    G.W = applySnap(createWorld({ L: m.L, course: G.course, free: G.free, players: G.free ? m.names.length : undefined }), m.s); G.ct = 0; G.pend = []; G.out = []; G.partnerIn = IDLE; G.done = false; slot[0].jc = slot[0].dc = slot[0].uc = 0;
+    G.W = applySnap(createWorld({ L: m.L, course: G.course, free: G.free && !G.crazy, crazy: G.crazy, players: G.free ? m.names.length : undefined }), m.s); G.ct = 0; G.pend = []; G.out = []; G.partnerIn = IDLE; G.done = false; slot[0].jc = slot[0].dc = slot[0].uc = 0;
     const W = G.W; await Scene.buildLevel(W); if (G.W !== W) return; Scene.setRoster(W.pl.length); Music.playWorld(W.level.world); // partie quittée pendant le chargement : on s'arrête là
     await prepare(W); if (G.W !== W) return; G.prep = false; G.last = performance.now(); G.acc = 0;
     show(null); $('#hud').classList.add('on'); $('#hud').dataset.mode = G.free ? 'free' : 'online'; $('#end').classList.remove('on');
-    $('#help').classList.add('show'); setTimeout(() => $('#help').classList.remove('show'), 9000);
+    if (G.crazy) Crazy.begin(G); else { $('#help').classList.add('show'); setTimeout(() => $('#help').classList.remove('show'), 9000); }
   });
   net.on('s', (m) => {
     if (G.mode !== 'online' || !G.W) return;
@@ -549,8 +566,8 @@ function renderRoom(m) {
   $('#r-code').textContent = m.code;
   $('#r-link').value = location.origin + location.pathname + '?r=' + m.code;
   const host = m.host === m.you;
-  const max = m.cfg.max || 2, free = m.cfg.mode === 'free';
-  $$('#r-mode button').forEach((b) => { b.classList.toggle('on', b.dataset.m === (free ? 'free' : 'coop')); b.disabled = !host; }); $('#r-len').style.display = free ? 'none' : '';
+  const max = m.cfg.max || 2, free = m.cfg.mode === 'free' || m.cfg.mode === 'crazy';
+  $$('#r-mode button').forEach((b) => { b.classList.toggle('on', b.dataset.m === m.cfg.mode); b.disabled = !host; }); $('#r-len').style.display = free ? 'none' : '';
   $('#r-players').innerHTML = Array.from({ length: max }, (_, i) => i).map((i) => { const p = m.players[i]; return `<li class="${p ? '' : 'empty'}"><i style="background:${['#ff9a3c', '#46b8ff', '#5ed67a', '#e86cc0'][i]}"></i>${p ? esc(p.name) + (p.id === m.host ? ` <small>${tr('hôte')}</small>` : '') + (p.id === m.you ? ` <small>${tr('toi')}</small>` : '') + (p.offline ? ` <small>${tr('déconnecté')}</small>` : '') : tr(free ? 'Place libre…' : 'En attente d\'un partenaire…')}</li>`; }).join('');
   $$('#r-len button').forEach((b) => { b.classList.toggle('on', +b.dataset.l === m.cfg.L); b.disabled = !host; });
   fillCourseSelects(); $('#r-course').value = m.cfg.course; $('#r-course').disabled = !host;
@@ -558,7 +575,7 @@ function renderRoom(m) {
   $('#r-start').textContent = host ? (m.players.length < 2 ? tr('En attente du 2e grimpeur') : tr(free ? 'Lancer la course' : 'Lancer l\'ascension')) : tr('L\'hôte lance la partie');
 }
 function renderRooms(list) {
-  $('#o-list').innerHTML = list.length ? list.map((r) => `<li><b>${esc(r.host)}</b><span>${r.n}/${r.max || 2}${r.mode === 'free' ? ' · ' + tr('libre') : ''}</span><button data-code="${r.code}">Rejoindre</button></li>`).join('') : '<li class="muted">Aucun salon ouvert pour l\'instant.</li>';
+  $('#o-list').innerHTML = list.length ? list.map((r) => `<li><b>${esc(r.host)}</b><span>${r.n}/${r.max || 2}${r.mode === 'free' ? ' · ' + tr('libre') : r.mode === 'crazy' ? ' · crazy' : ''}</span><button data-code="${r.code}">Rejoindre</button></li>`).join('') : '<li class="muted">Aucun salon ouvert pour l\'instant.</li>';
 }
 
 /* ------------------------------ choix du parcours ------------------------------ */
@@ -628,7 +645,7 @@ document.addEventListener('click', (e) => {
   else if (id === 'help-close') $('#help').classList.remove('show');
   else if (id === 'm-board') { G.bCourse = G.course || DEFAULT_COURSE; show('board'); askBoard(); }
   else if (id === 'back' || b.classList.contains('back')) show('home');
-  else if (id === 'o-create') { if (!nameOk()) return; getNet().send({ t: 'create', L: G.L, course: G.course, mode: G.createMode === 'free' ? 'free' : 'coop' }); }
+  else if (id === 'o-create') { if (!nameOk()) return; getNet().send({ t: 'create', L: G.L, course: G.course, mode: G.createMode === 'free' || G.createMode === 'crazy' ? G.createMode : 'coop' }); }
   else if (b.closest('#o-mode')) { G.createMode = b.dataset.m; $$('#o-mode button').forEach((x) => x.classList.toggle('on', x === b)); }
   else if (b.closest('#r-mode')) net?.send({ t: 'cfg', mode: b.dataset.m });
   else if (id === 'o-join') { if (!nameOk()) return; const c = $('#o-code').value.trim().toUpperCase(); if (c) getNet().send({ t: 'join', code: c }); }

@@ -359,7 +359,8 @@ function poseClimber(c, p, mate, W, dt, rp) {
   c.lastPT = p.pT;
   if (c.atk) { c.atk.t += S.hitstop > 0 ? dt * 0.08 : dt; if (c.atk.t > c.atk.dur - 0.12 || p.ko || p.downT > 0 || (p.st !== ST.GROUND && p.st !== ST.AIR)) c.atk = null; }
   if (c.hit) { c.hit.t += dt; if (c.hit.t > 0.2) c.hit = null; }
-  if (c.hit || c.atk) { /* l'animation du coup / de l'impact continue */ }
+  if (W.crazy && p.dead > 0) { c.atk = null; c.hit = null; if (c.cur !== 'Death01') { setAnim(c, 'Death01', 0.08, true); c.deadAt = performance.now(); } } // mode crazy : mort = animation de chute, une seule fois
+  else if (c.hit || c.atk) { /* l'animation du coup / de l'impact continue */ }
   else if (p.downT > 0) {
     const want = p.downT > 0.95 ? 'Death01' : 'LayToIdle';
     if (c.cur !== want) { setAnim(c, want, 0.1, true); const ac = c.acts[want]; if (ac) { if (want === 'Death01') { ac.time = 1.45; ac.timeScale = 1.5; } else ac.timeScale = 1.53 / 0.95; } }
@@ -372,7 +373,7 @@ function poseClimber(c, p, mate, W, dt, rp) {
   // position et orientation (lissées : le rendu ne doit jamais trembler même si la physique corrige)
   c.g.position.set(rp.x, rp.y, rp.z);
   const koFly = p.ko && p.st === ST.AIR && Math.hypot(p.vx, p.vz) > 1;
-  const wantYaw = koFly ? Math.atan2(-p.vx, -p.vz) : p.downT > 0 ? c.yaw : p.yaw;
+  const wantYaw = koFly ? Math.atan2(-p.vx, -p.vz) : p.downT > 0 || p.dead > 0 ? c.yaw : p.yaw;
   let dy = wantYaw - c.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); c.yaw += dy * Math.min(1, dt * (koFly ? 30 : 16));
   c.g.rotation.y = c.yaw;
   const kick = c.atk?.kick ? kickPose(c.atk.t) : null, slide = p.st === ST.GROUND && p.slideT > 0 && !p.crawl && !p.ko;
@@ -547,6 +548,7 @@ export function controlYaw(k, p, held) {
   return CAM.ctrl[k];
 }
 function camera(W, rp, me, dt) {
+  if (W.crazy && S.crazy?.camera(W, rp, me, dt, S.cam)) return; // mode crazy : caméra par-dessus l'épaule, dans l'axe de la visée
   let [a, b] = rp, wMe = me == null ? 0.5 : me === 0 ? 0.68 : 0.32;
   if (W.free) { // mode libre : pas de cordée, la caméra suit son grimpeur (le meneur pour un spectateur)
     let f = me; if (f == null || !rp[f]) { f = 0; for (let k = 1; k < W.pl.length; k++) if (W.pl[k].cp > W.pl[f].cp || (W.pl[k].cp === W.pl[f].cp && W.pl[k].y > W.pl[f].y)) f = k; }
@@ -676,6 +678,7 @@ export function frame(W, dt, view = {}) {
     if (Math.random() < dt * 14) { const p = W.pl[(Math.random() * W.pl.length) | 0]; confetti(p.x, p.y + 2.5, p.z); }
     CAM.uyaw += dt * 0.35; CAM.lastUser = performance.now();
   }
+  if (W.crazy && S.crazy) { S.crazy.pose(S.cl, W, dt, rp, view.me); S.crazy.update(W, dt); } // mode crazy : fusil, mains, effets de tir et de sang
   stepFx(dt);
   camera(W, rp, view.me, dt);
   perf(dt);
